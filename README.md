@@ -101,6 +101,27 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 
 No files or resources in `C:\src\arc-demo` are changed by this repo.
 
+## Off state / reactivate
+
+Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
+an always-on charge, the off-state for this optional repo removes only the SRE
+Agent resource group and its RBAC grants on the Arc demo resource groups. The
+Arc demo estate stays intact.
+
+```powershell
+# After a demo — removes the optional SRE layer only
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> `
+  -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json
+
+# Before the next demo — recreate the optional SRE layer
+.\scripts\Deploy-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> `
+  -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json
+```
+
 ## Scenario runbooks
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.

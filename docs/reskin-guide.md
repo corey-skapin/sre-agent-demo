@@ -48,6 +48,23 @@ Keep constant:
    .\scripts\New-LobArcAppMonitorAlert.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action ShowQuery
    ```
 
+## Off state vs cleanup
+
+The optional SRE layer has a different off-state from `arc-demo` because Azure
+SRE Agent has no stopped/deallocated state. To avoid the always-on agent charge,
+run:
+
+```powershell
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> `
+  -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json
+```
+
+This removes only `rg-<prefix>-sre` and deletes RBAC assignments granted to the
+SRE Agent identity on the existing Arc demo resource groups. It does not delete
+or redeploy the Arc estate. Recreate the SRE layer with `Deploy-SreAgent.ps1`.
+
 ## Examples
 
 DTF/default: use `config\demo-skin.json`, then provide only subscription/tenant and any live `AdditionalManagedResourceIds`.
