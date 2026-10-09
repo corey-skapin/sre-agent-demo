@@ -21,8 +21,12 @@ infra/
   main.bicep                 # subscription-scope composition and RBAC over existing arc-demo RGs
   modules/sre-agent.bicep    # SRE Agent, identity, and App Insights resources
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
+samples/
+  lob-arc-app/               # T11 sample app to publish as its own code repo for RCA context
 scripts/
   Deploy-SreAgent.ps1        # discovers arc-demo IDs and deploys this layer
+  Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
+  New-LobArcAppMonitorAlert.ps1 # creates or prints the T11 log alert signal
 ```
 
 ## Prerequisites
@@ -93,7 +97,12 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 
 No files or resources in `C:\src\arc-demo` are changed by this repo.
 
+## Scenario runbooks
+
+- `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
+- `docs\t10-sre-on-arc-experiment.md` - Arc-server investigation/remediation experiment.
+- `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
+
 ## Left for later tasks
 
-- **T09:** pick the Azure-native Container App/AKS alert, connect code context, run the governed closed-loop demo, and capture evidence.
-- **T10:** empirically test what SRE Agent can investigate/remediate on Arc-enabled servers via ARM/Arc run-command. Do not promise Arc-server remediation until validated.
+- **T12/T13:** reskin variables and final delivery storyboard. Do not promise live SRE remediation for T09-T11 until lab evidence is captured.

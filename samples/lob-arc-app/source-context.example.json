@@ -1,0 +1,6 @@
+{
+  "repositoryUrl": "https://github.com/<org>/lob-arc-app-demo",
+  "branch": "main",
+  "commit": "<commit-sha-used-for-the-live-demo>",
+  "sourcePath": "LobArcBridgeApp.ps1"
+}

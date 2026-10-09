@@ -1,6 +1,7 @@
 # Local Azure CLI / deployment scratch
 .azure/
 *.azcli.output.json
+*.guest.ps1
 
 # PowerShell/editor noise
 *.ps1xml
