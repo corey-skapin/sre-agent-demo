@@ -46,10 +46,14 @@ param(
 
     [string]$SourcePath = 'LobArcBridgeApp.ps1',
 
+    [string]$AppName = 'Arc LOB Bridge App',
+
     [ValidateRange(5, 300)]
     [int]$LoopSeconds = 15,
 
-    [string]$GuestScriptOutputPath
+    [string]$GuestScriptOutputPath,
+
+    [string]$SkinPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -138,7 +142,7 @@ function New-DeployGuestScript {
 
     $appScript = Get-Content -LiteralPath $AppSourcePath -Raw
     $config = [ordered]@{
-        AppName = 'Arc LOB Bridge App'
+        AppName = $AppName
         FaultMode = 'Healthy'
         IncidentId = 'none'
         EventSource = $EventSource
@@ -418,9 +422,22 @@ function Invoke-ArcRunCommand {
     }
 }
 
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
+Import-Module $skinModule -Force
+$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
+if (-not $PSBoundParameters.ContainsKey('MachineName')) { $MachineName = Get-DemoSkinValue -Skin $skin -Path 'sre.targetArcMachine' -Default $MachineName }
+if (-not $PSBoundParameters.ContainsKey('FaultMode')) { $FaultMode = Get-DemoSkinValue -Skin $skin -Path 'sre.lobFaultMode' -Default $FaultMode }
+if (-not $PSBoundParameters.ContainsKey('EventSource')) { $EventSource = Get-DemoSkinValue -Skin $skin -Path 'labels.lobEventSource' -Default $EventSource }
+if (-not $PSBoundParameters.ContainsKey('TaskName')) { $TaskName = Get-DemoSkinValue -Skin $skin -Path 'labels.lobTaskName' -Default $TaskName }
+if (-not $PSBoundParameters.ContainsKey('AppName')) { $AppName = Get-DemoSkinValue -Skin $skin -Path 'labels.lobAppName' -Default $AppName }
+if (-not $PSBoundParameters.ContainsKey('SourceRepositoryUrl')) { $SourceRepositoryUrl = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobRepositoryUrl' -Default $SourceRepositoryUrl }
+if (-not $PSBoundParameters.ContainsKey('SourceCommit')) { $SourceCommit = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobSourceCommit' -Default $SourceCommit }
+if (-not $PSBoundParameters.ContainsKey('SourcePath')) { $SourcePath = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobSourcePath' -Default $SourcePath }
+
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $AppSourcePath) {
-    $repoRoot = Split-Path -Parent $PSScriptRoot
     $AppSourcePath = Join-Path $repoRoot 'samples\lob-arc-app\LobArcBridgeApp.ps1'
 }
 

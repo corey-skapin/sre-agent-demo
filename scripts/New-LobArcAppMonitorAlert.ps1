@@ -33,7 +33,9 @@ param(
     [string]$EventSource = 'ArcLobBridgeApp',
 
     [ValidateSet('Create', 'ShowQuery')]
-    [string]$Action = 'ShowQuery'
+    [string]$Action = 'ShowQuery',
+
+    [string]$SkinPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -71,6 +73,14 @@ function Get-AzTsv {
 
     return $value.Trim()
 }
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
+Import-Module $skinModule -Force
+$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
+if (-not $PSBoundParameters.ContainsKey('MachineName')) { $MachineName = Get-DemoSkinValue -Skin $skin -Path 'sre.targetArcMachine' -Default $MachineName }
+if (-not $PSBoundParameters.ContainsKey('EventSource')) { $EventSource = Get-DemoSkinValue -Skin $skin -Path 'labels.lobEventSource' -Default $EventSource }
 
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $WorkspaceName) { $WorkspaceName = "law-$NamePrefix" }

@@ -15,6 +15,8 @@ This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo`
 ## Resource map
 
 Default names assume `-NamePrefix arc-demo`.
+For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
+`-SkinPath .\config\demo-skin.json`; see [`reskin-guide.md`](reskin-guide.md).
 
 | Resource | Default name | Resource group | Purpose |
 |---|---|---|---|
@@ -47,8 +49,7 @@ az account set --subscription <SUBSCRIPTION_ID>
 .\scripts\Deploy-ArcDemo.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -AdminEmail you@contoso.com `
-  -NamePrefix arc-demo `
+  -SkinPath .\config\demo-skin.json `
   -DeployContainerApps $true
 ```
 
@@ -84,7 +85,7 @@ cd C:\src\sre-agent
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
+  -SkinPath .\config\demo-skin.json `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
@@ -131,7 +132,7 @@ cd C:\src\sre-agent
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
+  -SkinPath .\config\demo-skin.json `
   -State Break `
   -ShowMetrics
 ```
@@ -179,7 +180,7 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
+  -SkinPath .\config\demo-skin.json `
   -State Repair `
   -ShowMetrics
 ```
@@ -192,7 +193,7 @@ If this fallback is used, label the demo as "manual reset fallback"; do not clai
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
+  -SkinPath .\config\demo-skin.json `
   -State Status `
   -ShowMetrics
 

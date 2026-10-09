@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "customer": {
+    "name": "SA DTF",
+    "shortName": "DTF",
+    "scenarioLabel": "Infrastructure Modernisation Program"
+  },
+  "azure": {
+    "namePrefix": "arc-demo",
+    "location": "australiaeast"
+  },
+  "sre": {
+    "accessLevel": "High",
+    "targetArcMachine": "win-app-01",
+    "nativeContainerFaultState": "Status",
+    "t10Scenario": "HeartbeatByBackingVm",
+    "lobFaultMode": "CrashOnProcessing"
+  },
+  "labels": {
+    "demoTitle": "Arc Demo",
+    "agentName": "sre-arc-demo",
+    "containerResponsePlan": "container-app-restart-review",
+    "lobAlertTitleContains": "lob-arc-app-fault",
+    "lobAppName": "Arc LOB Bridge App",
+    "lobEventSource": "ArcLobBridgeApp",
+    "lobTaskName": "ArcSreLobApp"
+  },
+  "codeContext": {
+    "lobRepositoryUrl": "https://github.com/<org>/lob-arc-app-demo",
+    "lobSourceCommit": "pending-live-demo-commit",
+    "lobSourcePath": "LobArcBridgeApp.ps1"
+  },
+  "tags": {
+    "owner": "demo",
+    "purpose": "sre-agent",
+    "env": "demo",
+    "layersOn": "arc-demo"
+  }
+}

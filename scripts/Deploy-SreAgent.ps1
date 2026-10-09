@@ -36,6 +36,8 @@ param(
     [ValidateSet('High', 'Low')]
     [string]$AccessLevel = 'High',
 
+    [string]$SkinPath = '',
+
     [switch]$WhatIf
 )
 
@@ -115,6 +117,22 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
+if (Test-Path -LiteralPath $skinModule) {
+    Import-Module $skinModule -Force
+}
+$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('Location')) { $Location = Get-DemoSkinValue -Skin $skin -Path 'azure.location' -Default $Location }
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
+if (-not $PSBoundParameters.ContainsKey('AgentName')) { $AgentName = Get-DemoSkinValue -Skin $skin -Path 'labels.agentName' -Default $AgentName }
+if (-not $PSBoundParameters.ContainsKey('AccessLevel')) { $AccessLevel = Get-DemoSkinValue -Skin $skin -Path 'sre.accessLevel' -Default $AccessLevel }
+$demoTags = Merge-DemoHashtable -Defaults ([ordered]@{
+    owner = 'demo'
+    purpose = 'sre-agent'
+    env = 'demo'
+    layersOn = 'arc-demo'
+}) -Overrides (Get-DemoSkinValue -Skin $skin -Path 'tags' -Default @{})
+
 $templateFile = Join-Path $repoRoot 'infra\main.bicep'
 if (-not (Test-Path -LiteralPath $templateFile)) {
     throw "Template not found: $templateFile"
@@ -157,12 +175,7 @@ Write-Host 'Building Bicep template...'
 Invoke-AzCli -Arguments @('bicep', 'build', '--file', $templateFile, '--only-show-errors') | Out-Null
 
 $additionalManagedResourceIdsJson = ConvertTo-Json @($AdditionalManagedResourceIds) -Compress
-$tagsJson = ConvertTo-Json ([ordered]@{
-    owner = 'demo'
-    purpose = 'sre-agent'
-    env = 'demo'
-    layersOn = 'arc-demo'
-}) -Compress
+$tagsJson = ConvertTo-Json $demoTags -Compress
 $deploymentName = "sre-agent-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
 $verb = if ($WhatIf) { 'what-if' } else { 'create' }
 $parameters = @(

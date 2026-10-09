@@ -24,6 +24,8 @@ param(
     [ValidateSet('Break', 'Repair', 'Status')]
     [string]$State = 'Status',
 
+    [string]$SkinPath = '',
+
     [switch]$ShowMetrics
 )
 
@@ -92,6 +94,13 @@ function Get-ContainerAppStatus {
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI (az) is required. Install it and run az login before this script.'
 }
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
+Import-Module $skinModule -Force
+$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
+if (-not $PSBoundParameters.ContainsKey('State')) { $State = Get-DemoSkinValue -Skin $skin -Path 'sre.nativeContainerFaultState' -Default $State }
 
 if (-not $ResourceGroupName) {
     $ResourceGroupName = "rg-$NamePrefix-infra"

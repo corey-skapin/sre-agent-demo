@@ -4,6 +4,10 @@
 
 **Live verdict: pending.** This package is a reproducible experiment harness for measuring Azure SRE Agent value against `arc-demo` Arc-enabled servers. It intentionally does **not** claim SRE Agent support for Arc-server remediation until the live lab run has been reproduced and evidence has been attached.
 
+Default prefix, region, access level, and target machine are read from
+`config\demo-skin.json` when scripts are run with `-SkinPath`; see
+[`reskin-guide.md`](reskin-guide.md).
+
 References used for the harness:
 
 - Azure Arc-enabled servers Run command (preview): <https://learn.microsoft.com/en-us/azure/azure-arc/servers/run-command>
@@ -104,7 +108,7 @@ $targetArcId = az connectedmachine show `
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -NamePrefix arc-demo `
+  -SkinPath .\config\demo-skin.json `
   -AdditionalManagedResourceIds $targetArcId
 ```
 

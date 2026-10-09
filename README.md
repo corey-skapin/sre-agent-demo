@@ -2,6 +2,8 @@
 
 This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` repository at `C:\src\arc-demo`. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
+Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json). Keep `azure.namePrefix` aligned with the Arc repo's skin, then use `-SkinPath` on the scripts; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
+
 ## What it deploys
 
 - `Microsoft.App/agents` SRE Agent in **Review** mode.
@@ -47,6 +49,8 @@ Default arc-demo names discovered by the script:
 | SRE RG | `rg-<NamePrefix>-sre` |
 | Agent name | `sre-<NamePrefix>` sanitized to the SRE Agent naming rules |
 
+The defaults above are read from the skin file unless a script parameter overrides them.
+
 ## Validate locally
 
 ```powershell
@@ -65,7 +69,7 @@ Preview first:
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -NamePrefix arc-demo `
+  -SkinPath .\config\demo-skin.json `
   -WhatIf
 ```
 
@@ -75,7 +79,7 @@ Deploy:
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -NamePrefix arc-demo
+  -SkinPath .\config\demo-skin.json
 ```
 
 If your arc-demo names differ, pass explicit IDs/names instead of relying on discovery:
@@ -102,6 +106,7 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server investigation/remediation experiment.
 - `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
+- `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Left for later tasks
 

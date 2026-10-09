@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "customer": {
+    "name": "Contoso Energy",
+    "shortName": "Contoso",
+    "scenarioLabel": "Hybrid Operations Readiness"
+  },
+  "azure": {
+    "namePrefix": "contoso-arc",
+    "location": "australiaeast"
+  },
+  "sre": {
+    "accessLevel": "High",
+    "targetArcMachine": "win-app-01",
+    "nativeContainerFaultState": "Status",
+    "t10Scenario": "HeartbeatByBackingVm",
+    "lobFaultMode": "CrashOnProcessing"
+  },
+  "labels": {
+    "demoTitle": "Contoso Arc Demo",
+    "agentName": "sre-contoso-arc",
+    "containerResponsePlan": "container-app-restart-review",
+    "lobAlertTitleContains": "lob-arc-app-fault",
+    "lobAppName": "Contoso LOB Bridge App",
+    "lobEventSource": "ContosoLobBridgeApp",
+    "lobTaskName": "ContosoSreLobApp"
+  },
+  "codeContext": {
+    "lobRepositoryUrl": "https://github.com/contoso/lob-arc-app-demo",
+    "lobSourceCommit": "pending-live-demo-commit",
+    "lobSourcePath": "LobArcBridgeApp.ps1"
+  },
+  "tags": {
+    "owner": "demo",
+    "purpose": "contoso-sre-agent",
+    "env": "demo",
+    "layersOn": "contoso-arc"
+  }
+}

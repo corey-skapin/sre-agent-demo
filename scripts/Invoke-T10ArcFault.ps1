@@ -43,7 +43,9 @@ param(
     [int]$MinimumFreeGB = 5,
 
     [ValidateRange(30, 1800)]
-    [int]$CpuDurationSeconds = 300
+    [int]$CpuDurationSeconds = 300,
+
+    [string]$SkinPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -315,6 +317,14 @@ function Invoke-ArcRunCommand {
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI (az) is required. Install it and run az login before this script.'
 }
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
+Import-Module $skinModule -Force
+$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
+if (-not $PSBoundParameters.ContainsKey('MachineName')) { $MachineName = Get-DemoSkinValue -Skin $skin -Path 'sre.targetArcMachine' -Default $MachineName }
+if (-not $PSBoundParameters.ContainsKey('Scenario')) { $Scenario = Get-DemoSkinValue -Skin $skin -Path 'sre.t10Scenario' -Default $Scenario }
 
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $InfraResourceGroupName) { $InfraResourceGroupName = "rg-$NamePrefix-infra" }

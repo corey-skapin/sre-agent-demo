@@ -8,6 +8,10 @@ evidence checklist for a line-of-business app running on an Arc-enabled Windows
 server. It does **not** claim a live SRE Agent investigation or remediation until
 the lab is run and evidence is captured.
 
+Default prefix, target machine, LOB app labels, and code-context repository values
+come from `config\demo-skin.json` when scripts are run with `-SkinPath`; see
+[`reskin-guide.md`](reskin-guide.md).
+
 ## Bridge architecture
 
 ```text
@@ -82,7 +86,7 @@ Deploy or update the SRE Agent with the target Arc machine in scope:
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
+  -SkinPath .\config\demo-skin.json `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($targetArcId)
 ```
@@ -97,10 +101,8 @@ Arc Run command permissions.
 .\scripts\Invoke-LobArcAppOnArc.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
-  -MachineName $machineName `
+  -SkinPath .\config\demo-skin.json `
   -Action Deploy `
-  -SourceRepositoryUrl 'https://github.com/<org>/lob-arc-app-demo' `
   -SourceCommit '<commit-sha>'
 ```
 
@@ -131,8 +133,7 @@ Preview the query:
 .\scripts\New-LobArcAppMonitorAlert.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
-  -MachineName $machineName `
+  -SkinPath .\config\demo-skin.json `
   -Action ShowQuery
 ```
 
@@ -154,8 +155,7 @@ Create the scheduled-query alert routed to the existing arc-demo Action Group:
 .\scripts\New-LobArcAppMonitorAlert.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -NamePrefix $namePrefix `
-  -MachineName $machineName `
+  -SkinPath .\config\demo-skin.json `
   -Action Create
 ```
 
