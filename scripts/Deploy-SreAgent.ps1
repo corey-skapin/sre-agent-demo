@@ -7,7 +7,7 @@
     This script discovers or accepts the resource IDs exported by arc-demo, then deploys
     infra/main.bicep at subscription scope. It does not modify or redeploy arc-demo.
 #>
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$SubscriptionId,
@@ -199,24 +199,23 @@ $deploymentArgs = @(
 ) + $parameters + @('--only-show-errors')
 
 $targetSummary = "SRE Agent '$AgentName' in '$SreResourceGroupName' layered on '$ArcResourceGroupName' and '$InfraResourceGroupName'"
-if ($PSCmdlet.ShouldProcess($targetSummary, "az deployment sub $verb")) {
-    $resultText = Invoke-AzCli -Arguments $deploymentArgs
-    if ($WhatIf) {
-        Write-Host $resultText
-        Write-Host 'What-if complete. No resources were deployed.'
-        return
-    }
+Write-Host "Running az deployment sub $verb for $targetSummary"
+$resultText = Invoke-AzCli -Arguments $deploymentArgs
+if ($WhatIf) {
+    Write-Host $resultText
+    Write-Host 'What-if complete. No resources were deployed.'
+    return
+}
 
-    $result = $resultText | ConvertFrom-Json
-    $outputs = $result.properties.outputs
-    Write-Host ''
-    Write-Host 'SRE Agent deploy complete.'
-    Write-Host "  Agent:       $($outputs.agentName.value)"
-    Write-Host "  Portal:      $($outputs.agentPortalUrl.value)"
-    Write-Host "  Identity:    $($outputs.managedIdentityId.value)"
-    Write-Host "  AccessLevel: $($outputs.accessLevel.value)"
-    Write-Host '  Managed resource IDs:'
-    foreach ($id in @($outputs.managedResourceIds.value)) {
-        Write-Host "    - $id"
-    }
+$result = $resultText | ConvertFrom-Json
+$outputs = $result.properties.outputs
+Write-Host ''
+Write-Host 'SRE Agent deploy complete.'
+Write-Host "  Agent:       $($outputs.agentName.value)"
+Write-Host "  Portal:      $($outputs.agentPortalUrl.value)"
+Write-Host "  Identity:    $($outputs.managedIdentityId.value)"
+Write-Host "  AccessLevel: $($outputs.accessLevel.value)"
+Write-Host '  Managed resource IDs:'
+foreach ($id in @($outputs.managedResourceIds.value)) {
+    Write-Host "    - $id"
 }
