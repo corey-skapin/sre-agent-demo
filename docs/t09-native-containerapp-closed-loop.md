@@ -1,6 +1,6 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: local artifact validation complete; live Azure alert/SRE execution is pending because this task was authored without subscription or portal access.
+Status: live lab validation partially complete. The Container App fault/recovery path and SRE Agent investigation were exercised in Azure; portal response-plan approval, automatic Azure Monitor incident handoff, and audit capture are still pending.
 
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
@@ -22,7 +22,7 @@ For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
 |---|---|---|---|
 | Container App | `ca-arc-demo-fault` | `rg-arc-demo-infra` | Tiny HTTP app with `SIMULATE_CRASH` env-var fault |
 | Container Apps environment | `cae-arc-demo` | `rg-arc-demo-infra` | Hosts the app |
-| Metric alert | `alert-arc-demo-containerapp-restarts` | `rg-arc-demo-infra` | Fires when `RestartCount` total is greater than 3 in 5 minutes |
+| Metric alert | `alert-arc-demo-containerapp-restarts` | `rg-arc-demo-infra` | Fires when `RestartCount` total is greater than 0 in 5 minutes |
 | Action Group | `ag-arc-demo` | `rg-arc-demo` | Existing alert seam consumed by SRE Agent |
 | SRE Agent | `sre-arc-demo` | `rg-arc-demo-sre` | Review-mode agent with Azure Monitor incident source |
 
@@ -146,7 +146,7 @@ az containerapp update `
   --set-env-vars SIMULATE_CRASH=true
 ```
 
-Wait 5-10 minutes. The alert evaluates every 5 minutes over a 5-minute window and fires when `RestartCount` total is greater than 3.
+Wait 5-10 minutes. The alert evaluates every 5 minutes over a 5-minute window and fires when `RestartCount` total is greater than 0.
 
 ## 6. Observe the SRE investigation
 
@@ -235,16 +235,16 @@ Use three evidence points:
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| Arc-demo Container App deployed | No | Pending live lab |
-| SRE Agent deployed with Container App and alert IDs in managed resources | No | Pending live lab |
+| Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after repair: `ca-arc-demo-fault--0000006` |
+| SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
 | Review-mode response plan enabled | No | Pending live lab |
-| `SIMULATE_CRASH=true` induced | No | Pending live lab |
-| Azure Monitor alert fired | No | Pending live lab |
-| SRE Agent RCA produced | No | Pending live lab |
+| `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000005` became unhealthy with `RestartCount` > 0 |
+| Azure Monitor alert fired | Partial | Metric threshold crossed after lowering alert to `RestartCount > 0`; active alert/incident handoff not yet captured |
+| SRE Agent RCA produced | Partial | SRE thread `43cccd0b-df51-4015-8806-b146ba173d62` investigated the resource; final RCA output required follow-up and tool-result messages were sometimes blank |
 | Review-mode action approved | No | Pending live lab |
-| Agent reset `SIMULATE_CRASH=false` | No | Pending live lab |
-| App recovered and alert resolved | No | Pending live lab |
+| Agent reset `SIMULATE_CRASH=false` | No | Manual repair performed with helper script |
+| App recovered and alert resolved | Yes | `SIMULATE_CRASH=false`; active revision healthy after manual repair |
 | Audit trail captured | No | Pending live lab |
 
 ## Local validation completed for this task
