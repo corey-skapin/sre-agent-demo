@@ -103,6 +103,7 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 
 ## Scenario runbooks
 
+- `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server investigation/remediation experiment.
 - `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
@@ -110,4 +111,5 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 
 ## Left for later tasks
 
-- **T12/T13:** reskin variables and final delivery storyboard. Do not promise live SRE remediation for T09-T11 until lab evidence is captured.
+- **Live lab validation:** Do not promise live SRE remediation for T09-T11 until lab evidence is captured.
+- **T14:** EDE PoC datasheet remains deferred.
