@@ -1,0 +1,10 @@
+# Local Azure CLI / deployment scratch
+.azure/
+*.azcli.output.json
+
+# PowerShell/editor noise
+*.ps1xml
+.vscode/
+
+# Bicep build output if generated manually
+infra/**/*.json
