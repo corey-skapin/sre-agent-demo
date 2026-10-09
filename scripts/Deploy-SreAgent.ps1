@@ -174,37 +174,48 @@ foreach ($id in $AdditionalManagedResourceIds) {
 Write-Host 'Building Bicep template...'
 Invoke-AzCli -Arguments @('bicep', 'build', '--file', $templateFile, '--only-show-errors') | Out-Null
 
-$additionalManagedResourceIdsJson = ConvertTo-Json @($AdditionalManagedResourceIds) -Compress
-$tagsJson = ConvertTo-Json $demoTags -Compress
 $deploymentName = "sre-agent-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
 $verb = if ($WhatIf) { 'what-if' } else { 'create' }
-$parameters = @(
-    "location=$Location",
-    "sreResourceGroupName=$SreResourceGroupName",
-    "agentName=$AgentName",
-    "arcDemoResourceGroupName=$ArcResourceGroupName",
-    "arcDemoInfraResourceGroupName=$InfraResourceGroupName",
-    "arcDemoWorkspaceId=$LogAnalyticsWorkspaceId",
-    "arcDemoActionGroupId=$ActionGroupId",
-    "additionalManagedResourceIds=$additionalManagedResourceIdsJson",
-    "accessLevel=$AccessLevel",
-    "tags=$tagsJson"
-)
+$paramFile = Join-Path $env:TEMP "sre-agent-params-$(Get-Random).json"
+$templateParameters = @{
+    location                     = @{ value = $Location }
+    sreResourceGroupName         = @{ value = $SreResourceGroupName }
+    agentName                    = @{ value = $AgentName }
+    arcDemoResourceGroupName     = @{ value = $ArcResourceGroupName }
+    arcDemoInfraResourceGroupName = @{ value = $InfraResourceGroupName }
+    arcDemoWorkspaceId           = @{ value = $LogAnalyticsWorkspaceId }
+    arcDemoActionGroupId         = @{ value = $ActionGroupId }
+    additionalManagedResourceIds = @{ value = @($AdditionalManagedResourceIds) }
+    accessLevel                  = @{ value = $AccessLevel }
+    tags                         = @{ value = $demoTags }
+}
+@{
+    '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
+    contentVersion = '1.0.0.0'
+    parameters = $templateParameters
+} | ConvertTo-Json -Depth 20 | ForEach-Object {
+    [System.IO.File]::WriteAllText($paramFile, $_, [System.Text.UTF8Encoding]::new($false))
+}
 $deploymentArgs = @(
     'deployment', 'sub', $verb,
     '--name', $deploymentName,
     '--location', $Location,
     '--template-file', $templateFile,
-    '--parameters'
-) + $parameters + @('--only-show-errors')
+    '--parameters', "@$paramFile",
+    '--only-show-errors'
+)
 
 $targetSummary = "SRE Agent '$AgentName' in '$SreResourceGroupName' layered on '$ArcResourceGroupName' and '$InfraResourceGroupName'"
 Write-Host "Running az deployment sub $verb for $targetSummary"
-$resultText = Invoke-AzCli -Arguments $deploymentArgs
-if ($WhatIf) {
-    Write-Host $resultText
-    Write-Host 'What-if complete. No resources were deployed.'
-    return
+try {
+    $resultText = Invoke-AzCli -Arguments $deploymentArgs
+    if ($WhatIf) {
+        Write-Host $resultText
+        Write-Host 'What-if complete. No resources were deployed.'
+        return
+    }
+} finally {
+    Remove-Item $paramFile -Force -ErrorAction SilentlyContinue
 }
 
 $result = $resultText | ConvertFrom-Json
