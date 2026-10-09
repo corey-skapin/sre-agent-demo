@@ -90,10 +90,8 @@ if ($identityPrincipalId) {
         $scope = Invoke-AzCli -Arguments @('group', 'show', '--name', $rg, '--query', 'id', '--output', 'tsv', '--only-show-errors')
         $assignments = Invoke-AzCli -Arguments @(
             'role', 'assignment', 'list',
-            '--assignee-object-id', $identityPrincipalId,
-            '--assignee-principal-type', 'ServicePrincipal',
             '--scope', $scope,
-            '--query', '[].id',
+            '--query', "[?principalId=='$identityPrincipalId'].id",
             '--output', 'tsv',
             '--only-show-errors'
         ) 2>$null
