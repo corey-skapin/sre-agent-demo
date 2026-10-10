@@ -297,6 +297,7 @@ function Invoke-ArcRunCommand {
     # The connectedmachine CLI extension is more reliable with inline scripts
     # when the script is a single line. Preserve pipeline continuations first.
     $normalizedScript = ($Script -replace "\|\s*(`r`n|`n|`r)\s*", '| ') -replace "(`r`n|`n|`r)", '; '
+    $normalizedScript = $normalizedScript -replace "}\s*;\s*else", "} else"
 
     $resultText = Invoke-AzCli -Arguments @(
         'connectedmachine', 'run-command', 'create',
