@@ -359,9 +359,30 @@ Follow-up:
 
 ## Live-verdict status
 
-No live subscription/SRE portal run was executed while creating this package. The lab still needs:
+Status as of 2026-10-10:
 
-1. Deploy or update SRE Agent with `win-app-01` in `AdditionalManagedResourceIds`.
-2. Run Scenario A end-to-end and capture the SRE incident.
-3. Run at least one Arc Run command scenario end-to-end.
-4. Fill the matrix with evidence-backed `works`, `partial`, or `fails` verdicts.
+- SRE Agent `sre-arc-demo` was redeployed with `accessLevel=High`.
+- `win-app-01` was used as the target Arc server.
+- Arc Run Command successfully executed against `win-app-01` for `WriteEvent`.
+- Guest-local evidence was confirmed through Arc Run Command:
+  - Event `1010` / Provider `T10ArcFault` / Level `Error`
+  - Reset marker event `1011` / Provider `T10ArcFault` / Level `Information`
+- SRE Agent manual investigation thread `49acabac-7d88-402f-895f-d774085e985e`
+  started and attempted evidence collection, but tool result messages were often
+  blank and no final RCA was produced without repeated prompting.
+
+Current verdict:
+
+| Area | Verdict |
+|---|---|
+| Arc Run Command as a remediation/investigation mechanism | **Works** from the lab using `Microsoft.HybridCompute/machines/runCommands` |
+| SRE Agent can target the Arc machine resource in a manual investigation | **Partial** - it accepts the Arc resource and begins investigation |
+| SRE Agent produces a clean, evidence-backed Arc-server RCA automatically | **Not yet** - data-plane/tool output was flaky in this run |
+| Automatic Azure Monitor -> SRE incident handoff for Arc server alert | **Not yet validated** |
+
+Remaining live work:
+
+1. Configure/validate a real Arc-server Azure Monitor alert or incident response plan.
+2. Re-run T10 once SRE response-plan handling-agent setup is confirmed.
+3. Capture an SRE transcript where the agent successfully cites Arc/Log Analytics
+   evidence and proposes an Arc Run Command reset.
