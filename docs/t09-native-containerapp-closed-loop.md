@@ -110,17 +110,69 @@ Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` 
 In the SRE Agent portal:
 
 1. Open `sre-arc-demo`.
-2. Go to **Builder** > **Incident response plans**.
-3. If the quickstart response plan would also match this alert, disable or delete it to avoid duplicate processing.
-4. Create a response plan:
+2. Go to **Build + setup** > **Agent Canvas**.
+3. Create or verify a custom agent named `sre-arc-demo`:
+   - Instructions: handle Azure Monitor incidents for `alert-arc-demo-containerapp-restarts`; investigate `ca-arc-demo-fault`, `RestartCount`, revision health, and the `SIMULATE_CRASH` environment variable.
+   - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
+   - Tools: leave empty to inherit the parent agent's global Azure tools, or explicitly select the Azure Monitor/Azure resource tools required by the environment.
+4. Go to **Builder** > **Incident response plans**.
+5. If the quickstart response plan would also match this alert, disable or delete it to avoid duplicate processing.
+6. Create a response plan:
    - Platform: **Azure Monitor**
    - Name: `container-app-restart-review`
    - Severity: `Sev2`
    - Title contains: `containerapp-restarts`
-   - Response custom agent: the default/custom agent used for this demo
+   - Response custom agent: `sre-arc-demo`
    - Agent autonomy level: **Review**
    - Reinvestigation cooldown: enabled, 3 hours
-5. Save and enable the plan.
+7. Save and enable the plan.
+
+### F04 live setup status
+
+The live lab currently has the parent SRE Agent resource, but not the data-plane
+custom agent/handling agent required by response plans.
+
+Validated state on 2026-10-10:
+
+- `sreagent_agents_list` with tenant `4a2e6a7b-9d04-4e89-9d8b-01c75a2444c1` shows `sre-arc-demo` in `rg-arc-demo-sre` with `provisioningState: Succeeded`.
+- `az resource show` shows the parent agent is `Running`, Review mode, High access, and has `ca-arc-demo-fault` in `knowledgeGraphConfiguration.managedResources`.
+- `sreagent_incidents_plans_list` returns no incident response plans.
+- `sreagent_hooks_list`, `sreagent_commonprompts_list`, `sreagent_skills_list`, `sreagent_agents_tools_list`, `sreagent_connectors_list`, and `sreagent_scheduledtasks_list` all return empty results.
+
+Attempted MCP setup:
+
+```powershell
+# Handler YAML validation passed.
+sreagent_workflows_validate `
+  --yaml-content <ExtendedAgent YAML with metadata.name sre-arc-demo>
+
+# Applying the same YAML failed in the SRE Agent data plane.
+sreagent_workflows_apply `
+  --tenant 4a2e6a7b-9d04-4e89-9d8b-01c75a2444c1 `
+  --subscription 6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5 `
+  --resource-group rg-arc-demo-sre `
+  --agent sre-arc-demo `
+  --yaml-content <ExtendedAgent YAML>
+# 400 from /api/v2/extendedAgent/agents/sre-arc-demo:
+# The JSON value could not be converted ...; request field is required.
+
+# Creating the response plan still fails until the custom handling agent exists.
+sreagent_incidents_plans_create `
+  --name container-app-restart-review `
+  --severity high `
+  --trigger-condition "alert-arc-demo-containerapp-restarts OR containerapp-restarts" `
+  --services Azure Container Apps,ca-arc-demo-fault,rg-arc-demo-infra `
+  --agent-mode review `
+  --agent sre-arc-demo
+# 400 from /api/v1/incidentplayground/filters/container-app-restart-review:
+# "Handling agent 'sre-arc-demo' does not exist."
+```
+
+Until `sreagent_workflows_apply` is fixed or the custom agent is created in the
+portal, the reproducible next step is portal creation through **Build + setup** >
+**Agent Canvas**, followed by the response plan steps above. After the custom
+agent exists, rerun `sreagent_incidents_plans_create` or create the plan in the
+portal and verify with `sreagent_incidents_plans_list`.
 
 ## 5. Induce the fault
 
@@ -238,7 +290,7 @@ Use three evidence points:
 | Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after repair: `ca-arc-demo-fault--0000006` |
 | SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
-| Review-mode response plan enabled | No | Pending live lab |
+| Review-mode response plan enabled | No | F04 verified no plans; MCP workflow apply fails with data-plane 400 and response-plan create fails until handling agent `sre-arc-demo` exists; portal custom-agent creation is the current next step |
 | `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000005` became unhealthy with `RestartCount` > 0 |
 | Azure Monitor alert fired | Partial | Metric threshold crossed after lowering alert to `RestartCount > 0`; active alert/incident handoff not yet captured |
 | SRE Agent RCA produced | Partial | SRE thread `43cccd0b-df51-4015-8806-b146ba173d62` investigated the resource; final RCA output required follow-up and tool-result messages were sometimes blank |
