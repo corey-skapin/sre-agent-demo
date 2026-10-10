@@ -303,7 +303,17 @@ function Invoke-ArcRunCommand {
         '--only-show-errors',
         '-o', 'json'
     )
-    $result = $resultText | ConvertFrom-Json
+    $result = $null
+    try {
+        $jsonStart = $resultText.IndexOf('{')
+        if ($jsonStart -ge 0) {
+            $result = $resultText.Substring($jsonStart) | ConvertFrom-Json
+        } else {
+            $result = [pscustomobject]@{ rawOutput = $resultText }
+        }
+    } catch {
+        $result = [pscustomobject]@{ rawOutput = $resultText; parseError = $_.Exception.Message }
+    }
 
     [pscustomobject]@{
         Scenario = $Scenario
