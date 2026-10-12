@@ -2,7 +2,16 @@
 
 ## Current status
 
-**Live verdict: assisted diagnostics validated; autonomous repair not currently demo-ready.** This package is a reproducible experiment harness for measuring Azure SRE Agent value against `arc-demo` Arc-enabled servers. The current customer-safe claim is SRE-assisted diagnosis plus governed operator remediation through Arc Run Command. Do **not** present autonomous or SRE-executed Arc server repair as available in this demo; treat it only as a possible future capability.
+**Backstage evidence, not the main customer scene.** This package is the engineering
+proof behind the customer-facing T11 hybrid diagnostics wow. It validates that SRE
+Agent can reason over Arc/on-prem-shaped evidence and that Arc Run Command gives
+the operator a governed action path. The current customer-safe claim is
+SRE-assisted diagnosis plus governed operator remediation through Arc Run Command.
+Do **not** present autonomous or SRE-executed Arc server repair as available in
+this demo; treat it only as a possible future capability.
+
+Use T10 when an architect or platform engineer asks, "How do we know the Arc
+mechanics are real?" Use T11 when delivering the customer wow.
 
 Default prefix, region, access level, and target machine are read from
 `config\demo-skin.json` when scripts are run with `-SkinPath`; see
@@ -16,7 +25,8 @@ References used for the harness:
 
 ## Goal
 
-Empirically answer: **how much value does Azure SRE Agent deliver against on-premises-shaped Arc-enabled servers?**
+Empirically answer: **which Arc-server diagnostics and operator-action mechanics
+are real enough to support the T11 customer story?**
 
 The answer must separate:
 
@@ -380,6 +390,13 @@ Current verdict:
 | SRE Agent produces a clean, evidence-backed Arc-server RCA automatically | **Partial** - the final RCA is good, but tool-result messages can be blank and Log Analytics Event/Heartbeat evidence was not available in this run |
 | SRE Agent can execute Arc Run Command remediation | **Not yet** - it attempted the approved reset action, but EventID 1011 was not observed from the agent action; manual replay succeeded |
 | Automatic Azure Monitor -> SRE incident handoff for Arc server alert | **Not yet validated** |
+
+Presenter guidance:
+
+- Use this section as appendix/backstage evidence.
+- Do not spend customer demo time walking through every T10 hypothesis unless the
+  audience asks for implementation detail.
+- Lead with T11 for the customer-facing hybrid diagnostics story.
 
 Customer-facing stance:
 
