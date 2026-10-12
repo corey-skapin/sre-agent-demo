@@ -125,6 +125,7 @@ Arc demo estate stays intact.
 ## Scenario runbooks
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
+- `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\sre-response-plan-automation.md` - Decision record for automating custom agents and response plans.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
