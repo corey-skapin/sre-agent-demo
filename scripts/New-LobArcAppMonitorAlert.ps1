@@ -132,22 +132,50 @@ $actionGroupId = Get-AzTsv -Arguments @(
     '--query', 'id'
 ) -Description "Action Group '$ActionGroupName'"
 
-$condition = "count '$($query.Replace("'", "''"))' > 0"
 $target = "scheduled query alert '$AlertName' in '$ArcResourceGroupName'"
 if ($PSCmdlet.ShouldProcess($target, 'create or update Azure Monitor alert')) {
-    Invoke-AzCli -Arguments @(
-        'monitor', 'scheduled-query', 'create',
-        '--resource-group', $ArcResourceGroupName,
-        '--name', $AlertName,
-        '--scopes', $workspaceId,
-        '--description', "T11 LOB Arc bridge app fault event from $MachineName",
-        '--condition', $condition,
-        '--evaluation-frequency', '5m',
-        '--window-size', '10m',
-        '--severity', '2',
-        '--action-groups', $actionGroupId,
-        '--auto-mitigate', 'true',
-        '--only-show-errors',
-        '-o', 'json'
-    )
+    $body = @{
+        location = 'australiaeast'
+        properties = @{
+            displayName = 'Arc Demo - LOB Arc app fault'
+            description = "T11 LOB Arc bridge app fault event from $MachineName"
+            severity = 2
+            enabled = $true
+            evaluationFrequency = 'PT5M'
+            windowSize = 'PT10M'
+            scopes = @($workspaceId)
+            criteria = @{
+                allOf = @(@{
+                    query = $query
+                    timeAggregation = 'Count'
+                    operator = 'GreaterThan'
+                    threshold = 0
+                    failingPeriods = @{
+                        numberOfEvaluationPeriods = 1
+                        minFailingPeriodsToAlert = 1
+                    }
+                })
+            }
+            autoMitigate = $true
+            actions = @{
+                actionGroups = @($actionGroupId)
+            }
+        }
+    } | ConvertTo-Json -Depth 20
+
+    $tempBody = Join-Path $env:TEMP "lob-arc-alert-$(Get-Random).json"
+    [System.IO.File]::WriteAllText($tempBody, $body, [System.Text.UTF8Encoding]::new($false))
+    try {
+        Invoke-AzCli -Arguments @(
+            'rest',
+            '--method', 'put',
+            '--url', "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ArcResourceGroupName/providers/Microsoft.Insights/scheduledQueryRules/$AlertName?api-version=2023-03-15-preview",
+            '--body', "@$tempBody",
+            '--headers', 'Content-Type=application/json',
+            '--only-show-errors',
+            '-o', 'json'
+        )
+    } finally {
+        Remove-Item -LiteralPath $tempBody -Force -ErrorAction SilentlyContinue
+    }
 }
