@@ -287,17 +287,17 @@ Use three evidence points:
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after repair: `ca-arc-demo-fault--0000006` |
+| Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after SRE repair: `ca-arc-demo-fault--0000012` |
 | SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
-| Review-mode response plan enabled | No | F04 verified no plans; MCP workflow apply fails with data-plane 400 and response-plan create fails until handling agent `sre-arc-demo` exists; portal custom-agent creation is the current next step |
-| `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000005` became unhealthy with `RestartCount` > 0 |
-| Azure Monitor alert fired | Partial | Metric threshold crossed after lowering alert to `RestartCount > 0`; active alert/incident handoff not yet captured |
-| SRE Agent RCA produced | Partial | SRE thread `43cccd0b-df51-4015-8806-b146ba173d62` investigated the resource; final RCA output required follow-up and tool-result messages were sometimes blank |
-| Review-mode action approved | No | Pending live lab |
-| Agent reset `SIMULATE_CRASH=false` | No | Manual repair performed with helper script |
-| App recovered and alert resolved | Yes | `SIMULATE_CRASH=false`; active revision healthy after manual repair |
-| Audit trail captured | No | Pending live lab |
+| Review-mode response plan enabled | Yes | Created through SRE portal after creating custom subagent `sre-arc-demo`; MCP `incidents_plans_list` shows `container-app-restart-review` enabled, Sev2, mode `review` |
+| `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000011` became unhealthy with `RestartCount` > 0 |
+| Azure Monitor alert fired | Yes | Alert thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd`, alert ID `56ca7acd-84ad-4ff0-b660-26647566f000`, fired at `2026-10-12T01:38:34Z` |
+| SRE Agent RCA produced | Yes | RCA identified `SIMULATE_CRASH=true`, entrypoint exits with code 1, RestartCount starts at `01:36 UTC`, and previous revision `--0000010` was last healthy |
+| Review-mode action approved | Yes | Portal approval card executed `az containerapp update --name ca-arc-demo-fault --resource-group rg-arc-demo-infra --subscription 6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5 --set-env-vars SIMULATE_CRASH=false` |
+| Agent reset `SIMULATE_CRASH=false` | Yes | SRE Agent reported `SIMULATE_CRASH=false` applied and created revision `ca-arc-demo-fault--0000012` |
+| App recovered and alert resolved | Yes | Revision `ca-arc-demo-fault--0000012` became ready, RestartCount returned to 0, and SRE Agent closed the Sev2 alert |
+| Audit trail captured | Yes | Thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd` includes alert payload, RCA, approved Azure CLI action, execution completion, recovery confirmation, and alert closure |
 
 ## Local validation completed for this task
 
