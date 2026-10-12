@@ -403,16 +403,33 @@ function Invoke-ArcRunCommand {
         return
     }
 
-    $resultText = Invoke-AzCli -Arguments @(
-        'connectedmachine', 'run-command', 'create',
-        '--name', $runCommandName,
-        '--machine-name', $MachineName,
-        '--resource-group', $ArcResourceGroupName,
-        '--script', $Script,
-        '--only-show-errors',
-        '-o', 'json'
-    )
-    $result = $resultText | ConvertFrom-Json -Depth 100
+    $scriptPath = Join-Path $env:TEMP "$runCommandName.ps1"
+    [System.IO.File]::WriteAllText($scriptPath, $Script, [System.Text.UTF8Encoding]::new($false))
+    try {
+        $resultText = Invoke-AzCli -Arguments @(
+            'connectedmachine', 'run-command', 'create',
+            '--name', $runCommandName,
+            '--machine-name', $MachineName,
+            '--resource-group', $ArcResourceGroupName,
+            '--script', "@$scriptPath",
+            '--only-show-errors',
+            '-o', 'json'
+        )
+    } finally {
+        Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
+    }
+
+    $result = $null
+    try {
+        $jsonStart = $resultText.IndexOf('{')
+        if ($jsonStart -ge 0) {
+            $result = $resultText.Substring($jsonStart) | ConvertFrom-Json -Depth 100
+        } else {
+            $result = [pscustomobject]@{ rawOutput = $resultText }
+        }
+    } catch {
+        $result = [pscustomobject]@{ rawOutput = $resultText; parseError = $_.Exception.Message }
+    }
 
     [pscustomobject]@{
         Action = $Action
