@@ -155,5 +155,5 @@ Only include reset commands for scenarios you actually induced. Capture SRE thre
 
 - T09: optional source-code repository connection/audit polish only; core closed-loop path is proven.
 - T10: keep as assisted diagnosis plus manual/operator Arc Run Command replay. Treat SRE-executed Arc Run Command repair as future investigation, not current demo scope.
-- T11: publish/connect the LOB sample repo for better code context. Keep RCA + operator recovery positioning; do not add autonomous Arc repair back into the talk track unless a future product-supported path is proven.
+- T11: connect the public `corey-skapin/arc-demo` repo in the SRE knowledge base so the agent can cite `samples/lob-arc-app/LobArcBridgeApp.ps1`. Keep RCA + operator recovery positioning; do not add autonomous Arc repair back into the talk track unless a future product-supported path is proven.
 - Act 1: before customer delivery, refresh live portal screenshots/queries after deployment because Monitor, Defender, Policy, and Update Manager blades have ingestion delays.

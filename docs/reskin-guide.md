@@ -21,7 +21,9 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 Change per customer:
 - Match `azure.namePrefix` and `azure.location` to the Arc repo's skin.
 - Update `labels.agentName` if the prefix changes.
-- Update `codeContext.lobRepositoryUrl` and `codeContext.lobSourceCommit` after publishing the customer-facing LOB app repo.
+- Update `codeContext.lobRepositoryUrl`, `codeContext.lobSourceCommit`, and
+  `codeContext.lobSourcePath` if you fork or move the public LOB sample. The
+  default points to `corey-skapin/arc-demo/samples/lob-arc-app`.
 - Pick the T10/T11 target Arc machine if the fleet mix changes.
 
 Keep constant:
@@ -69,7 +71,7 @@ or redeploy the Arc estate. Recreate the SRE layer with `Deploy-SreAgent.ps1`.
 
 DTF/default: use `config\demo-skin.json`, then provide only subscription/tenant and any live `AdditionalManagedResourceIds`.
 
-Dummy customer: `config\dummy-customer.demo-skin.json` changes the prefix to `contoso-arc`, agent name to `sre-contoso-arc`, LOB labels to Contoso, and code context to `https://github.com/contoso/lob-arc-app-demo`.
+Dummy customer: `config\dummy-customer.demo-skin.json` changes the prefix to `contoso-arc`, agent name to `sre-contoso-arc`, LOB labels to Contoso, and code context to a placeholder Contoso repo. For the shared demo, keep the default public `corey-skapin/arc-demo` code context unless the customer has its own LOB sample repo.
 
 ## Remaining constants
 

@@ -24,7 +24,7 @@ infra/
   modules/sre-agent.bicep    # SRE Agent, identity, and App Insights resources
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
 samples/
-  lob-arc-app/               # T11 sample app to publish as its own code repo for RCA context
+  lob-arc-app/               # Local copy of the T11 app; public source context lives in arc-demo samples/lob-arc-app
 scripts/
   Deploy-SreAgent.ps1        # discovers arc-demo IDs and deploys this layer
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server

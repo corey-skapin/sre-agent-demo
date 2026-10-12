@@ -41,20 +41,25 @@ This is intentionally different from the earlier tasks:
 
 ## App source and code context
 
-The sample app lives in `samples\lob-arc-app`. For the final customer demo, publish
-that folder as a separate GitHub repository, for example `lob-arc-app-demo`, and
-connect that repository in the SRE Agent portal:
+The sample app source used for SRE code context now lives in the public
+`arc-demo` repo at `samples/lob-arc-app`. Connect that repository in the SRE
+Agent portal:
 
 1. Open the SRE Agent.
 2. Go to **Builder** > **Knowledge base**.
-3. Add the LOB app repository, not `arc-demo`.
+3. Add `https://github.com/corey-skapin/arc-demo`.
 4. Deploy with `-SourceRepositoryUrl`, `-SourceCommit`, and `-SourcePath` so those
    values appear in the emitted Application events.
 
-The 2026-10-12 lab run stamped events with `corey-skapin/sre-agent-demo` at commit
-`5e09e53d3ddf4305590b86d6f2389b5aa6e137af`. The SRE Agent could not read the private
-GitHub repo directly, but it still correlated the event payload, Arc Run Command
-history, config path, scheduled task, and fault mode well enough to produce RCA.
+The previous 2026-10-12 lab run stamped events with the private
+`corey-skapin/sre-agent-demo` repo, so SRE could not read source code directly.
+The current default stamps public code context instead:
+
+| Field | Value |
+|---|---|
+| Repository | `https://github.com/corey-skapin/arc-demo` |
+| Commit | `161a27865a954312615ec4824fcf8292156335b0` |
+| Source path | `samples/lob-arc-app/LobArcBridgeApp.ps1` |
 
 The app reads `C:\ProgramData\ArcSreLobApp\appsettings.json`:
 
@@ -240,8 +245,8 @@ Desired investigation evidence:
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| LOB app source published as separate repo | Partial | Source stayed in `corey-skapin/sre-agent-demo`; publish `samples\lob-arc-app` separately or connect the private repo before customer delivery. |
-| SRE Agent knowledge base connected to LOB app repo | No | SRE could not access the private GitHub repo; event/run-command context still enabled RCA. |
+| LOB app source available to SRE code context | Yes | Public source copied to `corey-skapin/arc-demo` under `samples/lob-arc-app` at commit `161a27865a954312615ec4824fcf8292156335b0`. |
+| SRE Agent knowledge base connected to LOB app repo | Pending live check | Connect `https://github.com/corey-skapin/arc-demo` in the SRE portal before the next T11 run. |
 | Target Arc machine ID added to SRE Agent managed resources | Yes | `win-app-01` was in SRE scope through the `rg-arc-demo`/managed-resource configuration. |
 | App deployed on `win-app-01` with repository/commit stamped | Yes | Deploy run command `t11-lob-deploy-1012021324`; events stamped repo, commit `5e09e53d3ddf4305590b86d6f2389b5aa6e137af`, and source path. |
 | Healthy Application event/log heartbeat visible | Yes | Healthy Event ID `4000` heartbeats observed before fault and after reset. |
@@ -264,7 +269,8 @@ Desired investigation evidence:
   customer-facing demo claim. The demo-ready claim is SRE-assisted RCA plus
   operator-approved/manual Arc Run Command recovery. SRE-executed Arc app repair is
   future investigation only.
-- Connect or publish the LOB app repo before using this as a code-context demo.
+- Connect `https://github.com/corey-skapin/arc-demo` in the SRE Agent knowledge base
+  before using this as a code-context demo.
 - Keep `arc-demo` standalone: no files in `C:\src\arc-demo` are changed for T11.
 
 ## Local validation completed for this package

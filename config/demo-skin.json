@@ -26,9 +26,9 @@
     "lobTaskName": "ArcSreLobApp"
   },
   "codeContext": {
-    "lobRepositoryUrl": "https://github.com/<org>/lob-arc-app-demo",
-    "lobSourceCommit": "pending-live-demo-commit",
-    "lobSourcePath": "LobArcBridgeApp.ps1"
+    "lobRepositoryUrl": "https://github.com/corey-skapin/arc-demo",
+    "lobSourceCommit": "161a27865a954312615ec4824fcf8292156335b0",
+    "lobSourcePath": "samples/lob-arc-app/LobArcBridgeApp.ps1"
   },
   "tags": {
     "owner": "demo",

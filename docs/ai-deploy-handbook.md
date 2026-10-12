@@ -89,6 +89,7 @@ If MCP setup fails:
 | Custom handling agent | `sre-arc-demo` exists in Agent Canvas / subagent builder |
 | T09 response plan | `container-app-restart-review`, On, Review mode |
 | T09 closed loop | Container App alert opens SRE thread, RCA identifies `SIMULATE_CRASH=true`, approval resets it to `false`, app recovers |
+| T11 code context | `https://github.com/corey-skapin/arc-demo` connected in SRE knowledge base if running LOB-on-Arc |
 | T10/T11 stance | Assisted diagnostics only; operator Arc Run Command recovery |
 
 ## Scenario priority

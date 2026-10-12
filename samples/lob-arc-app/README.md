@@ -14,8 +14,8 @@ The runtime reads `C:\ProgramData\ArcSreLobApp\appsettings.json`:
 | `Degraded` | Writes warning events but keeps running. | Event ID `4200` Warning |
 | `CrashOnProcessing` | Writes an error event and exits with code 42. | Event ID `4100` Error plus stopped scheduled task |
 
-For the live demo, publish this folder as its own GitHub repository (for example
-`lob-arc-app-demo`) and connect that repository to the SRE Agent knowledge base.
-The deploy helper stamps the repository URL, commit, and source path into the
-app config and event messages so an SRE investigation has code context that is
-separate from both `arc-demo` and `sre-agent`.
+For the live demo, use the public copy in
+`https://github.com/corey-skapin/arc-demo/tree/main/samples/lob-arc-app` and
+connect the `arc-demo` repository to the SRE Agent knowledge base. The deploy
+helper stamps the repository URL, commit, and source path into the app config and
+event messages so an SRE investigation has public code context.
