@@ -126,6 +126,7 @@ Arc demo estate stays intact.
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
 - `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
+- `docs\clean-room-shareability-test-2026-10-12.md` - No-cost clean-room preview result across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\sre-response-plan-automation.md` - Decision record for automating custom agents and response plans.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
