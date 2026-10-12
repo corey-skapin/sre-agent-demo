@@ -19,9 +19,9 @@ Current status for T13:
 
 - Act 1 Arc/Monitor assets are built in `C:\src\arc-demo`; portal visuals depend on a live deployment and data ingestion.
 - T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, recovery, and alert closure.
-- T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability; SRE-executed Arc reset remains partial.
-- T11 LOB-on-Arc bridge is live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery; SRE-executed Arc reset remains partial.
-- Present T09 as the fully closed-loop "wow" path. Present T10/T11 honestly as hybrid RCA plus governed/manual Arc remediation unless later evidence captures a successful SRE-executed Arc command.
+- T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready** and should be described only as possible future capability.
+- T11 LOB-on-Arc bridge is live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery. Autonomous / SRE-executed Arc app repair is **not currently demo-ready**.
+- Present T09 as the fully closed-loop "wow" path. Present T10/T11 as hybrid assisted diagnostics plus governed operator remediation through Arc Run Command.
 
 ## Pre-demo setup checklist
 
@@ -96,10 +96,10 @@ Goal: show the art of the possible with strict governance, while clearly separat
 
 | Scene | Time | Show / do | Built assets to map to | Speaker notes / key phrases | Marker |
 |---|---:|---|---|---|---|
-| 2.1 Honest status reset | 1 min | State which SRE paths are live-proven today. | This runsheet; T09/T10/T11 evidence checklists | "The Azure-native Container App path is closed-loop proven. The Arc-server paths are proven for investigation and Arc Run Command recovery, with SRE-executed Arc actions still partial." | Required honesty marker |
+| 2.1 Honest status reset | 1 min | State which SRE paths are live-proven today. | This runsheet; T09/T10/T11 evidence checklists | "The Azure-native Container App path is closed-loop proven. The Arc-server paths are proven for assisted diagnostics and operator Arc Run Command recovery. We are not selling autonomous Arc server repair in this demo." | Required honesty marker |
 | 2.2 Optional SRE layer architecture | 3 min | Show `sre-agent` README, Review mode, AzMonitor incident source, RBAC profiles, and separation from `arc-demo`. | `C:\src\sre-agent\README.md`, `infra\main.bicep`, `scripts\Deploy-SreAgent.ps1` | "The agent layers on top. It reads existing Arc/Monitor resources; it does not redeploy or modify arc-demo." | Built / locally validated |
 | 2.3 T09 native Container App wow | 10-12 min | Induce `SIMULATE_CRASH=true`, wait for `alert-arc-demo-containerapp-restarts`, show SRE RCA, approve reset to `false`, verify endpoint and audit. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "The first credible wow is Azure-native: alert, investigate, RCA, human approval, real Azure fix, audit trail." | Live validated |
-| 2.4 T10 Arc-server experiment positioning | 5 min | Show the live verdict: SRE can reason over Arc resource evidence and Arc Run Command is viable, but agent-executed Arc reset is not yet reliable. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "Arc gives us an Azure control plane for hybrid servers. Today, the demo-ready claim is assisted diagnosis plus governed operator action, not unattended server repair." | Partial live verdict |
+| 2.4 T10 Arc-server experiment positioning | 5 min | Show the live verdict: SRE can reason over Arc resource evidence and Arc Run Command is viable for the operator, but autonomous Arc repair is not yet available for the demo. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "Arc gives us an Azure control plane for hybrid servers. Today, the demo-ready claim is assisted diagnosis plus governed operator action, not autonomous server repair." | Assisted diagnostics validated; autonomous repair future |
 | 2.5 T11 LOB app on Arc bridge | 5 min | Show the app-on-Arc alert, SRE RCA, and helper reset evidence. Explain code-context limitation if the repo is private/unconnected. | `docs\t11-lob-app-on-arc-bridge.md`, `samples\lob-arc-app`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This bridges on-prem-shaped operations with the app-context SRE loop without pretending a bare legacy server can magically produce a PR." | Live validated for RCA + manual Arc recovery |
 | 2.6 Governance and audit | 2 min | Reinforce Review mode, approval card, RBAC, Activity Log, SRE thread audit. | T09 section 9; README RBAC table | "AI can recommend and execute only inside Azure RBAC, Review approval, and auditable operations." | Built design; live audit requires run |
 
@@ -154,6 +154,6 @@ Only include reset commands for scenarios you actually induced. Capture SRE thre
 ## Remaining live-validation gaps
 
 - T09: optional source-code repository connection/audit polish only; core closed-loop path is proven.
-- T10: improve SRE action execution for Arc Run Command reset, or keep as assisted diagnosis plus manual/operator Arc Run Command replay.
-- T11: publish/connect the LOB sample repo and capture a successful SRE-executed Arc Run Command if that claim is required; otherwise keep the honest RCA + operator recovery positioning.
+- T10: keep as assisted diagnosis plus manual/operator Arc Run Command replay. Treat SRE-executed Arc Run Command repair as future investigation, not current demo scope.
+- T11: publish/connect the LOB sample repo for better code context. Keep RCA + operator recovery positioning; do not add autonomous Arc repair back into the talk track unless a future product-supported path is proven.
 - Act 1: before customer delivery, refresh live portal screenshots/queries after deployment because Monitor, Defender, Policy, and Update Manager blades have ingestion delays.

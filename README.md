@@ -126,12 +126,12 @@ Arc demo estate stays intact.
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
-- `docs\t10-sre-on-arc-experiment.md` - Arc-server investigation/remediation experiment.
+- `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
 - `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
-- **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability; SRE-executed Arc reset remains partial.
-- **T11 LOB app on Arc:** live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery; SRE-executed Arc reset remains partial and the private code repository was not readable by SRE.
+- **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
+- **T11 LOB app on Arc:** live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery. Autonomous / SRE-executed Arc app repair is **not currently demo-ready**, and the private code repository was not readable by SRE.

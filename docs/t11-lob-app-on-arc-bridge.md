@@ -10,7 +10,8 @@ execution path remained partial: one generated command was too long, and the
 shorter follow-up produced a blank action result and did not change the guest
 state. The operator helper then reset the app through Arc Run Command and verified
 healthy heartbeats. Present this as a proven hybrid RCA bridge with manual/operator
-Arc Run Command recovery, not as a fully closed-loop SRE remediation.
+Arc Run Command recovery, not as a fully closed-loop or autonomous Arc remediation
+story. Treat SRE-executed Arc app repair only as a possible future capability.
 
 Default prefix, target machine, LOB app labels, and code-context repository values
 come from `config\demo-skin.json` when scripts are run with `-SkinPath`; see
@@ -33,7 +34,8 @@ This is intentionally different from the earlier tasks:
 - **T09** is the Azure-native "wow" loop: Container App crash/restart alert,
   cloud resource remediation, and code context from the cloud workload.
 - **T10** is a server-only Arc experiment: service/disk/CPU/heartbeat faults on
-  the Arc machine, with no first-class app repository.
+  the Arc machine, with no first-class app repository. It is positioned as assisted
+  diagnostics plus operator remediation.
 - **T11** bridges both: an app with its own GitHub/code context runs **on** the
   Arc server, so the alert is on the hybrid estate while the RCA can cite app code.
 
@@ -232,7 +234,7 @@ Desired investigation evidence:
   (`Microsoft.HybridCompute/machines`), not a native Container App.
 - RCA cites `LobArcBridgeApp.ps1` and the `CrashOnProcessing` branch.
 - Any proposed remediation is governed and limited to resetting the app config to
-  `FaultMode=Healthy` and restarting the scheduled task via Arc Run command.
+  `FaultMode=Healthy` and restarting the scheduled task via operator Arc Run Command.
 
 ## Evidence capture checklist
 
@@ -258,9 +260,10 @@ Desired investigation evidence:
   port the worker to a .NET Worker Service before the live demo.
 - Application-log collection depends on the existing arc-demo DCR. This worked in
   the 2026-10-12 lab, but re-verify the `Event` table after every clean deployment.
-- SRE remediation through Arc Run Command is still partial. The demo-ready claim is
-  SRE-assisted RCA plus operator-approved/manual Arc Run Command recovery unless
-  a later run captures a successful SRE-executed Arc command.
+- SRE remediation through Arc Run Command is still partial and is not part of the
+  customer-facing demo claim. The demo-ready claim is SRE-assisted RCA plus
+  operator-approved/manual Arc Run Command recovery. SRE-executed Arc app repair is
+  future investigation only.
 - Connect or publish the LOB app repo before using this as a code-context demo.
 - Keep `arc-demo` standalone: no files in `C:\src\arc-demo` are changed for T11.
 

@@ -2,7 +2,7 @@
 
 ## Current status
 
-**Live verdict: pending.** This package is a reproducible experiment harness for measuring Azure SRE Agent value against `arc-demo` Arc-enabled servers. It intentionally does **not** claim SRE Agent support for Arc-server remediation until the live lab run has been reproduced and evidence has been attached.
+**Live verdict: assisted diagnostics validated; autonomous repair not currently demo-ready.** This package is a reproducible experiment harness for measuring Azure SRE Agent value against `arc-demo` Arc-enabled servers. The current customer-safe claim is SRE-assisted diagnosis plus governed operator remediation through Arc Run Command. Do **not** present autonomous or SRE-executed Arc server repair as available in this demo; treat it only as a possible future capability.
 
 Default prefix, region, access level, and target machine are read from
 `config\demo-skin.json` when scripts are run with `-SkinPath`; see
@@ -21,7 +21,7 @@ Empirically answer: **how much value does Azure SRE Agent deliver against on-pre
 The answer must separate:
 
 1. What SRE Agent can investigate from Azure Monitor / ARM / Log Analytics.
-2. What it can remediate through Azure RBAC and `Microsoft.HybridCompute/machines/runCommands`.
+2. What a human/operator can remediate through Azure RBAC and `Microsoft.HybridCompute/machines/runCommands`.
 3. What only works because `arc-demo` uses backing Azure VMs, not because real on-premises servers are directly power-controllable.
 4. What fails or requires a human.
 
@@ -30,8 +30,8 @@ The answer must separate:
 | ID | Hypothesis | Required proof |
 |---|---|---|
 | H1 | SRE Agent can ingest Azure Monitor incidents for Arc-enabled servers and correlate Heartbeat, Event, Perf, and Arc ARM metadata. | Agent incident transcript includes the target `Microsoft.HybridCompute/machines` resource, Log Analytics evidence, and a plausible RCA. |
-| H2 | In Review mode with sufficient RBAC, SRE Agent can propose an Arc Run command remediation for guest-level faults such as a stopped Windows service or cleanup of an induced disk-pressure file. | Agent proposes the exact Run command or an equivalent governed action; execution succeeds once approved or manually replayed. |
-| H3 | For the `arc-demo` missed-heartbeat fault, SRE Agent may remediate by starting the backing Azure VM, but that is a lab-only capability. | Agent identifies the backing VM path and starts it, or correctly labels real on-prem power recovery as manual/hypervisor action. |
+| H2 | SRE Agent can propose or describe an Arc Run Command remediation for guest-level faults such as a stopped Windows service or cleanup of an induced disk-pressure file. | The proposed operator action is safe, bounded, and succeeds when replayed manually through the helper or Azure CLI. |
+| H3 | For the `arc-demo` missed-heartbeat fault, SRE Agent may suggest starting the backing Azure VM, but that is a lab-only capability. | Agent identifies the backing VM path or correctly labels real on-prem power recovery as manual/hypervisor action. |
 | H4 | For legacy/control-plane-only Arc servers without AMA, SRE Agent value is limited to inventory/governance metadata unless another telemetry source is added. | Agent cannot use Heartbeat/Perf/Event evidence for those machines and states the telemetry gap. |
 
 ## Prerequisites
@@ -88,7 +88,7 @@ Avoid for first run:
 ## Safety boundaries
 
 - Run only in the `arc-demo` lab subscription/resource groups.
-- Keep SRE Agent in **Review** mode; do not enable unattended remediation.
+- Keep SRE Agent in **Review** mode; do not enable or imply unattended Arc server remediation.
 - Do not stop `azcmagent`, AMA, networking, firewall, or RDP/SSH access during the first pass. If those are needed later, require console/hypervisor access and a reset plan first.
 - `HeartbeatByBackingVm` deallocates the backing Azure VM and is safe only because `arc-demo` simulates on-prem servers with Azure VMs.
 - `StopService` defaults to `Spooler`, not a business-critical service.
@@ -187,9 +187,9 @@ Expected evidence:
   - Lab: start backing Azure VM.
   - Real on-prem: human/hypervisor/power/network action.
 
-### Scenario B - stopped Windows service via Arc Run command
+### Scenario B - stopped Windows service via operator Arc Run command
 
-Purpose: test guest-level action through `Microsoft.HybridCompute/machines/runCommands`.
+Purpose: test guest-level operator action through `Microsoft.HybridCompute/machines/runCommands`.
 
 Induce:
 
@@ -219,11 +219,11 @@ Expected evidence:
 
 - Run command output shows service stopped/started.
 - Windows System/Application events may appear depending on DCR filters and service behavior.
-- SRE Agent either proposes an Arc Run command remediation or fails clearly due to missing action support/RBAC.
+- SRE Agent should help diagnose and suggest the operator Arc Run Command path. The demo claim is not that SRE executes this repair autonomously.
 
 ### Scenario C - disk-pressure Perf signal
 
-Purpose: test whether SRE Agent can reason over Perf counter movement and propose cleanup through Arc Run command.
+Purpose: test whether SRE Agent can reason over Perf counter movement and suggest cleanup through operator Arc Run Command.
 
 Induce:
 
@@ -297,26 +297,26 @@ Expected evidence:
 
 - CPU Perf counter rises during the configured window.
 - Application event with source `T10ArcFault` appears if event source creation succeeds.
-- Any SRE remediation claim remains pending until observed in the live agent run.
+- Any autonomous SRE remediation claim remains out of scope for the current demo.
 
 ## Success criteria
 
-An Arc-server remediation beat is **demo-ready** only if all of these are true:
+An Arc-server **assisted diagnostics + operator remediation** beat is demo-ready only if all of these are true:
 
 1. Azure Monitor produces a real incident visible to SRE Agent.
 2. SRE Agent names the Arc machine and cites useful ARM/Log Analytics evidence.
-3. SRE Agent proposes a safe action that maps to `az connectedmachine run-command` or another governed Azure action.
-4. The action succeeds in Review mode or succeeds when the exact proposed command is manually replayed.
+3. SRE Agent proposes or describes a safe action that maps to `az connectedmachine run-command` or another governed Azure action.
+4. The operator action succeeds when replayed manually through the helper or Azure CLI.
 5. Reset returns Heartbeat/Perf/Event state to healthy.
 6. Evidence is captured in the matrix below.
 
 ## Failure criteria
 
-Mark the scenario **not demo-ready** if any of these occur:
+Mark the assisted Arc scenario **not demo-ready** if any of these occur:
 
 - SRE Agent cannot see the Azure Monitor incident.
 - SRE Agent treats the Arc machine only as inert metadata and cannot inspect relevant logs/metrics.
-- Run command execution fails because of missing Connected Machine agent capability, RBAC, local blocklist, network egress, or unsupported SRE action path.
+- Operator Run Command execution fails because of missing Connected Machine agent capability, RBAC, local blocklist, or network egress.
 - The remediation depends on `arc-demo` backing Azure VM power control and cannot be explained honestly for real on-prem servers.
 - Reset is not reliable.
 
@@ -381,6 +381,13 @@ Current verdict:
 | SRE Agent can execute Arc Run Command remediation | **Not yet** - it attempted the approved reset action, but EventID 1011 was not observed from the agent action; manual replay succeeded |
 | Automatic Azure Monitor -> SRE incident handoff for Arc server alert | **Not yet validated** |
 
+Customer-facing stance:
+
+- **Say:** SRE Agent is useful for Arc/on-prem diagnostics and can guide an operator to safe Arc Run Command recovery.
+- **Say:** Arc Run Command gives Azure-governed remote action for supported Arc machines.
+- **Do not say:** SRE Agent autonomously repairs Arc servers.
+- **Future-looking only:** autonomous Arc server repair may become possible later if a supported product path reliably executes and verifies Arc Run Command actions.
+
 Live run evidence on 2026-10-12:
 
 | Evidence | Result |
@@ -397,7 +404,7 @@ Live run evidence on 2026-10-12:
 Remaining live work:
 
 1. Configure/validate a real Arc-server Azure Monitor alert or incident response plan.
-2. Improve SRE action execution for Arc Run Command reset, or keep T10 as SRE-assisted
-   diagnosis with manual/operator-approved Arc Run Command replay.
+2. Keep T10 as SRE-assisted diagnosis with manual/operator-approved Arc Run Command
+   replay. Track SRE-executed Arc repair as future investigation only.
 3. Capture Log Analytics `Event`/`Heartbeat` evidence if ingestion and tool access are
    required for the final customer-facing run.
