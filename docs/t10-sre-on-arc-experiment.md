@@ -376,13 +376,28 @@ Current verdict:
 | Area | Verdict |
 |---|---|
 | Arc Run Command as a remediation/investigation mechanism | **Works** from the lab using `Microsoft.HybridCompute/machines/runCommands` |
-| SRE Agent can target the Arc machine resource in a manual investigation | **Partial** - it accepts the Arc resource and begins investigation |
-| SRE Agent produces a clean, evidence-backed Arc-server RCA automatically | **Not yet** - data-plane/tool output was flaky in this run |
+| SRE Agent can target the Arc machine resource in a manual investigation | **Works** - it accepts the Arc resource and produces a useful RCA when given the Arc Run Command evidence |
+| SRE Agent produces a clean, evidence-backed Arc-server RCA automatically | **Partial** - the final RCA is good, but tool-result messages can be blank and Log Analytics Event/Heartbeat evidence was not available in this run |
+| SRE Agent can execute Arc Run Command remediation | **Not yet** - it attempted the approved reset action, but EventID 1011 was not observed from the agent action; manual replay succeeded |
 | Automatic Azure Monitor -> SRE incident handoff for Arc server alert | **Not yet validated** |
+
+Live run evidence on 2026-10-12:
+
+| Evidence | Result |
+|---|---|
+| Fault command | `t10-writeevent-induce-1012015102` |
+| Fault output | `Wrote Application Error event source=T10ArcFault eventId=1010.` |
+| SRE thread | `eb16884a-8769-4dfb-a471-235b7726ab92` |
+| SRE RCA | Identified `win-app-01` as Connected/healthy and the event as deliberate fault injection; confirmed Arc Run Command is viable |
+| Agent reset attempt | Agent attempted to execute reset via Arc Run Command, but no EventID 1011 was observed from the agent action |
+| Manual reset command | `t10-writeevent-reset-1012020229` |
+| Manual reset output | `Wrote reset marker event source=T10ArcFault eventId=1011.` |
+| Final status command | `t10-writeevent-status-1012020520` confirmed EventID 1011 and prior EventID 1010 |
 
 Remaining live work:
 
 1. Configure/validate a real Arc-server Azure Monitor alert or incident response plan.
-2. Re-run T10 once SRE response-plan handling-agent setup is confirmed.
-3. Capture an SRE transcript where the agent successfully cites Arc/Log Analytics
-   evidence and proposes an Arc Run Command reset.
+2. Improve SRE action execution for Arc Run Command reset, or keep T10 as SRE-assisted
+   diagnosis with manual/operator-approved Arc Run Command replay.
+3. Capture Log Analytics `Event`/`Heartbeat` evidence if ingestion and tool access are
+   required for the final customer-facing run.
