@@ -5,7 +5,7 @@ Scene-by-scene storyboard for delivering the reusable Arc + Azure Monitor + Azur
 - `C:\src\arc-demo` = standalone Arc + Monitor spine.
 - `C:\src\sre-agent` = optional SRE Agent layer over an existing `arc-demo` deployment.
 
-Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping optional Azure VM/AKS beats and treating Act 2 as positioning until live SRE evidence is captured.
+Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping optional Azure VM/AKS beats and using T09 as the primary live closed-loop SRE path.
 
 ## Validation and honesty markers
 
@@ -18,9 +18,10 @@ Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping
 Current status for T13:
 
 - Act 1 Arc/Monitor assets are built in `C:\src\arc-demo`; portal visuals depend on a live deployment and data ingestion.
-- T09 native Container App SRE loop is the documented wow path, but live Azure alert/SRE execution is still pending.
-- T10 Arc-server SRE remediation and T11 LOB-on-Arc bridge are packages/positioning paths with live verdicts pending.
-- Do **not** present live SRE remediation as proven until evidence is captured in the T09/T10/T11 checklists.
+- T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, recovery, and alert closure.
+- T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability; SRE-executed Arc reset remains partial.
+- T11 LOB-on-Arc bridge is live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery; SRE-executed Arc reset remains partial.
+- Present T09 as the fully closed-loop "wow" path. Present T10/T11 honestly as hybrid RCA plus governed/manual Arc remediation unless later evidence captures a successful SRE-executed Arc command.
 
 ## Pre-demo setup checklist
 
@@ -95,11 +96,11 @@ Goal: show the art of the possible with strict governance, while clearly separat
 
 | Scene | Time | Show / do | Built assets to map to | Speaker notes / key phrases | Marker |
 |---|---:|---|---|---|---|
-| 2.1 Honest status reset | 1 min | State whether today's SRE portion is live or storyboarded. | This runsheet; T09/T10/T11 evidence checklists | "The SRE packages are built and locally validated. Live lab execution is pending unless we have captured evidence in this subscription." | Required honesty marker |
+| 2.1 Honest status reset | 1 min | State which SRE paths are live-proven today. | This runsheet; T09/T10/T11 evidence checklists | "The Azure-native Container App path is closed-loop proven. The Arc-server paths are proven for investigation and Arc Run Command recovery, with SRE-executed Arc actions still partial." | Required honesty marker |
 | 2.2 Optional SRE layer architecture | 3 min | Show `sre-agent` README, Review mode, AzMonitor incident source, RBAC profiles, and separation from `arc-demo`. | `C:\src\sre-agent\README.md`, `infra\main.bicep`, `scripts\Deploy-SreAgent.ps1` | "The agent layers on top. It reads existing Arc/Monitor resources; it does not redeploy or modify arc-demo." | Built / locally validated |
-| 2.3 T09 native Container App wow | 10-12 min | If live validated: induce `SIMULATE_CRASH=true`, wait for `alert-arc-demo-containerapp-restarts`, show SRE RCA, approve reset to `false`, verify endpoint and audit. If not live validated: show the runbook and commands only. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "The first credible wow is Azure-native: alert, investigate, RCA with code context, human approval, real Azure fix, audit trail." | Live SRE execution pending |
-| 2.4 T10 Arc-server experiment positioning | 5 min | Explain hypotheses and success/failure criteria. Show safe helper scenarios: heartbeat by backing VM, stopped service, disk/CPU signal. Do not claim verdict. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "Arc servers are ARM resources, so this is plausible. The demo-ready claim only exists after the experiment matrix has evidence." | Pending verdict |
-| 2.5 T11 LOB app on Arc bridge | 5 min | Position as the target hybrid bridge: app code repo runs on Arc server, emits Application events, alert routes to SRE, RCA can cite app code. | `docs\t11-lob-app-on-arc-bridge.md`, `samples\lob-arc-app`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This bridges on-prem-shaped operations with the code-context SRE loop without pretending a bare legacy server can magically produce a PR." | Live validation pending |
+| 2.3 T09 native Container App wow | 10-12 min | Induce `SIMULATE_CRASH=true`, wait for `alert-arc-demo-containerapp-restarts`, show SRE RCA, approve reset to `false`, verify endpoint and audit. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "The first credible wow is Azure-native: alert, investigate, RCA, human approval, real Azure fix, audit trail." | Live validated |
+| 2.4 T10 Arc-server experiment positioning | 5 min | Show the live verdict: SRE can reason over Arc resource evidence and Arc Run Command is viable, but agent-executed Arc reset is not yet reliable. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "Arc gives us an Azure control plane for hybrid servers. Today, the demo-ready claim is assisted diagnosis plus governed operator action, not unattended server repair." | Partial live verdict |
+| 2.5 T11 LOB app on Arc bridge | 5 min | Show the app-on-Arc alert, SRE RCA, and helper reset evidence. Explain code-context limitation if the repo is private/unconnected. | `docs\t11-lob-app-on-arc-bridge.md`, `samples\lob-arc-app`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This bridges on-prem-shaped operations with the app-context SRE loop without pretending a bare legacy server can magically produce a PR." | Live validated for RCA + manual Arc recovery |
 | 2.6 Governance and audit | 2 min | Reinforce Review mode, approval card, RBAC, Activity Log, SRE thread audit. | T09 section 9; README RBAC table | "AI can recommend and execute only inside Azure RBAC, Review approval, and auditable operations." | Built design; live audit requires run |
 
 Act 2 fallback if live SRE is not ready:
@@ -152,7 +153,7 @@ Only include reset commands for scenarios you actually induced. Capture SRE thre
 
 ## Remaining live-validation gaps
 
-- T09: capture one full Container App alert -> SRE investigation -> Review approval -> repair -> audit trail.
-- T10: complete the experiment matrix and decide whether any Arc-server remediation beat is demo-ready.
-- T11: publish the LOB sample as its own repo, verify Application event ingestion, create the alert, and capture SRE RCA/remediation evidence.
+- T09: optional source-code repository connection/audit polish only; core closed-loop path is proven.
+- T10: improve SRE action execution for Arc Run Command reset, or keep as assisted diagnosis plus manual/operator Arc Run Command replay.
+- T11: publish/connect the LOB sample repo and capture a successful SRE-executed Arc Run Command if that claim is required; otherwise keep the honest RCA + operator recovery positioning.
 - Act 1: before customer delivery, refresh live portal screenshots/queries after deployment because Monitor, Defender, Policy, and Update Manager blades have ingestion delays.

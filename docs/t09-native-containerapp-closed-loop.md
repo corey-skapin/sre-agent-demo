@@ -1,6 +1,6 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: live lab validation partially complete. The Container App fault/recovery path and SRE Agent investigation were exercised in Azure; portal response-plan approval, automatic Azure Monitor incident handoff, and audit capture are still pending.
+Status: live lab validation complete for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. Source-code repository connection remains optional and was not captured in this run.
 
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
@@ -129,17 +129,14 @@ In the SRE Agent portal:
 
 ### F04 live setup status
 
-The live lab currently has the parent SRE Agent resource, but not the data-plane
-custom agent/handling agent required by response plans.
+Validated state on 2026-10-12:
 
-Validated state on 2026-10-10:
+- `sre-arc-demo` was running in `rg-arc-demo-sre` with Review mode and High access.
+- The required custom handling agent could not be created through MCP during the first pass, but portal creation through **Build + setup** > **Agent Canvas** succeeded.
+- After the portal custom agent existed, the response plan `container-app-restart-review` was enabled and automatic Azure Monitor handoff worked.
+- Thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd` captured alert payload, RCA, approved Azure CLI remediation, successful execution, recovery confirmation, and alert closure.
 
-- `sreagent_agents_list` with tenant `4a2e6a7b-9d04-4e89-9d8b-01c75a2444c1` shows `sre-arc-demo` in `rg-arc-demo-sre` with `provisioningState: Succeeded`.
-- `az resource show` shows the parent agent is `Running`, Review mode, High access, and has `ca-arc-demo-fault` in `knowledgeGraphConfiguration.managedResources`.
-- `sreagent_incidents_plans_list` returns no incident response plans.
-- `sreagent_hooks_list`, `sreagent_commonprompts_list`, `sreagent_skills_list`, `sreagent_agents_tools_list`, `sreagent_connectors_list`, and `sreagent_scheduledtasks_list` all return empty results.
-
-Attempted MCP setup:
+Historical MCP setup attempt:
 
 ```powershell
 # Handler YAML validation passed.
@@ -168,11 +165,10 @@ sreagent_incidents_plans_create `
 # "Handling agent 'sre-arc-demo' does not exist."
 ```
 
-Until `sreagent_workflows_apply` is fixed or the custom agent is created in the
-portal, the reproducible next step is portal creation through **Build + setup** >
-**Agent Canvas**, followed by the response plan steps above. After the custom
-agent exists, rerun `sreagent_incidents_plans_create` or create the plan in the
-portal and verify with `sreagent_incidents_plans_list`.
+Current reproducible setup path: create the custom agent in the SRE portal, then
+create the response plan either in the portal or through MCP after the custom
+agent exists. Do not rely on `sreagent_workflows_apply` until the data-plane
+schema issue is resolved.
 
 ## 5. Induce the fault
 

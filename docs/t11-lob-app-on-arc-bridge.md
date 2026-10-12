@@ -2,11 +2,15 @@
 
 ## Current status
 
-**Live validation pending.** This package provides the app source, Arc Run command
-operator script, Azure Monitor alert definition helper, SRE Agent setup steps, and
-evidence checklist for a line-of-business app running on an Arc-enabled Windows
-server. It does **not** claim a live SRE Agent investigation or remediation until
-the lab is run and evidence is captured.
+**Live validation complete for SRE-assisted diagnosis and operator Arc recovery.**
+The LOB app was deployed on `win-app-01`, emitted a real Application Event fault,
+triggered an Azure Monitor scheduled-query alert, and opened an SRE Agent incident.
+SRE produced a useful RCA and proposed Arc Run Command remediation. The SRE action
+execution path remained partial: one generated command was too long, and the
+shorter follow-up produced a blank action result and did not change the guest
+state. The operator helper then reset the app through Arc Run Command and verified
+healthy heartbeats. Present this as a proven hybrid RCA bridge with manual/operator
+Arc Run Command recovery, not as a fully closed-loop SRE remediation.
 
 Default prefix, target machine, LOB app labels, and code-context repository values
 come from `config\demo-skin.json` when scripts are run with `-SkinPath`; see
@@ -35,15 +39,20 @@ This is intentionally different from the earlier tasks:
 
 ## App source and code context
 
-The sample app lives in `samples\lob-arc-app`. For a live SRE demo, publish that
-folder as a separate GitHub repository, for example `lob-arc-app-demo`, and connect
-that repository in the SRE Agent portal:
+The sample app lives in `samples\lob-arc-app`. For the final customer demo, publish
+that folder as a separate GitHub repository, for example `lob-arc-app-demo`, and
+connect that repository in the SRE Agent portal:
 
 1. Open the SRE Agent.
 2. Go to **Builder** > **Knowledge base**.
 3. Add the LOB app repository, not `arc-demo`.
 4. Deploy with `-SourceRepositoryUrl`, `-SourceCommit`, and `-SourcePath` so those
    values appear in the emitted Application events.
+
+The 2026-10-12 lab run stamped events with `corey-skapin/sre-agent-demo` at commit
+`5e09e53d3ddf4305590b86d6f2389b5aa6e137af`. The SRE Agent could not read the private
+GitHub repo directly, but it still correlated the event payload, Arc Run Command
+history, config path, scheduled task, and fault mode well enough to produce RCA.
 
 The app reads `C:\ProgramData\ArcSreLobApp\appsettings.json`:
 
@@ -229,29 +238,30 @@ Desired investigation evidence:
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| LOB app source published as separate repo | No | Pending live lab |
-| SRE Agent knowledge base connected to LOB app repo | No | Pending live lab |
-| Target Arc machine ID added to SRE Agent managed resources | No | Pending live lab |
-| App deployed on `win-app-01` with repository/commit stamped | No | Pending live lab |
-| Healthy Application event/log heartbeat visible | No | Pending live lab |
-| Scheduled-query alert created and routed to `ag-arc-demo` | No | Pending live lab |
-| `CrashOnProcessing` induced | No | Pending live lab |
-| Log Analytics `Event` row observed | No | Pending live lab |
-| SRE Agent incident opened | No | Pending live lab |
-| RCA cites Arc machine + app code context | No | Pending live lab |
-| Review-mode remediation proposed/executed | No | Pending live lab |
-| Reset verified healthy | No | Pending live lab |
+| LOB app source published as separate repo | Partial | Source stayed in `corey-skapin/sre-agent-demo`; publish `samples\lob-arc-app` separately or connect the private repo before customer delivery. |
+| SRE Agent knowledge base connected to LOB app repo | No | SRE could not access the private GitHub repo; event/run-command context still enabled RCA. |
+| Target Arc machine ID added to SRE Agent managed resources | Yes | `win-app-01` was in SRE scope through the `rg-arc-demo`/managed-resource configuration. |
+| App deployed on `win-app-01` with repository/commit stamped | Yes | Deploy run command `t11-lob-deploy-1012021324`; events stamped repo, commit `5e09e53d3ddf4305590b86d6f2389b5aa6e137af`, and source path. |
+| Healthy Application event/log heartbeat visible | Yes | Healthy Event ID `4000` heartbeats observed before fault and after reset. |
+| Scheduled-query alert created and routed to `ag-arc-demo` | Yes | Created through `New-LobArcAppMonitorAlert.ps1` ARM REST path; alert name `alert-arc-demo-lob-arc-app-fault`. |
+| `CrashOnProcessing` induced | Yes | Fault event Event ID `4100`, incident `t11-20261012022201`, generated from `win-app-01`. |
+| Log Analytics `Event` row observed | Yes | SRE RCA cited the 2026-10-12 `ArcLobBridgeApp` Error row from Log Analytics. |
+| SRE Agent incident opened | Yes | Thread `b2e5a213-b4ed-45c2-a3c1-28bd7f2d653f` opened from Azure Monitor alert ID `fa2d5357-846b-ee76-c972-4745ac76001f`. |
+| RCA cites Arc machine + app code context | Yes | RCA identified `win-app-01`, Connected Machine agent 1.68, Windows Server 2016, `ArcSreLobApp`, config path, `CrashOnProcessing`, commit, and source path. |
+| Review-mode remediation proposed/executed | Partial | SRE proposed Arc Run Command reset. First generated command was too long; shorter follow-up returned a blank action result and did not reset the app. |
+| Reset verified healthy | Yes | Operator helper run command `t11-lob-resetfault-1012025040` set `FaultMode=Healthy`; status `t11-lob-status-1012025316` showed task Running, process alive, and healthy Event ID `4000` heartbeats. |
 
-## Limitations and pending validation
+## Limitations and remaining work
 
-- No live Azure/SRE portal run was performed while authoring this package.
 - The helper uses scheduled tasks rather than installing a Windows Service, avoiding
   third-party service wrappers. If a customer requires a real Windows Service,
   port the worker to a .NET Worker Service before the live demo.
-- Application-log collection depends on the existing arc-demo DCR. Verify the
-  `Event` table before using this as the incident trigger.
-- SRE remediation through Arc Run command remains governed and unverified until a
-  Review-mode action is observed in the lab.
+- Application-log collection depends on the existing arc-demo DCR. This worked in
+  the 2026-10-12 lab, but re-verify the `Event` table after every clean deployment.
+- SRE remediation through Arc Run Command is still partial. The demo-ready claim is
+  SRE-assisted RCA plus operator-approved/manual Arc Run Command recovery unless
+  a later run captures a successful SRE-executed Arc command.
+- Connect or publish the LOB app repo before using this as a code-context demo.
 - Keep `arc-demo` standalone: no files in `C:\src\arc-demo` are changed for T11.
 
 ## Local validation completed for this package

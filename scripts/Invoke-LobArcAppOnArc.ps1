@@ -325,8 +325,8 @@ $pidPath = Join-Path $AppRoot 'lob-arc-app.pid'
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 $taskInfo = if ($task) { Get-ScheduledTaskInfo -TaskName $TaskName } else { $null }
 $config = if (Test-Path -LiteralPath $configPath) { Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json } else { $null }
-$pid = if (Test-Path -LiteralPath $pidPath) { (Get-Content -LiteralPath $pidPath -Raw).Trim() } else { $null }
-$process = if ($pid -match '^\d+$') { Get-Process -Id ([int]$pid) -ErrorAction SilentlyContinue } else { $null }
+$lobPid = if (Test-Path -LiteralPath $pidPath) { (Get-Content -LiteralPath $pidPath -Raw).Trim() } else { $null }
+$process = if ($lobPid -match '^\d+$') { Get-Process -Id ([int]$lobPid) -ErrorAction SilentlyContinue } else { $null }
 $events = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = $EventSource; StartTime = (Get-Date).AddHours(-4) } -ErrorAction SilentlyContinue |
     Select-Object -First 10 TimeCreated, ProviderName, Id, LevelDisplayName, Message
 $logTail = if (Test-Path -LiteralPath $logPath) { Get-Content -LiteralPath $logPath -Tail $Tail } else { @('Log file not present.') }
@@ -339,7 +339,7 @@ $logTail = if (Test-Path -LiteralPath $logPath) { Get-Content -LiteralPath $logP
     FaultMode = if ($config) { $config.FaultMode } else { $null }
     SourceRepositoryUrl = if ($config) { $config.SourceRepositoryUrl } else { $null }
     SourceCommit = if ($config) { $config.SourceCommit } else { $null }
-    Pid = $pid
+    Pid = $lobPid
     ProcessRunning = [bool]$process
     RecentEvents = $events
     LogTail = $logTail

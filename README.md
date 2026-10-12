@@ -130,7 +130,8 @@ Arc demo estate stays intact.
 - `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
-## Left for later tasks
+## Current validation stance
 
-- **Live lab validation:** Do not promise live SRE remediation for T09-T11 until lab evidence is captured.
-- **T14:** EDE PoC datasheet remains deferred.
+- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
+- **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability; SRE-executed Arc reset remains partial.
+- **T11 LOB app on Arc:** live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery; SRE-executed Arc reset remains partial and the private code repository was not readable by SRE.
