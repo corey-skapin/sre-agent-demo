@@ -107,6 +107,13 @@ Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` 
 
 ## 4. Create the Review-mode response plan
 
+Preferred automation path and fallback details are tracked in
+[`sre-response-plan-automation.md`](sre-response-plan-automation.md). The short
+version: create the parent SRE Agent through Bicep, create the custom handling
+agent with `sreagent_agents_create` if available, then create the response plan
+with `sreagent_incidents_plans_create`. If the custom-agent command fails, use the
+portal path below.
+
 In the SRE Agent portal:
 
 1. Open `sre-arc-demo`.

@@ -126,6 +126,7 @@ Arc demo estate stays intact.
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
+- `docs\sre-response-plan-automation.md` - Decision record for automating custom agents and response plans.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
 - `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
