@@ -1,5 +1,9 @@
 # T11 - LOB-app-on-Arc bridge package
 
+For the customer-facing demo scene, use
+[`t11-hybrid-diagnostics-wow.md`](t11-hybrid-diagnostics-wow.md). This file remains
+the detailed implementation runbook and evidence ledger.
+
 ## Current status
 
 **Live validation complete for SRE-assisted diagnosis and operator Arc recovery.**

@@ -59,6 +59,7 @@ Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/
    - `C:\src\arc-demo\docs\runsheet.md`
    - `C:\src\sre-agent\docs\t09-native-containerapp-closed-loop.md`
    - `C:\src\sre-agent\docs\t10-sre-on-arc-experiment.md`
+   - `C:\src\sre-agent\docs\t11-hybrid-diagnostics-wow.md`
    - `C:\src\sre-agent\docs\t11-lob-app-on-arc-bridge.md`
    - Arc Demo workbook, Arc servers, Azure Monitor Alerts, Log Analytics, Update Manager, Defender for Cloud.
    - SRE Agent portal only if a live SRE lab has been rehearsed.
@@ -99,8 +100,8 @@ Goal: show the art of the possible with strict governance, while clearly separat
 | 2.1 Honest status reset | 1 min | State which SRE paths are live-proven today. | This runsheet; T09/T10/T11 evidence checklists | "The Azure-native Container App path is closed-loop proven. The Arc-server paths are proven for assisted diagnostics and operator Arc Run Command recovery. We are not selling autonomous Arc server repair in this demo." | Required honesty marker |
 | 2.2 Optional SRE layer architecture | 3 min | Show `sre-agent` README, Review mode, AzMonitor incident source, RBAC profiles, and separation from `arc-demo`. | `C:\src\sre-agent\README.md`, `infra\main.bicep`, `scripts\Deploy-SreAgent.ps1` | "The agent layers on top. It reads existing Arc/Monitor resources; it does not redeploy or modify arc-demo." | Built / locally validated |
 | 2.3 T09 native Container App wow | 10-12 min | Induce `SIMULATE_CRASH=true`, wait for `alert-arc-demo-containerapp-restarts`, show SRE RCA, approve reset to `false`, verify endpoint and audit. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "The first credible wow is Azure-native: alert, investigate, RCA, human approval, real Azure fix, audit trail." | Live validated |
-| 2.4 T10 Arc-server experiment positioning | 5 min | Show the live verdict: SRE can reason over Arc resource evidence and Arc Run Command is viable for the operator, but autonomous Arc repair is not yet available for the demo. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "Arc gives us an Azure control plane for hybrid servers. Today, the demo-ready claim is assisted diagnosis plus governed operator action, not autonomous server repair." | Assisted diagnostics validated; autonomous repair future |
-| 2.5 T11 LOB app on Arc bridge | 5 min | Show the app-on-Arc alert, SRE RCA, and helper reset evidence. Explain code-context limitation if the repo is private/unconnected. | `docs\t11-lob-app-on-arc-bridge.md`, `samples\lob-arc-app`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This bridges on-prem-shaped operations with the app-context SRE loop without pretending a bare legacy server can magically produce a PR." | Live validated for RCA + manual Arc recovery |
+| 2.4 T11 hybrid diagnostics wow | 8-10 min | Show the LOB app fault on an Arc server: alert, SRE RCA, source context, and operator Arc Run Command recovery. | `docs\t11-hybrid-diagnostics-wow.md`, `docs\t11-lob-app-on-arc-bridge.md`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This is the on-prem-shaped wow: Arc turns an opaque datacenter app failure into a precise SRE-assisted diagnosis and governed operator action." | Live validated for RCA + manual Arc recovery; code context must be connected |
+| 2.5 T10 backstage evidence | 2-3 min | Mention only if the audience wants proof of the mechanics: Arc Run Command works, SRE can reason over Arc evidence, autonomous Arc repair is future-only. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "T10 is the engineering proof behind the T11 story, not the main customer scene." | Backstage evidence |
 | 2.6 Governance and audit | 2 min | Reinforce Review mode, approval card, RBAC, Activity Log, SRE thread audit. | T09 section 9; README RBAC table | "AI can recommend and execute only inside Azure RBAC, Review approval, and auditable operations." | Built design; live audit requires run |
 
 Act 2 fallback if live SRE is not ready:
@@ -132,7 +133,8 @@ Goal: move from one demo to a reusable customer motion without changing the tech
 | SRE Agent deployment | `C:\src\sre-agent\scripts\Deploy-SreAgent.ps1` |
 | T09 native closed loop | `C:\src\sre-agent\docs\t09-native-containerapp-closed-loop.md` |
 | T10 Arc-server experiment | `C:\src\sre-agent\docs\t10-sre-on-arc-experiment.md` |
-| T11 LOB-on-Arc bridge | `C:\src\sre-agent\docs\t11-lob-app-on-arc-bridge.md` |
+| T11 hybrid diagnostics wow | `C:\src\sre-agent\docs\t11-hybrid-diagnostics-wow.md` |
+| T11 LOB-on-Arc bridge details | `C:\src\sre-agent\docs\t11-lob-app-on-arc-bridge.md` |
 | Reskin / reuse | both repos' `docs\reskin-guide.md` and `config\demo-skin.json` |
 
 ## Reset checklist
