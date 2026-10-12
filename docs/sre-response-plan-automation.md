@@ -186,6 +186,107 @@ If `sreagent_agents_create` fails in the live environment, use the portal path:
 10. Verify the plan grid shows the expected plan, status On, response custom agent,
     severity, and Review autonomy.
 
+## Optional browser automation path
+
+Use this when an SE wants an AI browser agent, such as Scout with Playwright, to
+perform the portal fallback. Keep the browser visible because the portal may require
+interactive sign-in, tenant selection, consent, or UI changes that need human
+judgment.
+
+### Browser-agent prompt
+
+```text
+Open https://sre.azure.com and configure the Arc demo SRE Agent.
+
+Target:
+- Subscription: <SUBSCRIPTION_ID>
+- Tenant: <TENANT_ID>
+- SRE resource group: rg-arc-demo-sre
+- Parent SRE Agent: sre-arc-demo
+
+Create or verify a custom handling agent:
+- Name: sre-arc-demo
+- Description: Handles Arc demo Azure Monitor incidents in Review mode.
+- Instructions:
+  Investigate only Arc demo resources. For Container App restart alerts, inspect
+  ca-arc-demo-fault, RestartCount, revision health, and SIMULATE_CRASH. Propose
+  resetting SIMULATE_CRASH=false in Review mode. For Arc server or LOB-on-Arc
+  alerts, produce RCA and guide operator Arc Run Command recovery. Do not claim or
+  perform autonomous Arc server repair.
+
+Create or verify response plan 1:
+- Name: container-app-restart-review
+- Platform/source: Azure Monitor
+- Severity: Sev2 or equivalent high severity
+- Title contains: containerapp-restarts
+- Response custom agent/subagent: sre-arc-demo
+- Autonomy: Review
+- Reinvestigation cooldown: enabled, 3 hours
+
+If running the LOB-on-Arc bridge, create or verify response plan 2:
+- Name: lob-arc-app-review
+- Platform/source: Azure Monitor
+- Severity: Sev2 or equivalent high severity
+- Title contains: lob-arc-app-fault
+- Response custom agent/subagent: sre-arc-demo
+- Autonomy: Review
+- Reinvestigation cooldown: enabled, 3 hours
+
+Before finishing:
+- Delete or disable any quickstart/default response plan that would also match the
+  same demo alerts.
+- Verify both plans appear in the response-plan grid with status On, the right
+  response custom agent, and Review autonomy.
+- Do not change agent autonomy to Autonomous.
+```
+
+### Human-visible click path
+
+The portal changes wording over time; prefer labels over brittle selectors:
+
+1. Navigate to `https://sre.azure.com`.
+2. Select the correct tenant/subscription if prompted.
+3. Open the parent agent `sre-arc-demo`.
+4. Find **Builder**.
+5. Open **Agent Canvas** or **Subagent builder**.
+6. Select **Create** / **New custom agent** / **Custom agent**.
+7. Fill in the custom agent name, description, and instructions.
+8. Save the custom agent.
+9. Open **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
+10. Switch to table view if needed and disable/delete a conflicting quickstart plan.
+11. Create `container-app-restart-review`.
+12. Set Azure Monitor filters and select `sre-arc-demo` as the response custom agent.
+13. Set autonomy to **Review**.
+14. Save, then verify the row is On.
+15. Repeat for `lob-arc-app-review` only if validating T11.
+
+### Verification commands after browser setup
+
+```text
+command: sreagent_incidents_plans_list
+subscription: <SUBSCRIPTION_ID>
+tenant: <TENANT_ID>
+resource-group: rg-arc-demo-sre
+agent: sre-arc-demo
+```
+
+Expected:
+
+- `container-app-restart-review` is enabled/on, Review mode, Sev2/high, and routes
+  to `sre-arc-demo`.
+- `lob-arc-app-review` exists only when T11 is in scope.
+- No quickstart plan also matches the same demo alert titles.
+
+### Failure recovery
+
+| Symptom | Recovery |
+|---|---|
+| Custom agent list is empty or Create is disabled | Confirm the parent SRE Agent is running and the signed-in user has Contributor/Owner or SRE Agent Administrator-equivalent access. |
+| Response plan cannot select `sre-arc-demo` | Save or refresh the custom agent first; response plans require an existing custom agent. |
+| Alerts open duplicate threads | Disable/delete the quickstart response plan or narrow title filters. |
+| Agent proposes autonomous Arc repair | Edit custom-agent instructions and response-plan autonomy back to Review. |
+| Plan preview shows no historical alerts | This is acceptable for a new lab; validate with a future T09 induced alert. |
+
 ## What remains to validate
 
 The SRE layer is currently hibernated, so this review could not live-test
