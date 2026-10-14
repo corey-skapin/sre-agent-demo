@@ -7,10 +7,10 @@ The SRE setup is **partly automatable today** and should be documented that way.
 | Setup item | Current automation status | Demo kit stance |
 |---|---|---|
 | Parent `Microsoft.App/agents` resource | Automated through Bicep and `Deploy-SreAgent.ps1` | Shareable and repeatable |
-| Custom handling/subagent | MCP now exposes `sreagent_agents_create`; prior portal setup worked; live verification of the MCP create path is still required after SRE is reactivated | Treat as the preferred automation path to validate next |
+| Custom handling/subagent | Portal/Scout browser setup works after first-run onboarding. In the latest run, `sreagent_agents_create` timed out and `sreagent_workflows_apply` failed server-side despite YAML validation. | Use MCP first if available; fall back to the browser/portal path without treating it as a demo blocker |
 | Incident response plan | MCP exposes `sreagent_incidents_plans_create`, but it requires an existing custom agent/handler | Automatable after the custom agent exists |
 | Portal/manual setup | Official docs describe portal/canvas setup and it worked in the live lab | Keep as fallback and document clearly |
-| Playwright/browser automation | Feasible fallback if MCP custom-agent create fails | Separate optional task |
+| Playwright/browser automation | Proven fallback if MCP custom-agent create fails, assuming the user is signed in with the lab subscription account | Preferred fallback for Scout |
 
 ## Why this matters
 
@@ -65,8 +65,9 @@ Optional/useful:
 - `tools`
 - `handoffs`
 
-This command did not exist, or was not used, during the earlier failed setup pass.
-It is the best candidate for making custom-agent setup fully automatable.
+Latest live behavior: this command is exposed, but timed out during the
+2026-10-14 spin-up. Do not make it the only setup path until it completes
+reliably.
 
 ### Create response plan
 
@@ -97,8 +98,11 @@ with:
 Handling agent 'sre-arc-demo' does not exist.
 ```
 
-After the custom agent was created in the portal, response-plan creation worked for
-the LOB app plan.
+After the custom agent was created in the portal, response-plan creation worked
+for both demo plans:
+
+- `container-app-restart-review-v2`
+- `lob-arc-app-review-v2`
 
 ### Workflow YAML path
 
@@ -128,7 +132,7 @@ Use this order in the shareable AI deploy handbook:
      -SkinPath .\config\demo-skin.json `
      -AccessLevel High
    ```
-2. Create the custom handling agent with MCP:
+2. Try to create the custom handling agent with MCP:
    ```text
    command: sreagent_agents_create
    name: sre-arc-demo
@@ -139,10 +143,13 @@ Use this order in the shareable AI deploy handbook:
    description: Handles Arc demo Azure Monitor incidents in Review mode.
    instructions: Investigate only the Arc demo resources. For Container App alerts, identify SIMULATE_CRASH and propose resetting it to false. For Arc server and LOB-on-Arc alerts, produce RCA and guide operator Arc Run Command recovery; do not claim autonomous Arc repair.
    ```
-3. Create the T09 response plan with MCP:
+3. If MCP custom-agent creation times out, complete first-run onboarding in the
+   SRE portal and create the same custom handling agent through **Builder** >
+   **Agent Canvas**. Scout/Playwright can automate this browser path.
+4. Create the T09 response plan with MCP:
    ```text
    command: sreagent_incidents_plans_create
-   name: container-app-restart-review
+   name: container-app-restart-review-v2
    severity: high
    trigger-condition: alert-arc-demo-containerapp-restarts OR containerapp-restarts
    services: Azure Container Apps, ca-arc-demo-fault, rg-arc-demo-infra
@@ -150,10 +157,10 @@ Use this order in the shareable AI deploy handbook:
    agent-mode: review
    agent: sre-arc-demo
    ```
-4. Create the T11 response plan only if running the LOB-on-Arc bridge:
+5. Create the T11 response plan only if running the LOB-on-Arc bridge:
    ```text
    command: sreagent_incidents_plans_create
-   name: lob-arc-app-review
+   name: lob-arc-app-review-v2
    severity: high
    trigger-condition: lob-arc-app-fault OR ArcLobBridgeApp
    services: Azure Arc, win-app-01, ArcLobBridgeApp
@@ -161,7 +168,7 @@ Use this order in the shareable AI deploy handbook:
    agent-mode: review
    agent: sre-arc-demo
    ```
-5. Verify:
+6. Verify:
    ```text
    command: sreagent_incidents_plans_list
    agent: sre-arc-demo
@@ -172,18 +179,20 @@ Use this order in the shareable AI deploy handbook:
 
 ## Fallback manual portal path
 
-If `sreagent_agents_create` fails in the live environment, use the portal path:
+If `sreagent_agents_create` fails or times out in the live environment, use the
+portal path:
 
 1. Open `https://sre.azure.com`.
 2. Select the parent agent `sre-arc-demo`.
-3. Go to **Builder > Agent Canvas**.
-4. Create a custom agent named `sre-arc-demo`.
-5. Paste the instructions from the MCP step above.
-6. Go to **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
-7. Delete or disable any quickstart response plan that would also match the demo alerts.
-8. Create `container-app-restart-review` in Review mode.
-9. Create `lob-arc-app-review` only if running T11.
-10. Verify the plan grid shows the expected plan, status On, response custom agent,
+3. If first-run onboarding appears, select **Done and go to agent**.
+4. Go to **Builder > Agent Canvas**.
+5. Create a custom agent named `sre-arc-demo`.
+6. Paste the instructions from the MCP step above.
+7. Go to **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
+8. Delete or disable any quickstart response plan that would also match the demo alerts.
+9. Create `container-app-restart-review-v2` in Review mode.
+10. Create `lob-arc-app-review-v2` only if running T11.
+11. Verify the plan grid shows the expected plan, status On, response custom agent,
     severity, and Review autonomy.
 
 ## Optional browser automation path
@@ -215,7 +224,7 @@ Create or verify a custom handling agent:
   perform autonomous Arc server repair.
 
 Create or verify response plan 1:
-- Name: container-app-restart-review
+- Name: container-app-restart-review-v2
 - Platform/source: Azure Monitor
 - Severity: Sev2 or equivalent high severity
 - Title contains: containerapp-restarts
@@ -224,7 +233,7 @@ Create or verify response plan 1:
 - Reinvestigation cooldown: enabled, 3 hours
 
 If running the LOB-on-Arc bridge, create or verify response plan 2:
-- Name: lob-arc-app-review
+- Name: lob-arc-app-review-v2
 - Platform/source: Azure Monitor
 - Severity: Sev2 or equivalent high severity
 - Title contains: lob-arc-app-fault
@@ -254,11 +263,11 @@ The portal changes wording over time; prefer labels over brittle selectors:
 8. Save the custom agent.
 9. Open **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
 10. Switch to table view if needed and disable/delete a conflicting quickstart plan.
-11. Create `container-app-restart-review`.
+11. Create `container-app-restart-review-v2`.
 12. Set Azure Monitor filters and select `sre-arc-demo` as the response custom agent.
 13. Set autonomy to **Review**.
 14. Save, then verify the row is On.
-15. Repeat for `lob-arc-app-review` only if validating T11.
+15. Repeat for `lob-arc-app-review-v2` only if validating T11.
 
 ### Verification commands after browser setup
 
@@ -272,9 +281,9 @@ agent: sre-arc-demo
 
 Expected:
 
-- `container-app-restart-review` is enabled/on, Review mode, Sev2/high, and routes
+- `container-app-restart-review-v2` is enabled/on, Review mode, Sev2/high, and routes
   to `sre-arc-demo`.
-- `lob-arc-app-review` exists only when T11 is in scope.
+- `lob-arc-app-review-v2` exists only when T11 is in scope.
 - No quickstart plan also matches the same demo alert titles.
 
 ### Failure recovery

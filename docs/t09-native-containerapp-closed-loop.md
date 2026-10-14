@@ -109,10 +109,10 @@ Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` 
 
 Preferred automation path, portal fallback, and optional browser-agent prompt are tracked in
 [`sre-response-plan-automation.md`](sre-response-plan-automation.md). The short
-version: create the parent SRE Agent through Bicep, create the custom handling
-agent with `sreagent_agents_create` if available, then create the response plan
-with `sreagent_incidents_plans_create`. If the custom-agent command fails, use the
-portal path below.
+version: create the parent SRE Agent through Bicep, try the MCP custom-agent
+creation path, and if it times out use the SRE portal/Scout browser fallback to
+create the custom handling agent. After the handler exists, create the response
+plan with `sreagent_incidents_plans_create`.
 
 In the SRE Agent portal:
 
@@ -126,7 +126,7 @@ In the SRE Agent portal:
 5. If the quickstart response plan would also match this alert, disable or delete it to avoid duplicate processing.
 6. Create a response plan:
    - Platform: **Azure Monitor**
-   - Name: `container-app-restart-review`
+   - Name: `container-app-restart-review-v2`
    - Severity: `Sev2`
    - Title contains: `containerapp-restarts`
    - Response custom agent: `sre-arc-demo`
@@ -139,8 +139,8 @@ In the SRE Agent portal:
 Validated state on 2026-10-12:
 
 - `sre-arc-demo` was running in `rg-arc-demo-sre` with Review mode and High access.
-- The required custom handling agent could not be created through MCP during the first pass, but portal creation through **Build + setup** > **Agent Canvas** succeeded.
-- After the portal custom agent existed, the response plan `container-app-restart-review` was enabled and automatic Azure Monitor handoff worked.
+- The required custom handling agent could not be created through MCP during the first pass, but portal creation through **Builder** > **Agent Canvas** succeeded.
+- After the portal custom agent existed, the response plan `container-app-restart-review-v2` was enabled and automatic Azure Monitor handoff worked.
 - Thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd` captured alert payload, RCA, approved Azure CLI remediation, successful execution, recovery confirmation, and alert closure.
 
 Historical MCP setup attempt:
@@ -162,7 +162,7 @@ sreagent_workflows_apply `
 
 # Creating the response plan still fails until the custom handling agent exists.
 sreagent_incidents_plans_create `
-  --name container-app-restart-review `
+  --name container-app-restart-review-v2 `
   --severity high `
   --trigger-condition "alert-arc-demo-containerapp-restarts OR containerapp-restarts" `
   --services Azure Container Apps,ca-arc-demo-fault,rg-arc-demo-infra `
@@ -172,10 +172,10 @@ sreagent_incidents_plans_create `
 # "Handling agent 'sre-arc-demo' does not exist."
 ```
 
-Current reproducible setup path: create the custom agent in the SRE portal, then
-create the response plan either in the portal or through MCP after the custom
-agent exists. Do not rely on `sreagent_workflows_apply` until the data-plane
-schema issue is resolved.
+Current reproducible setup path: complete first-run onboarding if prompted,
+create the custom agent in the SRE portal, then create the response plan either
+in the portal or through MCP after the custom agent exists. Do not rely on
+`sreagent_workflows_apply` until the data-plane schema issue is resolved.
 
 ## 5. Induce the fault
 
@@ -293,7 +293,7 @@ Use three evidence points:
 | Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after SRE repair: `ca-arc-demo-fault--0000012` |
 | SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
-| Review-mode response plan enabled | Yes | Created through SRE portal after creating custom subagent `sre-arc-demo`; MCP `incidents_plans_list` shows `container-app-restart-review` enabled, Sev2, mode `review` |
+| Review-mode response plan enabled | Yes | Created through SRE portal after creating custom subagent `sre-arc-demo`; MCP `incidents_plans_list` shows `container-app-restart-review-v2` enabled, Sev2, mode `review` |
 | `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000011` became unhealthy with `RestartCount` > 0 |
 | Azure Monitor alert fired | Yes | Alert thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd`, alert ID `56ca7acd-84ad-4ff0-b660-26647566f000`, fired at `2026-10-12T01:38:34Z` |
 | SRE Agent RCA produced | Yes | RCA identified `SIMULATE_CRASH=true`, entrypoint exits with code 1, RestartCount starts at `01:36 UTC`, and previous revision `--0000010` was last healthy |

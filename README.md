@@ -4,6 +4,13 @@ This repository is the optional **Azure SRE Agent** layer for the separate `arc-
 
 Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json). Keep `azure.namePrefix` aligned with the Arc repo's skin, then use `-SkinPath` on the scripts; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
 
+## Start here
+
+- **AI coding assistants:** read [`AGENTS.md`](AGENTS.md) first.
+- **Presenter runthrough:** use [`docs\delivery-runsheet.md`](docs/delivery-runsheet.md), then branch to the scenario docs it names.
+- **Setup/repair SRE response plans:** use [`docs\sre-response-plan-automation.md`](docs/sre-response-plan-automation.md).
+- **Do not use every doc as a presenter script.** Several files under `docs\` are engineering evidence or historical runbooks.
+
 ## What it deploys
 
 - `Microsoft.App/agents` SRE Agent in **Review** mode.
@@ -131,11 +138,11 @@ Arc demo estate stays intact.
 - `docs\sre-response-plan-automation.md` - Decision record for automating custom agents and response plans.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
 - `docs\t11-hybrid-diagnostics-wow.md` - Customer-facing hybrid diagnostics wow scene for LOB-on-Arc.
-- `docs\t11-lob-app-on-arc-bridge.md` - LOB app running on an Arc server with its own code context.
+- `docs\t11-lob-app-on-arc-bridge.md` - Engineering evidence ledger for the LOB app running on an Arc server; not the current presenter source-of-truth.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
-- **T11 LOB app on Arc:** live validated for Azure Monitor alerting, SRE RCA, and operator Arc Run Command recovery. Autonomous / SRE-executed Arc app repair is **not currently demo-ready**. Public code context now lives in `corey-skapin/arc-demo`; SRE knowledge-base connection still needs the next live check.
+- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.

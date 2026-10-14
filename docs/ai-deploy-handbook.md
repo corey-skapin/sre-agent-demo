@@ -24,9 +24,9 @@ Inputs:
 Do:
 1. Confirm arc-demo is deployed and active.
 2. Deploy the parent SRE Agent with scripts/Deploy-SreAgent.ps1.
-3. Create the custom handling agent with sreagent_agents_create if available.
-4. Create the T09 response plan with sreagent_incidents_plans_create.
-5. If MCP custom-agent creation fails, use docs/sre-response-plan-automation.md portal/browser fallback.
+3. Try to create the custom handling agent with sreagent_agents_create if available.
+4. If MCP custom-agent creation times out, complete SRE first-run onboarding and use docs/sre-response-plan-automation.md portal/browser fallback.
+5. Create the T09/T11 response plans with sreagent_incidents_plans_create after the custom handler exists.
 6. Validate T09 as the only fully closed-loop remediation path.
 7. Position T10/T11 as assisted diagnostics plus operator Arc Run Command recovery.
 8. Hibernate the SRE layer with scripts/Hibernate-SreAgent.ps1 when finished.
@@ -68,7 +68,7 @@ az account set --subscription <SUBSCRIPTION_ID>
 Preferred path:
 
 1. Use `sreagent_agents_create` to create custom handling agent `sre-arc-demo`.
-2. Use `sreagent_incidents_plans_create` to create `container-app-restart-review`.
+2. Use `sreagent_incidents_plans_create` to create `container-app-restart-review-v2`.
 3. Use `sreagent_incidents_plans_list` to verify.
 
 Exact fields and fallback steps are in
@@ -87,10 +87,10 @@ If MCP setup fails:
 | Parent SRE Agent exists | `sre-arc-demo` running in `rg-arc-demo-sre` |
 | Incident platform | Azure Monitor |
 | Custom handling agent | `sre-arc-demo` exists in Agent Canvas / subagent builder |
-| T09 response plan | `container-app-restart-review`, On, Review mode |
+| T09 response plan | `container-app-restart-review-v2`, On, Review mode |
 | T09 closed loop | Container App alert opens SRE thread, RCA identifies `SIMULATE_CRASH=true`, approval resets it to `false`, app recovers |
-| T11 code context | `https://github.com/corey-skapin/arc-demo` connected in SRE knowledge base if running LOB-on-Arc |
-| T10/T11 stance | Assisted diagnostics only; operator Arc Run Command recovery |
+| T11 response plan | `lob-arc-app-review-v2`, On, Review mode if running LOB-on-Arc |
+| T10/T11 stance | Signal/evidence plus operator Arc Run Command recovery; do not claim autonomous repair or reliable T11 SRE RCA yet |
 
 ## Scenario priority
 
@@ -121,7 +121,8 @@ Then hibernate the Arc spine from `C:\src\arc-demo` if the whole lab should be o
 
 ## Manual steps summary
 
-Manual/portal work is not expected if `sreagent_agents_create` works. If it fails,
-the unavoidable manual step is creating the custom handling agent in the SRE portal
-before creating response plans. The documented browser-agent path makes that step
-repeatable and explicit.
+Manual portal clicks are not expected if `sreagent_agents_create` works. In the
+latest live run it timed out, so the proven fallback is visible-browser automation:
+complete first-run onboarding, create the custom handling agent in the SRE portal,
+then create response plans through MCP. The browser-agent path in
+`sre-response-plan-automation.md` makes that repeatable and explicit.

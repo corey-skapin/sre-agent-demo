@@ -6,8 +6,10 @@ This is the customer-facing Arc/on-prem SRE moment.
 
 T09 proves full Azure-native closed-loop remediation. T11 proves the hybrid value:
 an on-prem-shaped line-of-business app running on an Arc-enabled Windows server can
-enter Azure Monitor, trigger SRE Agent investigation, and produce useful RCA and a
-safe operator recovery path without RDP, war rooms, or tribal knowledge.
+enter Azure Monitor and produce a safe operator recovery path without RDP, war
+rooms, or tribal knowledge. In the latest live run, SRE incident creation worked
+but SRE RCA generation stalled, so treat the RCA as the quality bar rather than a
+reliable live claim.
 
 Do **not** sell this as autonomous Arc server repair. The wow is assisted
 diagnosis and governed operator action.
@@ -38,7 +40,7 @@ Key line:
 | 2 | LOB app code context | Source is public in `corey-skapin/arc-demo`, `samples/lob-arc-app/LobArcBridgeApp.ps1`. |
 | 3 | Fault induction | `FaultMode=CrashOnProcessing` creates Event ID `4100` from `ArcLobBridgeApp`. |
 | 4 | Azure Monitor alert | Alert title contains `lob-arc-app-fault`; source is Log Analytics `Event`. |
-| 5 | SRE Agent thread | RCA identifies Arc machine, event payload, scheduled task, fault mode, source path/commit. |
+| 5 | SRE Agent thread | Incident creation is proven when response plans are configured; RCA is the desired quality bar, but latest live run stalled before final diagnostic output. |
 | 6 | Operator recovery | Arc Run Command resets app config to `Healthy` and restarts the scheduled task. |
 | 7 | Verification | Event ID `4000` healthy heartbeat returns. |
 
@@ -76,10 +78,12 @@ $tenantId = '<TENANT_ID>'
   -FaultMode CrashOnProcessing
 ```
 
-Wait for the Azure Monitor alert and SRE thread. Use the SRE Agent thread as the
-main stage.
+Wait for the Azure Monitor alert. If the SRE response plan is configured and
+fires, use the SRE Agent thread as supporting evidence. If the SRE handler stalls,
+use Log Analytics plus the operator recovery command as the main stage.
 
-Reset only after capturing the SRE RCA:
+Reset only after capturing the alert/evidence, and after the SRE thread if it
+produces useful output:
 
 ```powershell
 .\scripts\Invoke-LobArcAppOnArc.ps1 `
@@ -121,8 +125,9 @@ Use this as the quality bar for the SRE response. The exact wording will vary:
 > Event ID 4100 and exits with code 42. Recommended operator action: use Arc Run
 > Command to set `FaultMode=Healthy`, reset `IncidentId`, and restart the task.
 
-If SRE does not cite the source file, use the event payload and run-command history
-as sufficient RCA evidence, but note that code-context connection needs attention.
+If SRE does not produce the RCA, use the event payload and run-command history as
+the proven evidence, and state that response-plan RCA reliability is still being
+hardened.
 
 ## Recovery line
 
@@ -150,14 +155,15 @@ If automatic SRE handoff does not fire during the meeting:
 
 ## Evidence checklist
 
-Before calling T11 customer-ready, capture:
+Current customer-ready claim is signal plus operator recovery. To expand the
+claim to reliable SRE RCA later, capture:
 
 | Evidence | Required |
 |---|---|
-| Public source connected | SRE knowledge base has `https://github.com/corey-skapin/arc-demo`. |
+| Public source connected | Optional for current claim; useful when hardening RCA quality. |
 | App deployed | `Invoke-LobArcAppOnArc.ps1 -Action Deploy` succeeds. |
 | Fault induced | Event ID `4100` from `ArcLobBridgeApp`. |
 | Alert fired | Azure Monitor alert title contains `lob-arc-app-fault`. |
-| SRE RCA | Thread identifies Arc machine, fault mode, config path, source path, and recovery action. |
+| SRE RCA | Future quality bar: thread identifies Arc machine, fault mode, config path, source path, and recovery action. Latest live run stalled before this. |
 | Operator recovery | `ResetFault` returns app to `Healthy`. |
 | Healthy heartbeat | Event ID `4000` observed after reset. |

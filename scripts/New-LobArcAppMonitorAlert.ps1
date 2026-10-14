@@ -169,7 +169,7 @@ if ($PSCmdlet.ShouldProcess($target, 'create or update Azure Monitor alert')) {
         Invoke-AzCli -Arguments @(
             'rest',
             '--method', 'put',
-            '--url', "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ArcResourceGroupName/providers/Microsoft.Insights/scheduledQueryRules/$AlertName?api-version=2023-03-15-preview",
+            '--url', "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ArcResourceGroupName/providers/Microsoft.Insights/scheduledQueryRules/${AlertName}?api-version=2023-03-15-preview",
             '--body', "@$tempBody",
             '--headers', 'Content-Type=application/json',
             '--only-show-errors',
