@@ -48,7 +48,7 @@ The sample app source used for SRE code context now lives in the public
 Agent portal:
 
 1. Open the SRE Agent.
-2. Go to **Builder** > **Knowledge base**.
+2. Go to **Builder** > **Knowledge sources**.
 3. Add `https://github.com/corey-skapin/arc-demo`.
 4. Deploy with `-SourceRepositoryUrl`, `-SourceCommit`, and `-SourcePath` so those
    values appear in the emitted Application events.

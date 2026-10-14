@@ -97,7 +97,7 @@ cd C:\src\sre-agent
 In the SRE Agent portal:
 
 1. Open `sre-arc-demo`.
-2. Go to **Builder** > **Knowledge base**.
+2. Go to **Builder** > **Knowledge sources**.
 3. Select **Add repository**.
 4. Choose GitHub or Azure DevOps authentication.
 5. Add the `corey-skapin/arc-demo` repository.
@@ -117,7 +117,7 @@ plan with `sreagent_incidents_plans_create`.
 In the SRE Agent portal:
 
 1. Open `sre-arc-demo`.
-2. Go to **Build + setup** > **Agent Canvas**.
+2. Go to **Builder** > **Agent Canvas**.
 3. Create or verify a custom agent named `sre-arc-demo`:
    - Instructions: handle Azure Monitor incidents for `alert-arc-demo-containerapp-restarts`; investigate `ca-arc-demo-fault`, `RestartCount`, revision health, and the `SIMULATE_CRASH` environment variable.
    - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
