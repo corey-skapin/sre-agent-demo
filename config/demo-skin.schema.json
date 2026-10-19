@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "customer", "azure", "sre", "labels", "codeContext", "tags"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "customer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "shortName", "scenarioLabel"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "shortName": { "type": "string", "minLength": 1 },
+        "scenarioLabel": { "type": "string", "minLength": 1 }
+      }
+    },
+    "azure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namePrefix", "location"],
+      "properties": {
+        "namePrefix": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,19}$" },
+        "location": { "type": "string", "pattern": "^[a-z][a-z0-9]+$" }
+      }
+    },
+    "sre": {
+      "type": "object", "additionalProperties": false,
+      "required": ["accessLevel", "targetArcMachine", "nativeContainerFaultState", "t10Scenario", "lobFaultMode"],
+      "properties": {
+        "accessLevel": { "enum": ["High", "Low"] },
+        "targetArcMachine": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" },
+        "nativeContainerFaultState": { "const": "Status" },
+        "t10Scenario": { "enum": ["HeartbeatByBackingVm", "StopService", "DiskPressure", "CpuPressure", "WriteEvent"] },
+        "lobFaultMode": { "enum": ["CrashOnProcessing", "Degraded"] },
+        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11"] } }
+      }
+    },
+    "labels": {
+      "type": "object", "additionalProperties": false,
+      "required": ["demoTitle", "agentName", "containerResponsePlan", "lobAlertTitleContains", "lobAppName", "lobEventSource", "lobTaskName"],
+      "properties": {
+        "demoTitle": { "type": "string", "minLength": 1 },
+        "agentName": { "type": "string", "pattern": "^[A-Za-z][-A-Za-z0-9]{0,30}[A-Za-z0-9]$" },
+        "containerResponsePlan": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,79}$" },
+        "lobResponsePlan": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,79}$" },
+        "lobAlertTitleContains": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_. -]{0,79}$" },
+        "lobAppName": { "type": "string", "minLength": 1 },
+        "lobEventSource": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,79}$" },
+        "lobTaskName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" }
+      }
+    },
+    "codeContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lobRepositoryUrl", "lobSourceCommit", "lobSourcePath"],
+      "properties": {
+        "lobRepositoryUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+        "lobSourceCommit": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "lobSourcePath": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tags": { "type": "object", "additionalProperties": { "type": "string" } }
+  }
+}

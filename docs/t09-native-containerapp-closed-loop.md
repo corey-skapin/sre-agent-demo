@@ -50,6 +50,7 @@ az account set --subscription <SUBSCRIPTION_ID>
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
+  -ParentOnly `
   -DeployContainerApps $true
 ```
 
@@ -100,7 +101,7 @@ In the SRE Agent portal:
 2. Go to **Builder** > **Knowledge sources**.
 3. Select **Add repository**.
 4. Choose GitHub or Azure DevOps authentication.
-5. Add the `corey-skapin/arc-demo` repository.
+5. Only after explicit authorization, add the `corey-skapin/arc-demo` repository.
 6. Confirm the repository card shows **Connected**.
 
 Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` startup script in `bicep/modules/container-apps.bicep` and the operator commands in `docs/container-app-fault.md`.
@@ -123,7 +124,7 @@ In the SRE Agent portal:
    - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
    - Tools: leave empty to inherit the parent agent's global Azure tools, or explicitly select the Azure Monitor/Azure resource tools required by the environment.
 4. Go to **Builder** > **Incident response plans**.
-5. If the quickstart response plan would also match this alert, disable or delete it to avoid duplicate processing.
+5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
 6. Create a response plan:
    - Platform: **Azure Monitor**
    - Name: `container-app-restart-review-v2`
@@ -152,8 +153,8 @@ sreagent_workflows_validate `
 
 # Applying the same YAML failed in the SRE Agent data plane.
 sreagent_workflows_apply `
-  --tenant 4a2e6a7b-9d04-4e89-9d8b-01c75a2444c1 `
-  --subscription 6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5 `
+  --tenant <TENANT_ID> `
+  --subscription <SUBSCRIPTION_ID> `
   --resource-group rg-arc-demo-sre `
   --agent sre-arc-demo `
   --yaml-content <ExtendedAgent YAML>
@@ -171,6 +172,11 @@ sreagent_incidents_plans_create `
 # 400 from /api/v1/incidentplayground/filters/container-app-restart-review:
 # "Handling agent 'sre-arc-demo' does not exist."
 ```
+
+The historical `OR` title example above is not current desired configuration:
+use the single keyword `containerapp-restarts`. Read existing plans before
+creating; never replay a timed-out non-idempotent create. Run the read-only
+readiness command and separately verify pending service gates before inducing.
 
 Current reproducible setup path: complete first-run onboarding if prompted,
 create the custom agent in the SRE portal, then create the response plan either

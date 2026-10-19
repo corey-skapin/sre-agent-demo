@@ -105,6 +105,7 @@ Deploy or update the SRE Agent with the target Arc machine in scope:
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
+  -ParentOnly `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($targetArcId)
 ```

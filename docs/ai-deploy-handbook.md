@@ -1,128 +1,97 @@
-# AI deploy handbook - SRE Agent layer
+# AI deploy handbook - optional SRE layer
 
-Use this after the standalone `arc-demo` repo is deployed. This repo adds the
-optional Azure SRE Agent layer and scenario runbooks.
+Use this only after standalone `arc-demo` is active. The Arc repo owns its estate;
+this repo adds SRE without editing the Arc checkout or redeploying its workloads.
 
-## Give this prompt to the AI assistant
+## Handoff prompt
 
 ```text
-You are deploying the optional Azure SRE Agent layer from
-https://github.com/corey-skapin/sre-agent-demo on top of an existing deployment
-from https://github.com/corey-skapin/arc-demo.
+Read AGENTS.md, README.md, docs/delivery-runsheet.md and
+docs/sre-response-plan-automation.md.
 
-Read README.md, docs/t09-native-containerapp-closed-loop.md,
-docs/sre-response-plan-automation.md, docs/t10-sre-on-arc-experiment.md,
-docs/t11-lob-app-on-arc-bridge.md, and docs/delivery-runsheet.md before running
-commands.
+Inputs: explicit subscription GUID, tenant GUID, skin, and desired state
+Ready or Hibernated. Never infer target context from an ambient Azure login.
+Keep runtime identifiers and credentials out of git.
 
-Inputs:
-- Subscription ID: <SUBSCRIPTION_ID>
-- Tenant ID: <TENANT_ID>
-- Arc demo name prefix: <PREFIX, default arc-demo>
-- SRE access level: High for lab validation, Low for observe-only
+For Ready:
+1. Confirm the Arc estate is active using Arc readiness and actual inventory.
+2. Validate skin; run local mocked tests and Bicep compilation.
+3. Preview Deploy-SreAgent.ps1 -WhatIf. Review the exact diff before changes.
+4. Deploy with -ParentOnly only when parent changes are authorized. This is
+   deliberately not a claim that the full demo is Ready.
+5. Render Initialize-SreConfiguration.ps1 and execute the documented bounded
+   MCP/browser ensure procedure. If supported read/update capability or browser
+   access is missing, fail explicitly; never invent endpoints or duplicate plans.
+6. Run Test-SreReadiness.ps1 and separately verify every pending handler, plan,
+   filter, Review, overlap and telemetry gate. Existing ARM success is not routing
+   readiness. Do not induce a fault merely to answer a read-only readiness check.
+7. Present T09 as primary proven Review closed loop; T10/T11 as hybrid evidence
+   plus governed operator Arc Run Command recovery. T11 RCA is not reliable yet.
+8. Leave a requested Ready demo running. Do not automatically hibernate.
 
-Do:
-1. Confirm arc-demo is deployed and active.
-2. Deploy the parent SRE Agent with scripts/Deploy-SreAgent.ps1.
-3. Try to create the custom handling agent with sreagent_agents_create if available.
-4. If MCP custom-agent creation times out, complete SRE first-run onboarding and use docs/sre-response-plan-automation.md portal/browser fallback.
-5. Create the T09/T11 response plans with sreagent_incidents_plans_create after the custom handler exists.
-6. Validate T09 as the only fully closed-loop remediation path.
-7. Position T10/T11 as assisted diagnostics plus operator Arc Run Command recovery.
-8. Hibernate the SRE layer with scripts/Hibernate-SreAgent.ps1 when finished.
+For Hibernated:
+1. Obtain explicit authorization for deletion and export required evidence.
+2. Save the SRE user-assigned identity principal ID.
+3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
+4. Verify deletion and external RBAC with Test-SreReadiness.ps1
+   -DesiredState Hibernated -PreviousIdentityPrincipalId <saved ID>.
+5. Arc lifecycle is separately owned; do not stop its workloads from this repo.
 
-Do not:
-- Claim autonomous Arc server repair.
-- Change response plans to Autonomous for customer demos.
-- Leave the SRE resource group running after the rehearsal unless the user asks.
+Never change plans to Autonomous, remove quickstart plans, revoke extra grants,
+connect a repository, or induce faults without the appropriate scoped approval.
 ```
 
-## Required inputs
-
-| Input | Notes |
-|---|---|
-| Subscription ID | Same subscription as `arc-demo`. |
-| Tenant ID | Same tenant used for `arc-demo`. |
-| Name prefix | Must match `arc-demo` skin, default `arc-demo`. |
-| Access level | `High` for live remediation validation; `Low` for observe-only. |
-| Portal access | Needed only if MCP custom-agent creation fails. |
-
-## Deployment order
+## Runtime commands
 
 ```powershell
-git clone https://github.com/corey-skapin/sre-agent-demo C:\src\sre-agent
-cd C:\src\sre-agent
-
 az login --tenant <TENANT_ID>
-az account set --subscription <SUBSCRIPTION_ID>
+# Scripts pass --subscription on every request and never run az account set.
+.\tests\Invoke-Tests.ps1
+az bicep build --file .\infra\main.bicep --stdout
 
 .\scripts\Deploy-SreAgent.ps1 `
-  -SubscriptionId <SUBSCRIPTION_ID> `
-  -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
-  -AccessLevel High
-```
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -WhatIf
 
-## Configure custom agent and response plan
+.\scripts\Deploy-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -ParentOnly
 
-Preferred path:
-
-1. Use `sreagent_agents_create` to create custom handling agent `sre-arc-demo`.
-2. Use `sreagent_incidents_plans_create` to create `container-app-restart-review-v2`.
-3. Use `sreagent_incidents_plans_list` to verify.
-
-Exact fields and fallback steps are in
-[`sre-response-plan-automation.md`](sre-response-plan-automation.md).
-
-If MCP setup fails:
-
-1. Use the manual portal path in `sre-response-plan-automation.md`.
-2. Or give the browser-agent prompt in that doc to Scout/Playwright.
-3. Verify the plan grid before inducing alerts.
-
-## Validation checklist
-
-| Check | Expected |
-|---|---|
-| Parent SRE Agent exists | `sre-arc-demo` running in `rg-arc-demo-sre` |
-| Incident platform | Azure Monitor |
-| Custom handling agent | `sre-arc-demo` exists in Agent Canvas / subagent builder |
-| T09 response plan | `container-app-restart-review-v2`, On, Review mode |
-| T09 closed loop | Container App alert opens SRE thread, RCA identifies `SIMULATE_CRASH=true`, approval resets it to `false`, app recovers |
-| T11 response plan | `lob-arc-app-review-v2`, On, Review mode if running LOB-on-Arc |
-| T10/T11 stance | Signal/evidence plus operator Arc Run Command recovery; do not claim autonomous repair or reliable T11 SRE RCA yet |
-
-## Scenario priority
-
-1. **T09 Container App** - primary live "wow"; fully closed-loop validated.
-2. **T10 Arc server** - assisted diagnostics, not autonomous repair.
-3. **T11 LOB-on-Arc** - hybrid RCA bridge, operator recovery, optional if time allows.
-
-## Hibernation
-
-After rehearsal:
-
-```powershell
-.\scripts\Hibernate-SreAgent.ps1 `
-  -SubscriptionId <SUBSCRIPTION_ID> `
-  -TenantId <TENANT_ID> `
+.\scripts\Initialize-SreConfiguration.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json
+
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json
 ```
 
-Verify:
+See [response-plan automation](sre-response-plan-automation.md) for supported
+commands, browser requirements, idempotency/timeouts and exact machine contract.
+`-Apply` on the initializer fails explicitly; complete unattended service
+reconciliation is not currently claimed.
 
-```powershell
-az group exists -n rg-arc-demo-sre -o tsv
-```
+## Lifecycle and permission boundaries
 
-Expected: `false` after deletion completes.
+SRE has a deletion-based off state, not VM-style deallocation. Deletion discards
+handler/plan/history/memory/connector state. Parent redeployment is only stage one
+of reconstruction. Resume requires data-plane setup and verification again.
+Save evidence before cleanup and reauthorize optional repository connections.
 
-Then hibernate the Arc spine from `C:\src\arc-demo` if the whole lab should be off.
+The deploying identity may be User or ServicePrincipal (including managed
+identity). The script infers known Azure CLI identity types; pass
+`-DeployerPrincipalType` for an unrecognized execution identity. RBAC names include
+the live principal and adopt existing same-principal role assignments. Incremental
+Bicep does not remove obsolete grants; Low downgrade with existing write grants
+fails explicitly pending a separately approved reconciliation.
 
-## Manual steps summary
+High preserves the existing Reader/Log Analytics Contributor/Contributor profile.
+Existing Monitoring Contributor grants are explicitly tolerated, not copied into
+the standard profile. Low uses true Log Analytics Reader, not the formerly
+mislabeled Log Analytics Contributor ID. Hibernation discovers known identity-owned
+inherited grants too, shows their IDs in the deletion confirmation and deduplicates
+them; no role grants are removed while the desired state is Ready.
 
-Manual portal clicks are not expected if `sreagent_agents_create` works. In the
-latest live run it timed out, so the proven fallback is visible-browser automation:
-complete first-run onboarding, create the custom handling agent in the SRE portal,
-then create response plans through MCP. The browser-agent path in
-`sre-response-plan-automation.md` makes that repeatable and explicit.
+Local checks cover parser/schema/rendering/mocked failures and safety behavior.
+They do not prove Azure data-plane create reliability, destructive lifecycle
+rebuild, live guest execution or a new T09 alert-to-recovery run.

@@ -9,8 +9,11 @@ param roleDefinitionIds array
 @description('Stable seed for deterministic role assignment names.')
 param roleAssignmentSeed string
 
+@description('Existing assignment names keyed by role ID, discovered at this scope for this principal. Adopts legacy names without duplicate grants.')
+param existingRoleAssignmentNames object = {}
+
 resource roleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for roleDefinitionId in roleDefinitionIds: {
-  name: guid(resourceGroup().id, roleAssignmentSeed, roleDefinitionId)
+  name: contains(existingRoleAssignmentNames, roleDefinitionId) ? existingRoleAssignmentNames[roleDefinitionId] : guid(resourceGroup().id, roleAssignmentSeed, principalId, roleDefinitionId)
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionId)
     principalId: principalId

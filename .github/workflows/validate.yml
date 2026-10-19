@@ -1,0 +1,20 @@
+name: Validate demo assets
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parser, skin and mocked behavior checks
+        shell: pwsh
+        run: .\tests\Invoke-Tests.ps1
+      - name: Compile Bicep without Azure sign-in
+        shell: pwsh
+        run: |
+          az bicep build --file .\infra\main.bicep --stdout --only-show-errors > $null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

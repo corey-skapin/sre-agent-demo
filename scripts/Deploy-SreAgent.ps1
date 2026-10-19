@@ -38,6 +38,11 @@ param(
 
     [string]$SkinPath = '',
 
+    [ValidateSet('User', 'ServicePrincipal')]
+    [string]$DeployerPrincipalType,
+
+    [switch]$ParentOnly,
+
     [switch]$WhatIf
 )
 
@@ -50,14 +55,7 @@ function Invoke-AzCli {
         [string[]]$Arguments
     )
 
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-
-    return $text
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments $Arguments
 }
 
 function Get-AzTsv {
@@ -107,9 +105,7 @@ function Assert-ArmId {
         [string]$Description
     )
 
-    if ($ResourceId -notmatch '^/subscriptions/[0-9a-fA-F-]{36}/') {
-        throw "$Description is not a valid Azure resource ID: $ResourceId"
-    }
+    Assert-SreArmId -ResourceId $ResourceId -SubscriptionId $SubscriptionId -Description $Description
 }
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
@@ -117,6 +113,7 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 if (Test-Path -LiteralPath $skinModule) {
     Import-Module $skinModule -Force
@@ -143,11 +140,26 @@ if (-not $AgentName) { $AgentName = Get-SafeAgentName -RawName "sre-$NamePrefix"
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $InfraResourceGroupName) { $InfraResourceGroupName = "rg-$NamePrefix-infra" }
 
-Write-Host "Selecting subscription $SubscriptionId in tenant $TenantId..."
-Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-$accountTenant = Get-AzTsv -Arguments @('account', 'show', '--query', 'tenantId') -Description 'current Azure CLI tenant'
-if ($accountTenant -ne $TenantId) {
-    throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
+Assert-SreName -Value $NamePrefix -Description 'name prefix' -Pattern '^[a-z][a-z0-9-]{1,19}$'
+Assert-SreName -Value $AgentName -Description 'agent name' -Pattern '^[A-Za-z][-A-Za-z0-9]{0,30}[A-Za-z0-9]$'
+foreach ($name in @($SreResourceGroupName, $ArcResourceGroupName, $InfraResourceGroupName)) {
+    Assert-SreName -Value $name -Description 'resource group'
+}
+if ($SreResourceGroupName -in @($ArcResourceGroupName, $InfraResourceGroupName)) {
+    throw 'The optional SRE resource group must be separate from both Arc resource groups.'
+}
+if ($AccessLevel -notin @('High', 'Low')) { throw 'Skin accessLevel must be High or Low.' }
+Assert-SreName -Value $Location -Description 'location' -Pattern '^[a-z][a-z0-9]+$'
+if (-not $WhatIf -and -not $ParentOnly) {
+    throw 'Complete unattended data-plane reconciliation is unavailable: supported MCP exposes no custom-handler read or plan update. Use -ParentOnly explicitly, then Initialize-SreConfiguration.ps1 and the MCP/browser ensure procedure in docs\sre-response-plan-automation.md. Parent deployment alone is not demo Ready.'
+}
+$account = Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId
+if (-not $DeployerPrincipalType) {
+    $DeployerPrincipalType = switch ($account.user.type) {
+        'user' { 'User' }
+        'servicePrincipal' { 'ServicePrincipal' }
+        default { throw 'Unable to infer deploying principal type. Pass -DeployerPrincipalType User or ServicePrincipal (including managed identity).' }
+    }
 }
 
 Write-Host 'Resolving existing arc-demo resources...'
@@ -167,12 +179,57 @@ Assert-ArmId -ResourceId $arcResourceGroupId -Description 'Arc resource group ID
 Assert-ArmId -ResourceId $infraResourceGroupId -Description 'infra resource group ID'
 Assert-ArmId -ResourceId $LogAnalyticsWorkspaceId -Description 'Log Analytics workspace ID'
 Assert-ArmId -ResourceId $ActionGroupId -Description 'Action Group ID'
+if ($LogAnalyticsWorkspaceId -notmatch '/providers/Microsoft\.OperationalInsights/workspaces/[^/]+$') { throw 'Expected a Log Analytics workspace resource ID.' }
+if ($ActionGroupId -notmatch '/providers/Microsoft\.Insights/actionGroups/[^/]+$') { throw 'Expected an Azure Monitor Action Group resource ID.' }
 foreach ($id in $AdditionalManagedResourceIds) {
     Assert-ArmId -ResourceId $id -Description 'Additional managed resource ID'
 }
 
+$requiredScenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
+if ('T09' -in $requiredScenarios) {
+    $containerId = Get-AzTsv -Arguments @('containerapp', 'show', '-g', $InfraResourceGroupName, '-n', "ca-$NamePrefix-fault", '--query', 'id') -Description 'required T09 Container App'
+    $AdditionalManagedResourceIds += $containerId
+}
+if ('T10' -in $requiredScenarios -or 'T11' -in $requiredScenarios) {
+    $machineName = Get-DemoSkinValue -Skin $skin -Path 'sre.targetArcMachine'
+    $machineId = Get-AzTsv -Arguments @('connectedmachine', 'show', '-g', $ArcResourceGroupName, '-n', $machineName, '--query', 'id') -Description 'required Arc machine'
+    $AdditionalManagedResourceIds += $machineId
+}
+$AdditionalManagedResourceIds = @($AdditionalManagedResourceIds | Sort-Object -Unique)
+
+# Adopt existing role names for this principal; never attempt to overwrite an old principal's assignment.
+$existingNames = @{}
+$sreExists = Invoke-AzCli -Arguments @('group', 'exists', '-n', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
+$principalId = $null
+if ($sreExists) {
+    $identities = Invoke-AzCli -Arguments @('identity', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
+    $principalId = @($identities | Where-Object name -EQ "$AgentName-uami" | Select-Object -ExpandProperty principalId) | Select-Object -First 1
+    $resources = Invoke-AzCli -Arguments @('resource', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
+    $existingParent = $resources | Where-Object { $_.type -eq 'Microsoft.App/agents' -and $_.name -eq $AgentName } | Select-Object -First 1
+    if ($existingParent) {
+        $currentParent = Invoke-AzCli -Arguments @('resource', 'show', '--ids', $existingParent.id, '-o', 'json') | ConvertFrom-Json -Depth 100
+        $AdditionalManagedResourceIds = @(@($AdditionalManagedResourceIds) + @($currentParent.properties.knowledgeGraphConfiguration.managedResources) | Sort-Object -Unique)
+    }
+}
+foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
+    $names = @{}
+    if ($principalId) {
+        $assignments = Invoke-AzCli -Arguments @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '-o', 'json') | ConvertFrom-Json
+        foreach ($assignment in @($assignments | Where-Object { $_.principalId -eq $principalId })) {
+            $roleId = ($assignment.roleDefinitionId -split '/')[-1]
+            if ($AccessLevel -eq 'Low' -and $roleId -notin @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')) {
+                throw "Low profile requested but existing incompatible grant $roleId remains at $($assignment.scope). Obtain scoped approval to remove it; incremental deployment does not revoke grants."
+            }
+            if ($assignment.scope -ne $scope) { continue }
+            if ($names.ContainsKey($roleId)) { throw "Duplicate role grants for $principalId at $scope; reconcile explicitly before deployment." }
+            $names[$roleId] = $assignment.name
+        }
+    }
+    $existingNames[$scope] = $names
+}
+
 Write-Host 'Building Bicep template...'
-Invoke-AzCli -Arguments @('bicep', 'build', '--file', $templateFile, '--only-show-errors') | Out-Null
+Invoke-AzCli -Arguments @('bicep', 'build', '--file', $templateFile, '--stdout') | Out-Null
 
 $deploymentName = "sre-agent-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
 $verb = if ($WhatIf) { 'what-if' } else { 'create' }
@@ -187,6 +244,9 @@ $templateParameters = @{
     arcDemoActionGroupId         = @{ value = $ActionGroupId }
     additionalManagedResourceIds = @{ value = @($AdditionalManagedResourceIds) }
     accessLevel                  = @{ value = $AccessLevel }
+    deployerPrincipalType        = @{ value = $DeployerPrincipalType }
+    arcRoleAssignmentNames       = @{ value = $existingNames[$arcResourceGroupId] }
+    infraRoleAssignmentNames     = @{ value = $existingNames[$infraResourceGroupId] }
     tags                         = @{ value = $demoTags }
 }
 @{
@@ -221,7 +281,7 @@ try {
 $result = $resultText | ConvertFrom-Json
 $outputs = $result.properties.outputs
 Write-Host ''
-Write-Host 'SRE Agent deploy complete.'
+Write-Host 'SRE parent deployment complete; data-plane configuration and routing readiness are NOT confirmed.'
 Write-Host "  Agent:       $($outputs.agentName.value)"
 Write-Host "  Portal:      $($outputs.agentPortalUrl.value)"
 Write-Host "  Identity:    $($outputs.managedIdentityId.value)"
@@ -230,3 +290,4 @@ Write-Host '  Managed resource IDs:'
 foreach ($id in @($outputs.managedResourceIds.value)) {
     Write-Host "    - $id"
 }
+Write-Host 'Next: render Initialize-SreConfiguration.ps1, ensure handler/plans through supported MCP/browser, then run Test-SreReadiness.ps1. Do not induce faults before routing is verified.'

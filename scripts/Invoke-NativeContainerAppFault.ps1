@@ -11,9 +11,9 @@
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
-    [string]$SubscriptionId,
+    [Parameter(Mandatory)][string]$SubscriptionId,
 
-    [string]$TenantId,
+    [Parameter(Mandatory)][string]$TenantId,
 
     [string]$NamePrefix = 'arc-demo',
 
@@ -38,14 +38,7 @@ function Invoke-AzCli {
         [string[]]$Arguments
     )
 
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-
-    return $text
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments $Arguments
 }
 
 function Get-DefaultContainerAppName {
@@ -96,6 +89,7 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 Import-Module $skinModule -Force
 $skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
@@ -109,16 +103,10 @@ if (-not $ContainerAppName) {
     $ContainerAppName = Get-DefaultContainerAppName -Prefix $NamePrefix
 }
 
-if ($SubscriptionId) {
-    Write-Host "Selecting subscription $SubscriptionId..."
-    Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-}
-if ($TenantId) {
-    $accountTenant = Invoke-AzCli -Arguments @('account', 'show', '--query', 'tenantId', '--output', 'tsv', '--only-show-errors')
-    if ($accountTenant -ne $TenantId) {
-        throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
-    }
-}
+Assert-SreName -Value $ResourceGroupName -Description 'resource group'
+Assert-SreName -Value $ContainerAppName -Description 'container app'
+if ($State -notin @('Break', 'Repair', 'Status')) { throw 'Invalid fault state in skin.' }
+Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
 
 if ($State -ne 'Status') {
     $simulateCrashValue = if ($State -eq 'Break') { 'true' } else { 'false' }

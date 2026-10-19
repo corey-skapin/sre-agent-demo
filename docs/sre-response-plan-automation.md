@@ -1,310 +1,154 @@
-# SRE custom agent and response-plan automation decision
+# Reconstructing the SRE handler and Review response plans
 
-## Decision
+## Supported boundary
 
-The SRE setup is **partly automatable today** and should be documented that way.
+Parent deployment is not a Ready demo. The complete order is **parent -> data-plane
+availability -> custom handler -> plans -> filter/routing verification**. Deletion-based
+hibernation requires repeating that sequence. The checked-in skin and handler
+instructions reconstruct desired configuration, not historical service state.
 
-| Setup item | Current automation status | Demo kit stance |
+Microsoft's supported interfaces, checked on 2026-10-19:
+
+| Interface | Supported capability | Important limit |
 |---|---|---|
-| Parent `Microsoft.App/agents` resource | Automated through Bicep and `Deploy-SreAgent.ps1` | Shareable and repeatable |
-| Custom handling/subagent | Portal/Scout browser setup works after first-run onboarding. In the latest run, `sreagent_agents_create` timed out and `sreagent_workflows_apply` failed server-side despite YAML validation. | Use MCP first if available; fall back to the browser/portal path without treating it as a demo blocker |
-| Incident response plan | MCP exposes `sreagent_incidents_plans_create`, but it requires an existing custom agent/handler | Automatable after the custom agent exists |
-| Portal/manual setup | Official docs describe portal/canvas setup and it worked in the live lab | Keep as fallback and document clearly |
-| Playwright/browser automation | Proven fallback if MCP custom-agent create fails, assuming the user is signed in with the lab subscription account | Preferred fallback for Scout |
+| Bicep `Microsoft.App/agents` | Parent, identity, Review action mode, managed resources | Does not deploy custom handlers or response plans |
+| Azure MCP `sreagent_agents_create` | Idempotent custom-handler create/update | No corresponding custom-handler read command in the discovered surface; `agents_get` reads the parent |
+| `sreagent_incidents_plans_create` | Creates/enables a plan; explicitly pass `agent-mode: review` | Non-idempotent; never blindly retry after timeout |
+| `sreagent_incidents_plans_list` | Lists configured plans, filters, status and handler summaries | Current result is human-readable text, not a documented stable full desired-state schema |
+| SRE portal Builder | Inspect/edit custom handlers, filters, handler mapping, status, autonomy | Requires authorized browser capability and interactive sign-in/onboarding when prompted |
 
-## Why this matters
+No supported plan-update command was exposed. We do not use undocumented portal
+REST endpoints, invent request bodies, or claim that workflow YAML validation
+proves successful application. Historical handler-create timeouts and YAML apply
+failures remain historical evidence, not proof of current failure or readiness.
 
-The goal is that another SE can send the two repo links to an AI coding assistant
-and say "deploy the demo" with minimal human interpretation. The parent SRE Agent
-deployment already works this way. The remaining risk is SRE data-plane setup:
-creating the custom handling agent and response plans that route Azure Monitor
-alerts to that custom agent.
+Sources:
+- [Azure MCP SRE tools](https://learn.microsoft.com/azure/developer/azure-mcp-server/tools/azure-sre-agent)
+- [SRE MCP setup and permissions](https://learn.microsoft.com/azure/sre-agent/setup-mcp-server)
+- [Incident response plans and portal controls](https://learn.microsoft.com/azure/sre-agent/incident-response-plans)
+- [Custom agents](https://learn.microsoft.com/azure/sre-agent/sub-agents)
 
-## Official documentation findings
+## Render the exact desired state
 
-Microsoft Learn currently describes incident response plan creation through the
-SRE Agent portal:
-
-- Create or use an agent with an incident platform connected.
-- Create at least one custom agent first.
-- Create the response plan from **Builder > Agent Canvas** or **Builder > Incident
-  response plans**.
-- For Azure Monitor, filter by severity and optional title contains.
-- Select a response custom agent/subagent.
-- Select autonomy level. Start with **Review**.
-- Avoid duplicate routing by deleting or disabling the automatically created
-  quickstart response plan if it also matches the alert.
-
-The docs also state that Azure Monitor connects automatically when the SRE Agent is
-created, and response plans decide which incidents the agent handles.
-
-The Azure MCP Server docs list an SRE Agent **Incidents: Create plan** tool. That
-matches the `sreagent_incidents_plans_create` MCP command, but plan creation still
-depends on a handler/custom agent existing.
-
-## Current MCP command surface
-
-The currently exposed SRE MCP commands include these relevant operations:
-
-### Create custom sub-agent
-
-`sreagent_agents_create`
-
-Required:
-
-- `name`
-- `agent`
-
-Optional/useful:
-
-- `subscription`
-- `tenant`
-- `resource-group`
-- `description`
-- `instructions`
-- `tools`
-- `handoffs`
-
-Latest live behavior: this command is exposed, but timed out during the
-2026-10-14 spin-up. Do not make it the only setup path until it completes
-reliably.
-
-### Create response plan
-
-`sreagent_incidents_plans_create`
-
-Required:
-
-- `name`
-- `severity`
-- `trigger-condition`
-- `services`
-- `steps`
-- `agent`
-
-Optional/useful:
-
-- `subscription`
-- `tenant`
-- `resource-group`
-- `agent-mode`
-- `escalation`
-- `runbook-url`
-
-Known live behavior: when no custom handling agent existed, plan creation failed
-with:
-
-```text
-Handling agent 'sre-arc-demo' does not exist.
+```powershell
+.\scripts\Initialize-SreConfiguration.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json
 ```
 
-After the custom agent was created in the portal, response-plan creation worked
-for both demo plans:
+This local command returns JSON containing supported MCP requests, with runtime
+context, skin-specific resource names, versioned handler instructions, explicit
+Review mode, and the required T09/T11 plans. Keep its output outside git: it
+contains runtime target IDs. It does not call Azure or authenticate a repository.
+`-Apply` fails with `SRE_BOOTSTRAP_CAPABILITY_REQUIRED` rather than pretending to
+configure an unverifiable data plane.
 
-- `container-app-restart-review-v2`
-- `lob-arc-app-review-v2`
+`labels.containerResponsePlan` and `labels.lobResponsePlan` identify the plans.
+`labels.lobAlertTitleContains` is shared with the LOB alert display name. Title
+contains is a **single keyword**, not an undocumented Boolean expression:
+T09 uses `containerapp-restarts`; T11 uses the configured LOB keyword. Do not put
+`OR` into a literal substring filter. Match the actual alert title in the portal.
+Plan severity must include the actual Azure Monitor Sev2 incident; verify the
+platform's displayed severity mapping rather than assuming MCP `high` equals Sev2.
 
-### Workflow YAML path
+## Bounded ensure procedure for a connected agent
 
-`sreagent_workflows_generate`, `sreagent_workflows_validate`, and
-`sreagent_workflows_apply` exist for ExtendedAgent and tool YAML.
+1. Verify explicit tenant/subscription and parent `Succeeded`/`Running`. Use the
+   read-only readiness command with a bounded timeout. Wait for parent/data-plane
+   availability at most 180 seconds, checking every 10 seconds; a timeout is
+   pending, not success. Do not start a replacement deployment.
+2. Open `https://sre.azure.com` in an authorized visible browser. Select the
+   target parent, complete first-run onboarding if required, and inspect
+   **Builder > Agent Canvas**. Compare the custom handler's name, description
+   and full instructions with the rendered desired state.
+3. If absent or different, use the rendered `sreagent_agents_create` request, or
+   edit the same handler in Builder. Attempt at most twice, 10 seconds apart.
+   After every timeout, **read back in Builder first**: creation may have completed.
+   If read-back is unavailable, stop and report a capability requirement. Do not
+   create another handler or claim the original request failed definitively.
+4. List plans with the rendered verification request, then inspect each named plan
+   in **Builder > Incident response plans**. If an exact desired plan already
+   exists, leave it unchanged. If an existing plan differs, edit that same plan
+   in the portal; do not create a duplicate or delete/recreate it.
+5. Only after confirming absence in both list and portal, submit the rendered
+   create request **once**. After timeout/error, poll list/portal every 10 seconds
+   for at most 180 seconds. If outcome remains ambiguous, stop pending. A plan
+   create is not safe to replay merely because the client timed out.
+6. Verify each required plan is **On**, correct Azure Monitor source, actual
+   severity, literal title keyword, intended impacted service and custom handler,
+   and **Review**. Inspect full handler instructions too. The portal's default
+   autonomy can be Autonomous, so explicitly select Review every time.
+7. Inspect all enabled plans, including quickstart plans, for overlap. Report
+   conflicts and proposed narrowing; obtain scoped authorization before changing,
+   disabling or deleting another plan. Never automatically remove quickstart.
+8. Record observed configuration and remaining gates. Missing browser capability,
+   stale authentication, unavailable read-back, conflict or ambiguous timeout is
+   an explicit failed/pending gate, never a successful manual fallback.
 
-Historical live result:
+For repeat runs, ensure means compare/read-back first, update only differing
+owned objects, verify, then stop. No plan deletion, autonomy change, fault
+induction or new grants are part of this setup procedure.
 
-- YAML validation passed.
-- `sreagent_workflows_apply` failed with a data-plane 400:
+## Readiness and lifecycle
 
-```text
-The JSON value could not be converted ...; request field is required.
+```powershell
+# Explicitly deploy only the supported control plane:
+.\scripts\Deploy-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -ParentOnly
+
+# Read-only ARM/resource/RBAC baseline plus explicit pending service gates:
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Ready `
+  -OutputFormat Json -TimeoutSeconds 180
 ```
 
-Until that schema mismatch is resolved, do not make YAML apply the primary path.
+The JSON contract is shared with Arc: `schemaVersion`, `workload`, `checkedAtUtc`,
+`subscriptionId`, `tenantId`, `resourceGroups`, `desiredState`, `status`,
+`checks[{id,resourceId,required,expected,observed,status,message}]`.
+Statuses are `pass|fail|pending|skipped`; exit codes are 0 pass, 1 fail/error,
+2 pending. A parent with correct ARM configuration can still return pending
+because handler/plan/telemetry verification requires supported service/browser
+read-back. This script does not accept a user-supplied success attestation.
+It must not be described as a full automatic routing certificate.
 
-## Recommended automation order
+Before separately authorized hibernation, save the user-assigned identity
+principal ID and export incident/thread/audit evidence. Group deletion loses
+custom agents, plans, incidents/threads, knowledge/memory and connector setup;
+Log Analytics records retained in the Arc workspace follow that workspace's
+retention policy. Repository connector authorization must be re-established
+explicitly; a source URL is not permission.
 
-Use this order in the shareable AI deploy handbook:
+After deletion, pass the saved principal to
+`Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <ID>`
+to verify external grants are absent. Without a known old principal, legacy
+orphan grant checks remain pending. A submitted deletion is not a verified
+hibernated state. Re-enable the Arc spine first, then parent, handler, plans,
+readiness, and browser/telemetry gates. Do not hibernate automatically on deploy.
 
-1. Deploy the parent SRE Agent:
-   ```powershell
-   .\scripts\Deploy-SreAgent.ps1 `
-     -SubscriptionId <SUBSCRIPTION_ID> `
-     -TenantId <TENANT_ID> `
-     -SkinPath .\config\demo-skin.json `
-     -AccessLevel High
-   ```
-2. Try to create the custom handling agent with MCP:
-   ```text
-   command: sreagent_agents_create
-   name: sre-arc-demo
-   agent: sre-arc-demo
-   subscription: <SUBSCRIPTION_ID>
-   tenant: <TENANT_ID>
-   resource-group: rg-arc-demo-sre
-   description: Handles Arc demo Azure Monitor incidents in Review mode.
-   instructions: Investigate only the Arc demo resources. For Container App alerts, identify SIMULATE_CRASH and propose resetting it to false. For Arc server and LOB-on-Arc alerts, produce RCA and guide operator Arc Run Command recovery; do not claim autonomous Arc repair.
-   ```
-3. If MCP custom-agent creation times out, complete first-run onboarding in the
-   SRE portal and create the same custom handling agent through **Builder** >
-   **Agent Canvas**. Scout/Playwright can automate this browser path.
-4. Create the T09 response plan with MCP:
-   ```text
-   command: sreagent_incidents_plans_create
-   name: container-app-restart-review-v2
-   severity: high
-   trigger-condition: alert-arc-demo-containerapp-restarts OR containerapp-restarts
-   services: Azure Container Apps, ca-arc-demo-fault, rg-arc-demo-infra
-   steps: Investigate revision health, RestartCount, and SIMULATE_CRASH; propose az containerapp update SIMULATE_CRASH=false; verify recovery
-   agent-mode: review
-   agent: sre-arc-demo
-   ```
-5. Create the T11 response plan only if running the LOB-on-Arc bridge:
-   ```text
-   command: sreagent_incidents_plans_create
-   name: lob-arc-app-review-v2
-   severity: high
-   trigger-condition: lob-arc-app-fault OR ArcLobBridgeApp
-   services: Azure Arc, win-app-01, ArcLobBridgeApp
-   steps: Inspect Log Analytics Event rows and Arc machine state; produce RCA; guide operator Arc Run Command recovery
-   agent-mode: review
-   agent: sre-arc-demo
-   ```
-6. Verify:
-   ```text
-   command: sreagent_incidents_plans_list
-   agent: sre-arc-demo
-   subscription: <SUBSCRIPTION_ID>
-   tenant: <TENANT_ID>
-   resource-group: rg-arc-demo-sre
-   ```
+## Current versus historical evidence
 
-## Fallback manual portal path
+Read-only inspection on 2026-10-19 saw a Running Review/High parent and two enabled
+Review plans. The Container App was healthy and the target Arc machine Connected.
+The initial parent lacked the explicit T09 Container App managed-resource ID.
+After separate user approval, a narrow ARM PATCH appended only that existing
+Container App ID; read-back preserved the original five IDs byte-for-byte and
+confirmed all other parent properties unchanged. Review and existing grants were
+preserved. Existing Monitoring Contributor is tolerated for High demo compatibility,
+not added by the standard profile; High retains its historical Log Analytics
+Contributor grant, while Low now correctly uses true Log Analytics Reader.
 
-If `sreagent_agents_create` fails or times out in the live environment, use the
-portal path:
+Plan title summaries contained `OR` strings requiring portal review. The approved
+two filter edits were not performed because available browser observation could
+not reliably identify the target window/URL. The live T11 alert still has a display
+name without the desired keyword; changing that alert was not authorized. Readiness
+therefore reports T11 title alignment failed and service gates pending, not Ready.
+Timestamped read-only/reconciliation evidence and rollback IDs were saved outside
+git. No fault injection, grant removal, plan recreation or destructive lifecycle
+test was performed. This is not evidence of a fresh end-to-end closed loop.
 
-1. Open `https://sre.azure.com`.
-2. Select the parent agent `sre-arc-demo`.
-3. If first-run onboarding appears, select **Done and go to agent**.
-4. Go to **Builder > Agent Canvas**.
-5. Create a custom agent named `sre-arc-demo`.
-6. Paste the instructions from the MCP step above.
-7. Go to **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
-8. Delete or disable any quickstart response plan that would also match the demo alerts.
-9. Create `container-app-restart-review-v2` in Review mode.
-10. Create `lob-arc-app-review-v2` only if running T11.
-11. Verify the plan grid shows the expected plan, status On, response custom agent,
-    severity, and Review autonomy.
-
-## Optional browser automation path
-
-Use this when an SE wants an AI browser agent, such as Scout with Playwright, to
-perform the portal fallback. Keep the browser visible because the portal may require
-interactive sign-in, tenant selection, consent, or UI changes that need human
-judgment.
-
-### Browser-agent prompt
-
-```text
-Open https://sre.azure.com and configure the Arc demo SRE Agent.
-
-Target:
-- Subscription: <SUBSCRIPTION_ID>
-- Tenant: <TENANT_ID>
-- SRE resource group: rg-arc-demo-sre
-- Parent SRE Agent: sre-arc-demo
-
-Create or verify a custom handling agent:
-- Name: sre-arc-demo
-- Description: Handles Arc demo Azure Monitor incidents in Review mode.
-- Instructions:
-  Investigate only Arc demo resources. For Container App restart alerts, inspect
-  ca-arc-demo-fault, RestartCount, revision health, and SIMULATE_CRASH. Propose
-  resetting SIMULATE_CRASH=false in Review mode. For Arc server or LOB-on-Arc
-  alerts, produce RCA and guide operator Arc Run Command recovery. Do not claim or
-  perform autonomous Arc server repair.
-
-Create or verify response plan 1:
-- Name: container-app-restart-review-v2
-- Platform/source: Azure Monitor
-- Severity: Sev2 or equivalent high severity
-- Title contains: containerapp-restarts
-- Response custom agent/subagent: sre-arc-demo
-- Autonomy: Review
-- Reinvestigation cooldown: enabled, 3 hours
-
-If running the LOB-on-Arc bridge, create or verify response plan 2:
-- Name: lob-arc-app-review-v2
-- Platform/source: Azure Monitor
-- Severity: Sev2 or equivalent high severity
-- Title contains: lob-arc-app-fault
-- Response custom agent/subagent: sre-arc-demo
-- Autonomy: Review
-- Reinvestigation cooldown: enabled, 3 hours
-
-Before finishing:
-- Delete or disable any quickstart/default response plan that would also match the
-  same demo alerts.
-- Verify both plans appear in the response-plan grid with status On, the right
-  response custom agent, and Review autonomy.
-- Do not change agent autonomy to Autonomous.
-```
-
-### Human-visible click path
-
-The portal changes wording over time; prefer labels over brittle selectors:
-
-1. Navigate to `https://sre.azure.com`.
-2. Select the correct tenant/subscription if prompted.
-3. Open the parent agent `sre-arc-demo`.
-4. Find **Builder**.
-5. Open **Agent Canvas** or **Subagent builder**.
-6. Select **Create** / **New custom agent** / **Custom agent**.
-7. Fill in the custom agent name, description, and instructions.
-8. Save the custom agent.
-9. Open **Builder > Incident response plans** or **Incidents > Triggers + response plans**.
-10. Switch to table view if needed and disable/delete a conflicting quickstart plan.
-11. Create `container-app-restart-review-v2`.
-12. Set Azure Monitor filters and select `sre-arc-demo` as the response custom agent.
-13. Set autonomy to **Review**.
-14. Save, then verify the row is On.
-15. Repeat for `lob-arc-app-review-v2` only if validating T11.
-
-### Verification commands after browser setup
-
-```text
-command: sreagent_incidents_plans_list
-subscription: <SUBSCRIPTION_ID>
-tenant: <TENANT_ID>
-resource-group: rg-arc-demo-sre
-agent: sre-arc-demo
-```
-
-Expected:
-
-- `container-app-restart-review-v2` is enabled/on, Review mode, Sev2/high, and routes
-  to `sre-arc-demo`.
-- `lob-arc-app-review-v2` exists only when T11 is in scope.
-- No quickstart plan also matches the same demo alert titles.
-
-### Failure recovery
-
-| Symptom | Recovery |
-|---|---|
-| Custom agent list is empty or Create is disabled | Confirm the parent SRE Agent is running and the signed-in user has Contributor/Owner or SRE Agent Administrator-equivalent access. |
-| Response plan cannot select `sre-arc-demo` | Save or refresh the custom agent first; response plans require an existing custom agent. |
-| Alerts open duplicate threads | Disable/delete the quickstart response plan or narrow title filters. |
-| Agent proposes autonomous Arc repair | Edit custom-agent instructions and response-plan autonomy back to Review. |
-| Plan preview shows no historical alerts | This is acceptable for a new lab; validate with a future T09 induced alert. |
-
-## What remains to validate
-
-The SRE layer is currently hibernated, so this review could not live-test
-`sreagent_agents_create`. The clean-room shareability test must validate:
-
-1. Deploy parent SRE Agent.
-2. Run `sreagent_agents_create`.
-3. Run `sreagent_incidents_plans_create`.
-4. Confirm a T09 Azure Monitor alert automatically opens a thread handled by the
-   custom agent.
-
-If step 2 fails, proceed to the optional Playwright/browser automation task.
+T09 remains the primary historically proven Review closed-loop wow path.
+T10/T11 remain hybrid signal/evidence plus governed **operator** Arc Run Command
+recovery. T11 SRE RCA can stall; do not promote it to reliable RCA or autonomous
+Arc repair.

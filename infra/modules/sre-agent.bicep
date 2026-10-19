@@ -22,8 +22,15 @@ param appInsightsWorkspaceId string
 @description('Existing resource IDs the SRE Agent should know about.')
 param managedResourceIds array = []
 
-@description('Assign the deploying user the SRE Agent Administrator role on the agent resource.')
+@description('Assign the deploying principal the SRE Agent Administrator role on the agent resource.')
 param assignDeployerAdminRole bool = true
+
+@description('Type of the deploying principal. Managed identities use ServicePrincipal.')
+@allowed([
+  'User'
+  'ServicePrincipal'
+])
+param deployerPrincipalType string
 
 var identityName = take('${agentName}-uami', 128)
 var appInsightsName = take('${agentName}-appi', 255)
@@ -84,7 +91,7 @@ resource sreAgentAdminRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sreAgentAdministratorRoleDefinitionId)
     principalId: deployer().objectId
-    principalType: 'User'
+    principalType: deployerPrincipalType
   }
 }
 
