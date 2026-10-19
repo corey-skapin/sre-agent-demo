@@ -27,15 +27,25 @@ $job = $null
 try {
     $job = Start-Job -ScriptBlock {
         param($ModulePath, $Parameters)
-        Import-Module $ModulePath -Force
-        Get-SreReadinessReport @Parameters
+        $items = @(& {
+            Import-Module $ModulePath -Force
+            Get-SreReadinessReport @Parameters
+        } 3>&1)
+        $reports = @($items | Where-Object { $_ -isnot [Management.Automation.WarningRecord] })
+        if ($reports.Count -ne 1) { throw 'Readiness worker must return exactly one report.' }
+        # Remoting can replay host warnings despite Receive-Job preferences.
+        @{
+            report = $reports[0]
+            warnings = @($items | Where-Object { $_ -is [Management.Automation.WarningRecord] } | ForEach-Object { $_.Message })
+        }
     } -ArgumentList (Join-Path $PSScriptRoot 'lib\SreReadiness.psm1'), $arguments
     if (-not (Wait-Job -Job $job -Timeout $TimeoutSeconds)) {
         throw [TimeoutException]::new("Readiness exceeded ${TimeoutSeconds}s; completion remains pending.")
     }
     if ($job.State -ne 'Completed') { throw "Readiness worker ended in state $($job.State)." }
-    $inspectionWarnings = @()
-    $report = Receive-Job -Job $job -ErrorAction Stop -WarningAction SilentlyContinue -WarningVariable inspectionWarnings
+    $inspection = Receive-Job -Job $job -ErrorAction Stop
+    $report = $inspection.report
+    $inspectionWarnings = @($inspection.warnings)
     # Do not leak PowerShell job remoting metadata into the shared JSON contract.
     $clean = [ordered]@{}
     foreach ($key in @('schemaVersion', 'workload', 'checkedAtUtc', 'subscriptionId', 'tenantId', 'resourceGroups', 'desiredState', 'status', 'checks')) {

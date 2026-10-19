@@ -94,6 +94,37 @@ Assert-True ($hibernatedKnown.status -eq 'pass') 'Known old identity and absent 
 $ready = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
 Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
+$fixture = Join-Path ([IO.Path]::GetTempPath()) "sre-readiness-cli-$([guid]::NewGuid())"
+$fixtureModule = Join-Path $fixture 'lib'
+$fixtureScript = Join-Path $fixture 'Test-SreReadiness.ps1'
+$fixtureModuleFile = Join-Path $fixtureModule 'SreReadiness.psm1'
+try {
+    New-Item -ItemType Directory -Path $fixtureModule -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root 'scripts\Test-SreReadiness.ps1') -Destination $fixtureScript
+    @'
+function Get-SreReadinessReport {
+    param($SubscriptionId, $TenantId, $SkinPath, $DesiredState, $PreviousIdentityPrincipalId)
+    Write-Warning 'Synthetic CLI diagnostic'
+    @{
+        schemaVersion = 1; workload = 'sre-agent'; checkedAtUtc = [DateTime]::UtcNow.ToString('o')
+        subscriptionId = $SubscriptionId; tenantId = $TenantId; resourceGroups = @()
+        desiredState = $DesiredState; status = 'pass'; checks = @()
+    }
+}
+Export-ModuleMember -Function Get-SreReadinessReport
+'@ | Set-Content -LiteralPath $fixtureModuleFile
+    $raw = & (Get-Command pwsh).Source -NoProfile -File $fixtureScript -SubscriptionId $subscription -TenantId $tenant -OutputFormat Json
+    $readinessExit = $LASTEXITCODE
+    $jsonReport = ($raw -join "`n") | ConvertFrom-Json
+    Assert-True ($readinessExit -eq 0 -and $jsonReport.status -eq 'pass') 'Worker warnings never corrupt CLI JSON or change required-check status'
+    Assert-True ($jsonReport.checks[-1].id -eq 'inspection-warnings' -and $jsonReport.checks[-1].observed[0] -match 'Synthetic CLI diagnostic') 'Worker warning diagnostics are retained in machine-readable checks'
+} finally {
+    foreach ($file in @($fixtureScript, $fixtureModuleFile)) {
+        if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+    }
+    if (Test-Path -LiteralPath $fixtureModule) { Remove-Item -LiteralPath $fixtureModule -Force }
+    if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture -Force }
+}
 $global:AzCalls.Clear()
 & (Join-Path $root 'scripts\Hibernate-SreAgent.ps1') -SubscriptionId $subscription -TenantId $tenant -WhatIf
 Assert-True (@($global:AzCalls | Where-Object { $_ -match 'delete|account set' }).Count -eq 0) 'Absent-state WhatIf has no mutation or context-selection side effects'

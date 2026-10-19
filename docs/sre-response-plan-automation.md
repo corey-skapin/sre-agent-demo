@@ -139,6 +139,11 @@ payloads, delete plans, or claim legacy rollback is functional. Replacement IDs
 and retirement changes need approval distinct from the earlier same-ID/title
 approval. No agent replacement, identity/role change or history deletion is needed.
 
+The approved six-write cutover was verified live on 2026-10-19 through these
+published v2 contracts: both modern filters enabled in Review/Sev2, both retired
+filters disabled, and old handlers/history retained. This validates configuration
+reconciliation, not a fresh incident/recovery rehearsal or destructive rebuild.
+
 ## Deployment, readiness and lifecycle
 
 For a new/rebuilt layer, complete deployment can chain parent plus configuration:
@@ -174,6 +179,9 @@ injects a fault or certifies a new closed loop.
 The Arc/SRE readiness JSON contract remains schemaVersion 1; status is
 `pass|fail|pending|skipped`, exits 0 pass, 1 fail/error, 2 pending. The desired
 configuration format is separately versioned.
+Worker warnings are captured before job remoting and included as optional
+`inspection-warnings` data, never printed ahead of the JSON document. They do not
+hide required failures or change a required check's outcome.
 
 For separately authorized hibernation, export incident/thread/audit evidence and
 save the user-assigned identity principal ID first. Deletion loses custom agents,
