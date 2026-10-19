@@ -17,6 +17,14 @@ Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping
 
 Current status for T13:
 
+The scenario claims below describe historical live evidence, not today's
+go/no-go. Before presenting T09 live, read back both existing title filters,
+handler instructions, enabled/Review settings and routing conflicts, then perform
+an explicitly authorized bounded rehearsal with recovery. A healthy app and
+passing ARM checks alone are not proof of automatic SRE handoff. If these gates
+remain pending, show historical T09 evidence honestly and use the current healthy
+Arc/Monitor estate for the live walkthrough; do not induce a fault to find out.
+
 - Act 1 Arc/Monitor assets are built in `C:\src\arc-demo`; portal visuals depend on a live deployment and data ingestion.
 - T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, recovery, and alert closure.
 - T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready** and should be described only as possible future capability.

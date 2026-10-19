@@ -1,6 +1,6 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: live lab validation complete for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. Source-code repository connection remains optional and was not captured in this run.
+Status: historically live validated for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. This is not certification of the current deployment: verify current handler instructions, existing plan title filters, Review mode and routing before a new rehearsal. Source-code repository connection remains optional and was not captured in the historical run.
 
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
@@ -50,7 +50,6 @@ az account set --subscription <SUBSCRIPTION_ID>
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
-  -ParentOnly `
   -DeployContainerApps $true
 ```
 
@@ -87,11 +86,12 @@ cd C:\src\sre-agent
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
+  -ParentOnly `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
 
-`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval.
+`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval. `-ParentOnly` explicitly acknowledges that this deploy does not complete the data-plane setup below. For an already running demo, do not redeploy merely to rehearse: use read-only readiness and verify the existing configuration first.
 
 ## 3. Connect code context
 
@@ -110,10 +110,12 @@ Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` 
 
 Preferred automation path, portal fallback, and optional browser-agent prompt are tracked in
 [`sre-response-plan-automation.md`](sre-response-plan-automation.md). The short
-version: create the parent SRE Agent through Bicep, try the MCP custom-agent
-creation path, and if it times out use the SRE portal/Scout browser fallback to
-create the custom handling agent. After the handler exists, create the response
-plan with `sreagent_incidents_plans_create`.
+version: render desired configuration with `Initialize-SreConfiguration.ps1`;
+list and inspect existing plans and the custom handler first. Create only when
+absence is verified. After an ambiguous timeout read back before retrying.
+Supported MCP provides plan list/create, but no plan-update or full handler-read
+operation. Use an authorized, verifiably observable portal for existing plan edits
+and handler inspection; stop if browser URL/content cannot be verified.
 
 In the SRE Agent portal:
 
@@ -125,7 +127,7 @@ In the SRE Agent portal:
    - Tools: leave empty to inherit the parent agent's global Azure tools, or explicitly select the Azure Monitor/Azure resource tools required by the environment.
 4. Go to **Builder** > **Incident response plans**.
 5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
-6. Create a response plan:
+6. Verify the existing response plan; create only if its absence is verified:
    - Platform: **Azure Monitor**
    - Name: `container-app-restart-review-v2`
    - Severity: `Sev2`
