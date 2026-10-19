@@ -19,11 +19,14 @@ For Ready:
 3. Preview Deploy-SreAgent.ps1 -WhatIf. Review the exact diff before changes.
 4. Deploy with -ParentOnly only when parent changes are authorized. This is
    deliberately not a claim that the full demo is Ready.
-5. Render Initialize-SreConfiguration.ps1 and execute the documented bounded
-   MCP/browser ensure procedure. If supported read/update capability or browser
-   access is missing, fail explicitly; never invent endpoints or duplicate plans.
-6. Run Test-SreReadiness.ps1 and separately verify every pending handler, plan,
-   filter, Review, overlap and telemetry gate. Existing ARM success is not routing
+5. Render Initialize-SreConfiguration.ps1, then -Inspect via pinned official
+   template protocols. Review the full preview before -Apply with a new external
+   -BackupPath. Existing legacy settings/P1-P2 need explicit migration approval
+   and -AllowLegacyMigration; do not replay the legacy MCP high-severity recipe.
+   No parent deletion is required. Never invent endpoints or duplicate plans.
+6. Run Test-SreReadiness.ps1: handler, plan, Sev2 filters, legacy fields, Review
+   and overlap now have full read-back. Separately verify the telemetry gate.
+   Existing ARM success is not routing
    readiness. Do not induce a fault merely to answer a read-only readiness check.
 7. Present T09 as primary proven Review closed loop; T10/T11 as hybrid evidence
    plus governed operator Arc Run Command recovery. T11 RCA is not reliable yet.
@@ -67,9 +70,9 @@ az bicep build --file .\infra\main.bicep --stdout
 ```
 
 See [response-plan automation](sre-response-plan-automation.md) for supported
-commands, browser requirements, idempotency/timeouts and exact machine contract.
-`-Apply` on the initializer fails explicitly; complete unattended service
-reconciliation is not currently claimed.
+commands, pinned protocol sources, idempotency/timeouts and exact machine
+contract. Complete deployment can use -ConfigurationBackupPath instead of
+-ParentOnly; a new live incident/recovery test still needs separate authorization.
 
 ## Lifecycle and permission boundaries
 

@@ -43,6 +43,13 @@ param(
 
     [switch]$ParentOnly,
 
+    [string]$ConfigurationBackupPath,
+
+    [switch]$AllowLegacyMigration,
+
+    [ValidateRange(1, 600)]
+    [int]$ConfigurationTimeoutSeconds = 180,
+
     [switch]$WhatIf
 )
 
@@ -150,8 +157,19 @@ if ($SreResourceGroupName -in @($ArcResourceGroupName, $InfraResourceGroupName))
 }
 if ($AccessLevel -notin @('High', 'Low')) { throw 'Skin accessLevel must be High or Low.' }
 Assert-SreName -Value $Location -Description 'location' -Pattern '^[a-z][a-z0-9]+$'
-if (-not $WhatIf -and -not $ParentOnly) {
-    throw 'Complete unattended data-plane reconciliation is unavailable: supported MCP exposes no custom-handler read or plan update. Use -ParentOnly explicitly, then Initialize-SreConfiguration.ps1 and the MCP/browser ensure procedure in docs\sre-response-plan-automation.md. Parent deployment alone is not demo Ready.'
+if (-not $WhatIf -and -not $ParentOnly -and -not $ConfigurationBackupPath) {
+    throw 'Complete deployment requires -ConfigurationBackupPath outside git, or explicit -ParentOnly. Current-schema configuration uses the pinned official template protocol; migration additionally requires -AllowLegacyMigration and scoped approval. Parent deployment alone is not demo Ready.'
+}
+if (-not $ParentOnly -and $ConfigurationBackupPath) {
+    if ($NamePrefix -ne $skin.azure.namePrefix -or $AgentName -ne $skin.labels.agentName -or
+        $SreResourceGroupName -ne "rg-$NamePrefix-sre" -or $ArcResourceGroupName -ne "rg-$NamePrefix" -or $InfraResourceGroupName -ne "rg-$NamePrefix-infra") {
+        throw 'Complete configuration must match the skin resource names. Reskin explicitly, or use -ParentOnly for custom parent overrides.'
+    }
+    $backup = [IO.Path]::GetFullPath($ConfigurationBackupPath)
+    if ($backup.StartsWith(([IO.Path]::GetFullPath($repoRoot) + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase) -or
+        (Test-Path -LiteralPath $backup) -or -not (Test-Path -LiteralPath (Split-Path $backup -Parent) -PathType Container)) {
+        throw 'ConfigurationBackupPath must be a new file in an existing directory outside the repository.'
+    }
 }
 $account = Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId
 if (-not $DeployerPrincipalType) {
@@ -290,4 +308,10 @@ Write-Host '  Managed resource IDs:'
 foreach ($id in @($outputs.managedResourceIds.value)) {
     Write-Host "    - $id"
 }
-Write-Host 'Next: render Initialize-SreConfiguration.ps1, ensure handler/plans through supported MCP/browser, then run Test-SreReadiness.ps1. Do not induce faults before routing is verified.'
+if ($ParentOnly) {
+    Write-Host 'Next: Initialize-SreConfiguration.ps1 -Inspect, then approved -Apply with -BackupPath; run Test-SreReadiness.ps1. Do not induce faults before routing is verified.'
+} else {
+    & (Join-Path $PSScriptRoot 'Initialize-SreConfiguration.ps1') -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath `
+        -Apply -BackupPath $ConfigurationBackupPath -AllowLegacyMigration:$AllowLegacyMigration -TimeoutSeconds $ConfigurationTimeoutSeconds
+    Write-Host 'Current-schema handler/plans verified. Run Test-SreReadiness.ps1; fresh incident/recovery evidence is a separate authorized rehearsal gate.'
+}

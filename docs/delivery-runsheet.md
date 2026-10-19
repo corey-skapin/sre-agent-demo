@@ -95,13 +95,15 @@ Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/
      -AccessLevel High
    ```
 
-3. Render `Initialize-SreConfiguration.ps1` with the same context/skin and follow
-   `sre-response-plan-automation.md` to ensure and read back the handler and plans.
+3. Render `Initialize-SreConfiguration.ps1` with the same context/skin, then
+   `-Inspect` and follow `sre-response-plan-automation.md` for approved current-schema
+   reconciliation/read-back. AzMonitor priorities must be Sev2, not legacy P1/P2;
+   instructions/tools belong to the handling custom agent, not response-level fields.
    Run `Test-SreReadiness.ps1 -DesiredState Ready -OutputFormat Json` with explicit
    tenant/subscription. Resolve failures and separately verify pending service
    gates. Parent success is not routing readiness. Do not induce a fault during
-   this read-only preflight. Browser capability is required for unsupported
-   handler read/plan update; stop honestly if unavailable.
+   this read-only preflight. Pinned official IaC protocols provide full service
+   read/upsert without browser automation; stop on auth/schema/read-back failure.
 
 4. Open tabs before the meeting:
    - `C:\src\arc-demo\docs\runsheet.md`

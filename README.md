@@ -118,19 +118,24 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 ### Complete Ready state
 
 `-ParentOnly` explicitly acknowledges that Bicep deploys only the control plane.
-Without it (or `-WhatIf`), deployment fails before cloud changes rather than
-claiming complete bootstrap. Run `Initialize-SreConfiguration.ps1` to render the
-versioned skin-specific handler/plans, then use the supported MCP/browser
-[ensure procedure](docs/sre-response-plan-automation.md). MCP lacks complete
-custom-handler read-back and plan update; `-Apply` on the initializer fails with an
-actionable capability requirement. No zero-touch data-plane guarantee is claimed.
+For complete parent-plus-configuration deployment supply a new
+`-ConfigurationBackupPath` outside git. For an already running parent, use
+`Initialize-SreConfiguration.ps1 -Inspect`, then separately authorized `-Apply
+-BackupPath <NEW_PATH>`; existing legacy plans also require `-AllowLegacyMigration`.
+The [current-schema procedure](docs/sre-response-plan-automation.md) uses pinned
+Microsoft IaC template protocols for full reads, named upserts and verification.
+Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
+P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review,
+and instructions/tools on the handling custom agent. No parent deletion is needed.
 
 Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
 -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.
 It is read-only and bounded (`-TimeoutSeconds`, default 180). The common Arc/SRE
 contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pending.
 It checks parent/Review/identity/RBAC/managed resources/scenario resource health
-and explicitly leaves unsupported handler/plan/telemetry verification pending.
+and reads full handler/plan/legacy-settings/routing configuration. Invalid
+priorities or legacy settings fail explicitly. Fresh telemetry/closed-loop
+rehearsal evidence remains a separate pending gate.
 Parent success is never a routing-readiness certificate.
 
 Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
@@ -191,12 +196,12 @@ guest script.
 
 ## Current validation stance
 
-The 2026-10-19 read-only baseline passes implemented ARM/resource/alert checks but
-is overall **pending** for handler/plan/routing/telemetry verification. Approved
-parent scope and T11 display-name-only corrections were read-back verified;
-the two existing response-plan title edits remain unexecuted because browser
-observation is fail-closed. Historical scenario evidence below is not a new
-full-lifecycle or alert-to-recovery rehearsal.
+The 2026-10-19 ARM/resource/alert baseline passed, and approved parent scope/T11
+display-name corrections were verified. Subsequent portal and full supported
+service reads found invalid AzMonitor P1/P2 plus legacy response-level settings.
+Title-only edits are insufficient; use the current-schema migration procedure.
+The new code and preview do not imply that migration or a new alert-to-recovery
+rehearsal has run. Historical scenario evidence below is not today's routing proof.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.

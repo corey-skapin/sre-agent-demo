@@ -113,9 +113,11 @@ Preferred automation path, portal fallback, and optional browser-agent prompt ar
 version: render desired configuration with `Initialize-SreConfiguration.ps1`;
 list and inspect existing plans and the custom handler first. Create only when
 absence is verified. After an ambiguous timeout read back before retrying.
-Supported MCP provides plan list/create, but no plan-update or full handler-read
-operation. Use an authorized, verifiably observable portal for existing plan edits
-and handler inspection; stop if browser URL/content cannot be verified.
+The initializer uses pinned Microsoft IaC template protocols for full handler and
+plan reads/upserts. Do not use legacy MCP `severity: high`: it creates invalid
+AzMonitor P1/P2 and response-level instructions. Existing legacy configuration
+requires approved migration to exact Sev2 and handler-owned instructions/tools,
+not just a title edit. See the automation doc for backup/preview/apply/verify.
 
 In the SRE Agent portal:
 
@@ -124,7 +126,7 @@ In the SRE Agent portal:
 3. Create or verify a custom agent named `sre-arc-demo`:
    - Instructions: handle Azure Monitor incidents for `alert-arc-demo-containerapp-restarts`; investigate `ca-arc-demo-fault`, `RestartCount`, revision health, and the `SIMULATE_CRASH` environment variable.
    - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
-   - Tools: leave empty to inherit the parent agent's global Azure tools, or explicitly select the Azure Monitor/Azure resource tools required by the environment.
+   - Tools: use the rendered explicit built-in tool selection on this custom agent; keep the plan in Review. Do not configure legacy response-level tools or instructions.
 4. Go to **Builder** > **Incident response plans**.
 5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
 6. Verify the existing response plan; create only if its absence is verified:
@@ -175,15 +177,18 @@ sreagent_incidents_plans_create `
 # "Handling agent 'sre-arc-demo' does not exist."
 ```
 
-The historical `OR` title example above is not current desired configuration:
-use the single keyword `containerapp-restarts`. Read existing plans before
-creating; never replay a timed-out non-idempotent create. Run the read-only
+The historical MCP command above is **not a deploy recipe**: `high` can produce
+invalid AzMonitor P1/P2 and legacy response fields, while `OR` is literal text.
+Use the current initializer's `AzMonitor`/`["Sev2"]` schema and single keyword
+`containerapp-restarts`. Read existing plans before creating; never replay a
+timed-out non-idempotent create. Run the read-only
 readiness command and separately verify pending service gates before inducing.
 
-Current reproducible setup path: complete first-run onboarding if prompted,
-create the custom agent in the SRE portal, then create the response plan either
-in the portal or through MCP after the custom agent exists. Do not rely on
-`sreagent_workflows_apply` until the data-plane schema issue is resolved.
+Current reproducible setup path: render/inspect `Initialize-SreConfiguration.ps1`,
+approve its exact changes, then apply with a new external backup path. For legacy
+state use separately authorized `-AllowLegacyMigration`. Verify full read-back,
+then separately authorize a bounded incident/recovery rehearsal. Portal operation
+is optional, not the only automation path.
 
 ## 5. Induce the fault
 

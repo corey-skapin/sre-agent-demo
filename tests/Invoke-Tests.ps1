@@ -78,12 +78,13 @@ Assert-True ($success.instanceView.exitCode -eq 0) 'Guest success requires both 
 $initialize = Join-Path $root 'scripts\Initialize-SreConfiguration.ps1'
 $desired = & $initialize -SubscriptionId $subscription -TenantId $tenant | ConvertFrom-Json
 Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
-Assert-True ($desired.plans[0].parameters.'trigger-condition' -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
-Assert-True (@($desired.plans | Where-Object { $_.parameters.'agent-mode' -ne 'review' }).Count -eq 0) 'Every plan explicitly uses Review'
-Assert-True ($desired.handler.parameters.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
-Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'SRE_BOOTSTRAP_CAPABILITY_REQUIRED'
+Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
+Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
+Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
+Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'BackupPath'
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'
+& (Join-Path $PSScriptRoot 'Test-SreConfiguration.ps1')
 
 Import-Module (Join-Path $root 'scripts\lib\SreReadiness.psm1') -Force
 $hibernated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated

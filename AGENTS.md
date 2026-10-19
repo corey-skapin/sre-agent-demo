@@ -60,43 +60,34 @@ $targetArcId = az connectedmachine show `
   -AdditionalManagedResourceIds @($targetArcId)
 ```
 
-Parent-only is not Ready. Render `scripts\Initialize-SreConfiguration.ps1`,
-then ensure/verify the custom handler and Review plans using
+Parent-only is not Ready. Render and `-Inspect`
+`scripts\Initialize-SreConfiguration.ps1`, then apply only the approved preview
+with a new external `-BackupPath` using
 `docs\sre-response-plan-automation.md`. Run `scripts\Test-SreReadiness.ps1`
 with the same explicit subscription/tenant/skin and resolve its failed/pending
-gates before delivery. Missing browser/service capability is an explicit blocker.
+gates before delivery. Failed service authentication/read-back is an explicit blocker.
 
 ## SRE data-plane setup reality
 
 The parent `Microsoft.App/agents` resource deploys repeatably through Bicep.
-The response plans are automatable through MCP **after** a custom handling agent
-exists.
+Microsoft's documented IaC templates now provide supported full service
+read/upsert contracts. `scripts\lib\SreConfiguration.psm1` pins the public source
+revision; the automation doc links the exact sources and routes.
 
-The custom handling agent creation path is currently the fragile part:
+Use `Initialize-SreConfiguration.ps1 -Inspect` to inspect full handlers, filters
+and legacy response handlers, then approved `-Apply -BackupPath <NEW_EXTERNAL_FILE>`.
+The initializer is local-only unless `-Inspect` or `-Apply` is supplied.
+Complete parent-plus-configuration deploy can use `-ConfigurationBackupPath`.
 
-- `sreagent_agents_create` can time out in the SRE data plane.
-- `sreagent_workflows_apply` has validated YAML but failed server-side in the
-  latest live run.
-- The SRE portal path works after first-run onboarding. Scout/Playwright can
-  automate it once the user is signed in to the lab subscription account.
-
-Use this capability path if MCP cannot verify the complete configuration:
-
-1. Open `https://sre.azure.com`.
-2. Select the `sre-arc-demo` agent.
-3. If the first-run screen appears, select **Done and go to agent**.
-4. Go to **Builder** > **Agent Canvas**.
-5. Create a subagent named `sre-arc-demo`.
-6. Paste the handler instructions from `docs\sre-response-plan-automation.md`.
-7. List/read existing plans first; create only when absence is verified:
-   - `container-app-restart-review-v2`
-   - `lob-arc-app-review-v2`
-8. Verify with `sreagent_incidents_plans_list`.
-
-Read full handler instructions and plan source/severity/title/status/Review in
-Builder. After a timeout read back before retrying; plan creation is not
-idempotent. Supported MCP exposes no complete handler read or plan update.
-Report quickstart conflicts; do not remove them without scoped authorization.
+Do not recreate plans through the legacy MCP `severity: high` interface: it
+produced invalid AzMonitor P1/P2 plus legacy response-level instructions.
+Current schema uses `priorities: ["Sev2"]`, single-keyword titles, explicit
+Review, and instructions/tools on the handling custom agent. Migrating old
+response fields requires scoped approval plus `-AllowLegacyMigration`.
+Retain the same parent, identity, agent/filter/handler IDs and incident history;
+do not delete the agent just to repair plans. Full exports stay outside git.
+After ambiguous writes read back before retrying. No duplicate plan creation.
+Report enabled extra/quickstart conflicts; do not remove them automatically.
 
 ## Do not do these
 

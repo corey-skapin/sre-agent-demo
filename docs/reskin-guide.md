@@ -69,8 +69,10 @@ This removes only `rg-<prefix>-sre` and deletes RBAC assignments granted to the
 SRE Agent identity on the existing Arc demo resource groups. It does not delete
 or redeploy the Arc estate. Save its identity principal ID and evidence first.
 Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly`, then render
-`Initialize-SreConfiguration.ps1`, execute the MCP/browser ensure procedure, and
-run readiness. Parent creation alone does not restore custom handlers, plans or
+`Initialize-SreConfiguration.ps1`, inspect and apply the pinned current-schema
+configuration with a new external backup path, then run readiness. Existing
+legacy plans require separately approved migration, not MCP `high`/P1/P2 creates.
+Parent creation alone does not restore custom handlers, plans or
 repository authorization. Keep the requested Ready demo running unless cleanup
 is explicitly requested.
 
