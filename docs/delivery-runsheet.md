@@ -83,10 +83,19 @@ Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/
      -SubscriptionId <SUBSCRIPTION_ID> `
      -TenantId <TENANT_ID> `
      -SkinPath .\config\demo-skin.json `
+     -ParentOnly `
      -AccessLevel High
    ```
 
-3. Open tabs before the meeting:
+3. Render `Initialize-SreConfiguration.ps1` with the same context/skin and follow
+   `sre-response-plan-automation.md` to ensure and read back the handler and plans.
+   Run `Test-SreReadiness.ps1 -DesiredState Ready -OutputFormat Json` with explicit
+   tenant/subscription. Resolve failures and separately verify pending service
+   gates. Parent success is not routing readiness. Do not induce a fault during
+   this read-only preflight. Browser capability is required for unsupported
+   handler read/plan update; stop honestly if unavailable.
+
+4. Open tabs before the meeting:
    - `C:\src\arc-demo\docs\runsheet.md`
    - `C:\src\sre-agent\docs\t09-native-containerapp-closed-loop.md`
    - `C:\src\sre-agent\docs\t10-sre-on-arc-experiment.md`
@@ -180,7 +189,9 @@ Goal: move from one demo to a reusable customer motion without changing the tech
 
 ## Reset checklist
 
-After any live rehearsal:
+Only when cleanup is requested and authorized after a live rehearsal; otherwise
+leave the desired Ready demo running. Save SRE identity principal and evidence
+before deletion:
 
 ```powershell
 cd C:\src\sre-agent
@@ -196,6 +207,12 @@ cd C:\src\sre-agent
 ```
 
 Only include reset commands for scenarios you actually induced. Capture SRE threads, alert history, Activity Log entries, and KQL snippets before resetting.
+
+SRE hibernation deletes configuration/history/memory, not just compute allocation.
+Verify `Test-SreReadiness.ps1 -DesiredState Hibernated` with the saved principal ID.
+Rebuild parent, handler and Review plans before the next run; optional code
+repository connections require explicit reauthorization. Local mocked checks and
+read-only inventory do not prove a destructive rebuild or a fresh end-to-end loop.
 
 ## Remaining live-validation gaps
 

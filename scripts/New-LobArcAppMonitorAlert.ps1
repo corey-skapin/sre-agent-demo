@@ -26,6 +26,8 @@ param(
 
     [string]$AlertName,
 
+    [string]$Location,
+
     [ValidatePattern('^[A-Za-z0-9_.-]+$')]
     [string]$MachineName = 'win-app-01',
 
@@ -47,14 +49,7 @@ function Invoke-AzCli {
         [string[]]$Arguments
     )
 
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-
-    return $text
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments $Arguments
 }
 
 function Get-AzTsv {
@@ -75,6 +70,7 @@ function Get-AzTsv {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 Import-Module $skinModule -Force
 $skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
@@ -86,6 +82,11 @@ if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $WorkspaceName) { $WorkspaceName = "law-$NamePrefix" }
 if (-not $ActionGroupName) { $ActionGroupName = "ag-$NamePrefix" }
 if (-not $AlertName) { $AlertName = "alert-$NamePrefix-lob-arc-app-fault" }
+foreach ($name in @($ArcResourceGroupName, $WorkspaceName, $ActionGroupName, $AlertName)) { Assert-SreName -Value $name -Description 'resource name' }
+Assert-SreName -Value $MachineName -Description 'machine name' -Pattern '^[A-Za-z0-9_.-]+$'
+Assert-SreName -Value $EventSource -Description 'event source' -Pattern '^[A-Za-z][A-Za-z0-9_.-]{0,79}$'
+$titleContains = Get-DemoSkinValue -Skin $skin -Path 'labels.lobAlertTitleContains'
+$displayName = "$($skin.labels.demoTitle) - $titleContains"
 
 $query = @"
 Event
@@ -112,11 +113,11 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI (az) is required for -Action Create.'
 }
 
-Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-$accountTenant = Get-AzTsv -Arguments @('account', 'show', '--query', 'tenantId') -Description 'current Azure CLI tenant'
-if ($accountTenant -ne $TenantId) {
-    throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
+Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
+if (-not $Location) {
+    $Location = Get-AzTsv -Arguments @('monitor', 'log-analytics', 'workspace', 'show', '-g', $ArcResourceGroupName, '-n', $WorkspaceName, '--query', 'location') -Description 'workspace location'
 }
+Assert-SreName -Value $Location -Description 'location' -Pattern '^[a-z][a-z0-9]+$'
 
 $workspaceId = Get-AzTsv -Arguments @(
     'monitor', 'log-analytics', 'workspace', 'show',
@@ -135,9 +136,9 @@ $actionGroupId = Get-AzTsv -Arguments @(
 $target = "scheduled query alert '$AlertName' in '$ArcResourceGroupName'"
 if ($PSCmdlet.ShouldProcess($target, 'create or update Azure Monitor alert')) {
     $body = @{
-        location = 'australiaeast'
+        location = $Location
         properties = @{
-            displayName = 'Arc Demo - LOB Arc app fault'
+            displayName = $displayName
             description = "T11 LOB Arc bridge app fault event from $MachineName"
             severity = 2
             enabled = $true

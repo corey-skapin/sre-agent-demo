@@ -18,7 +18,7 @@ Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json
 - User-assigned managed identity for the agent action and knowledge graph paths.
 - Workspace-based Application Insights component for agent diagnostics, linked to the existing arc-demo Log Analytics workspace.
 - RBAC on the existing arc-demo Arc/observability and infra resource groups:
-  - `High` access (default): Reader + Log Analytics Reader + Contributor for governed Review-mode remediation.
+  - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
 
 The Bicep follows the `matthansen0/azure-sre-agent-sandbox` `infra/bicep/modules/sre-agent.bicep` pattern and uses the current Microsoft.App/agents Bicep schema.
@@ -56,12 +56,17 @@ Default arc-demo names discovered by the script:
 | SRE RG | `rg-<NamePrefix>-sre` |
 | Agent name | `sre-<NamePrefix>` sanitized to the SRE Agent naming rules |
 
-The defaults above are read from the skin file unless a script parameter overrides them.
+The defaults above are read from the schema-validated skin unless a script parameter
+overrides them. Missing or invalid skins fail, rather than silently using another
+customer's defaults. Subscription and tenant GUIDs are required on cloud helpers;
+requests pass explicit subscription context without changing the global CLI account.
+Names are validated rather than silently sanitized when explicitly supplied.
 
 ## Validate locally
 
 ```powershell
 cd C:\src\sre-agent
+.\tests\Invoke-Tests.ps1
 az bicep build --file .\infra\main.bicep
 $tokens = $null; $errors = $null
 [System.Management.Automation.Language.Parser]::ParseFile('.\scripts\Deploy-SreAgent.ps1', [ref]$tokens, [ref]$errors) | Out-Null
@@ -86,6 +91,7 @@ Deploy:
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
+  -ParentOnly `
   -SkinPath .\config\demo-skin.json
 ```
 
@@ -95,6 +101,7 @@ If your arc-demo names differ, pass explicit IDs/names instead of relying on dis
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
+  -ParentOnly `
   -ArcResourceGroupName rg-my-arc `
   -InfraResourceGroupName rg-my-arc-infra `
   -LogAnalyticsWorkspaceId /subscriptions/.../providers/Microsoft.OperationalInsights/workspaces/law-my-arc `
@@ -108,6 +115,35 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 
 No files or resources in `C:\src\arc-demo` are changed by this repo.
 
+### Complete Ready state
+
+`-ParentOnly` explicitly acknowledges that Bicep deploys only the control plane.
+Without it (or `-WhatIf`), deployment fails before cloud changes rather than
+claiming complete bootstrap. Run `Initialize-SreConfiguration.ps1` to render the
+versioned skin-specific handler/plans, then use the supported MCP/browser
+[ensure procedure](docs/sre-response-plan-automation.md). MCP lacks complete
+custom-handler read-back and plan update; `-Apply` on the initializer fails with an
+actionable capability requirement. No zero-touch data-plane guarantee is claimed.
+
+Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
+-SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.
+It is read-only and bounded (`-TimeoutSeconds`, default 180). The common Arc/SRE
+contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pending.
+It checks parent/Review/identity/RBAC/managed resources/scenario resource health
+and explicitly leaves unsupported handler/plan/telemetry verification pending.
+Parent success is never a routing-readiness certificate.
+
+Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
+adds their explicit Container App/Arc IDs to managed resources. Bicep role names
+include the identity principal; existing same-principal names are adopted.
+Incremental deployments cannot revoke permissions: a Low downgrade with an
+existing incompatible write grant fails until a separately approved cleanup.
+An existing Monitoring Contributor grant is tolerated in High for demo compatibility,
+not created by the standard profile. Low uses the actual Log Analytics Reader ID;
+the previous template mislabeled Log Analytics Contributor as Reader.
+User, service-principal and managed-identity deployers are supported through
+`-DeployerPrincipalType` inference/override.
+
 ## Off state / reactivate
 
 Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
@@ -116,7 +152,7 @@ Agent resource group and its RBAC grants on the Arc demo resource groups. The
 Arc demo estate stays intact.
 
 ```powershell
-# After a demo — removes the optional SRE layer only
+# Only after separately approving destructive cleanup; save principal/evidence first
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
@@ -126,8 +162,19 @@ Arc demo estate stays intact.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
+  -ParentOnly `
   -SkinPath .\config\demo-skin.json
 ```
+
+Reactivation also requires the handler/plan ensure and verification above.
+Deletion loses custom agents, response plans, thread/incident history, memory and
+connector state. Code-repository authorization is optional and must be explicitly
+re-established; a URL in the skin is not authentication. Save the old identity
+principal and use readiness `-DesiredState Hibernated
+-PreviousIdentityPrincipalId <ID>` to verify external grant cleanup. Missing
+identity/partial state is safe to inspect; orphan checks without an old principal
+remain pending. WhatIf never selects a global account, revokes grants or writes a
+guest script.
 
 ## Scenario runbooks
 
@@ -143,6 +190,13 @@ Arc demo estate stays intact.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
+
+The 2026-10-19 read-only baseline passes implemented ARM/resource/alert checks but
+is overall **pending** for handler/plan/routing/telemetry verification. Approved
+parent scope and T11 display-name-only corrections were read-back verified;
+the two existing response-plan title edits remain unexecuted because browser
+observation is fail-closed. Historical scenario evidence below is not a new
+full-lifecycle or alert-to-recovery rehearsal.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.

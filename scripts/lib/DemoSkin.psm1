@@ -3,6 +3,7 @@ function ConvertTo-DemoHashtable {
     param([AllowNull()][object]$InputObject)
 
     if ($null -eq $InputObject) { return @{} }
+    if ($InputObject -is [string] -or $InputObject -is [ValueType]) { return $InputObject }
     if ($InputObject -is [System.Collections.IDictionary]) {
         $result = [ordered]@{}
         foreach ($key in $InputObject.Keys) {
@@ -18,7 +19,7 @@ function ConvertTo-DemoHashtable {
         return $result
     }
     if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
-        return @($InputObject | ForEach-Object { ConvertTo-DemoHashtable -InputObject $_ })
+        return ,@($InputObject | ForEach-Object { ConvertTo-DemoHashtable -InputObject $_ })
     }
     return $InputObject
 }
@@ -39,10 +40,15 @@ function Get-DemoSkin {
     }
 
     if (-not (Test-Path -LiteralPath $skinPath)) {
-        return [ordered]@{}
+        throw "Demo skin not found: $skinPath"
     }
 
-    return ConvertTo-DemoHashtable -InputObject (Get-Content -LiteralPath $skinPath -Raw | ConvertFrom-Json -Depth 30)
+    $json = Get-Content -LiteralPath $skinPath -Raw
+    $schemaPath = Join-Path $RepoRoot 'config\demo-skin.schema.json'
+    if (-not (Test-Json -Json $json -SchemaFile $schemaPath -ErrorAction Stop)) {
+        throw "Invalid demo skin: $skinPath"
+    }
+    return ConvertTo-DemoHashtable -InputObject ($json | ConvertFrom-Json -Depth 30)
 }
 
 function Get-DemoSkinValue {

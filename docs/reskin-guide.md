@@ -11,6 +11,7 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `azure.location` | Azure region for the SRE Agent resource group. | `australiaeast` |
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
 | `sre.targetArcMachine` | Default Arc machine for T10/T11 helpers. | `win-app-01` |
+| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. | `T09`, `T11` |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
 | `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | DTF baseline labels |
 | `codeContext.*` | LOB app repository URL, commit, and source path stamped into guest config/events. | Placeholder repo/commit |
@@ -40,6 +41,7 @@ Keep constant:
    .\scripts\Deploy-SreAgent.ps1 `
      -SubscriptionId <SUBSCRIPTION_ID> `
      -TenantId <TENANT_ID> `
+     -ParentOnly `
      -SkinPath .\config\demo-skin.json
    ```
 5. Use the same skin for scenario helpers:
@@ -65,7 +67,20 @@ run:
 
 This removes only `rg-<prefix>-sre` and deletes RBAC assignments granted to the
 SRE Agent identity on the existing Arc demo resource groups. It does not delete
-or redeploy the Arc estate. Recreate the SRE layer with `Deploy-SreAgent.ps1`.
+or redeploy the Arc estate. Save its identity principal ID and evidence first.
+Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly`, then render
+`Initialize-SreConfiguration.ps1`, execute the MCP/browser ensure procedure, and
+run readiness. Parent creation alone does not restore custom handlers, plans or
+repository authorization. Keep the requested Ready demo running unless cleanup
+is explicitly requested.
+
+Skins are validated against `config\demo-skin.schema.json`; missing files, unknown
+fields, unsafe names and invalid enum values fail explicitly. Fault helper
+defaults cannot silently induce a Container App fault (`Status` is required).
+`labels.containerResponsePlan`, `labels.lobResponsePlan` and
+`labels.lobAlertTitleContains` drive the generated desired state. The LOB alert
+display name includes that exact keyword; its region is discovered from the
+workspace unless explicitly supplied. Recheck existing plan filters when reskinning.
 
 ## Examples
 

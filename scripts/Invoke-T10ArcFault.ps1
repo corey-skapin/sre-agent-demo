@@ -57,14 +57,7 @@ function Invoke-AzCli {
         [string[]]$Arguments
     )
 
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-
-    return $text
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments $Arguments
 }
 
 function Get-AzJson {
@@ -218,13 +211,17 @@ Write-Output "Started bounded CPU pressure. PID=`$(`$process.Id), DurationSecond
 `$pidPath = 'C:\ProgramData\ArcSreT10\cpu-pressure.pid'
 if (Test-Path -LiteralPath `$pidPath) {
     `$pidText = Get-Content -LiteralPath `$pidPath -Raw
-    try {
-        `$pid = [int]`$pidText.Trim()
-        Stop-Process -Id `$pid -Force -ErrorAction SilentlyContinue
-        Write-Output "Stopped PID `$pid if it was still running."
+    `$workerPid = 0
+    if (-not [int]::TryParse(`$pidText.Trim(), [ref]`$workerPid) -or `$workerPid -le 0) {
+        throw "Invalid CPU-worker PID marker: `$pidText"
     }
-    catch {
-        Write-Warning "PID marker contained an invalid value: `$pidText"
+    `$workerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=`$workerPid"
+    if (`$workerProcess) {
+        if (`$workerProcess.CommandLine -notlike '*C:\ProgramData\ArcSreT10\cpu-pressure.ps1*') {
+            throw "Refusing to stop reused PID `$workerPid because its command line does not identify the CPU-pressure worker."
+        }
+        Stop-Process -Id `$workerPid -Force -ErrorAction Stop
+        Write-Output "Stopped CPU-pressure worker PID `$workerPid."
     }
     Remove-Item -LiteralPath `$pidPath -Force
 }
@@ -237,8 +234,8 @@ else {
                     return @"
 `$pidPath = 'C:\ProgramData\ArcSreT10\cpu-pressure.pid'
 if (Test-Path -LiteralPath `$pidPath) {
-    `$pid = [int](Get-Content -LiteralPath `$pidPath -Raw)
-    Get-Process -Id `$pid -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU, StartTime
+    `$workerPid = [int](Get-Content -LiteralPath `$pidPath -Raw)
+    Get-Process -Id `$workerPid -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU, StartTime
 }
 else {
     Write-Output "CPU pressure PID marker not present."
@@ -294,31 +291,24 @@ function Invoke-ArcRunCommand {
         return
     }
 
-    # The connectedmachine CLI extension is more reliable with inline scripts
-    # when the script is a single line. Preserve pipeline continuations first.
-    $normalizedScript = ($Script -replace "\|\s*(`r`n|`n|`r)\s*", '| ') -replace "(`r`n|`n|`r)", '; '
-    $normalizedScript = $normalizedScript -replace "}\s*;\s*else", "} else"
-
-    $resultText = Invoke-AzCli -Arguments @(
+    $scriptPath = [IO.Path]::GetTempFileName()
+    try {
+        [IO.File]::WriteAllText($scriptPath, "`$ErrorActionPreference = 'Stop'`n$Script")
+        Invoke-AzCli -Arguments @(
         'connectedmachine', 'run-command', 'create',
         '--name', $runCommandName,
         '--machine-name', $MachineName,
         '--resource-group', $ArcResourceGroupName,
-        '--script', $normalizedScript,
+        '--script', "@$scriptPath",
+        '--async-execution', 'false', '--timeout-in-seconds', '300',
         '--only-show-errors',
         '-o', 'json'
-    )
-    $result = $null
-    try {
-        $jsonStart = $resultText.IndexOf('{')
-        if ($jsonStart -ge 0) {
-            $result = $resultText.Substring($jsonStart) | ConvertFrom-Json
-        } else {
-            $result = [pscustomobject]@{ rawOutput = $resultText }
-        }
-    } catch {
-        $result = [pscustomobject]@{ rawOutput = $resultText; parseError = $_.Exception.Message }
+        ) | Out-Null
+    } finally {
+        Remove-Item -LiteralPath $scriptPath -Force
     }
+    $result = Invoke-AzCli -Arguments @('connectedmachine', 'run-command', 'show', '--name', $runCommandName, '--machine-name', $MachineName, '-g', $ArcResourceGroupName, '-o', 'json')
+    $result = Assert-SreRunCommandResult -Result $result
 
     [pscustomobject]@{
         Scenario = $Scenario
@@ -334,6 +324,7 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 Import-Module $skinModule -Force
 $skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
@@ -345,12 +336,9 @@ if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $InfraResourceGroupName) { $InfraResourceGroupName = "rg-$NamePrefix-infra" }
 if (-not $BackingVmName) { $BackingVmName = $MachineName }
 
-Write-Verbose "Selecting subscription $SubscriptionId."
-Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-$accountTenant = Get-AzTsv -Arguments @('account', 'show', '--query', 'tenantId') -Description 'current Azure CLI tenant'
-if ($accountTenant -ne $TenantId) {
-    throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
-}
+foreach ($name in @($ArcResourceGroupName, $InfraResourceGroupName, $MachineName, $BackingVmName)) { Assert-SreName -Value $name -Description 'resource name' }
+if ($Scenario -notin @('HeartbeatByBackingVm', 'StopService', 'DiskPressure', 'CpuPressure', 'WriteEvent')) { throw 'Invalid scenario in skin.' }
+Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
 
 $machine = Get-AzJson -Arguments @(
     'connectedmachine', 'show',
@@ -363,7 +351,7 @@ if (-not $machine) {
 }
 
 if ($Scenario -ne 'HeartbeatByBackingVm' -and $machine.osName -and $machine.osName -notmatch 'Windows') {
-    Write-Warning "Scenario $Scenario currently emits Windows PowerShell guest commands, but target OS is '$($machine.osName)'."
+    throw "Scenario $Scenario requires Windows; target OS is '$($machine.osName)'."
 }
 
 if ($Scenario -eq 'HeartbeatByBackingVm') {

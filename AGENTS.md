@@ -55,12 +55,16 @@ $targetArcId = az connectedmachine show `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
+  -ParentOnly `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($targetArcId)
 ```
 
-Then configure the custom handler and Review-mode response plans using
-`docs\sre-response-plan-automation.md`.
+Parent-only is not Ready. Render `scripts\Initialize-SreConfiguration.ps1`,
+then ensure/verify the custom handler and Review plans using
+`docs\sre-response-plan-automation.md`. Run `scripts\Test-SreReadiness.ps1`
+with the same explicit subscription/tenant/skin and resolve its failed/pending
+gates before delivery. Missing browser/service capability is an explicit blocker.
 
 ## SRE data-plane setup reality
 
@@ -76,7 +80,7 @@ The custom handling agent creation path is currently the fragile part:
 - The SRE portal path works after first-run onboarding. Scout/Playwright can
   automate it once the user is signed in to the lab subscription account.
 
-Use this fallback if MCP custom-agent creation fails:
+Use this capability path if MCP cannot verify the complete configuration:
 
 1. Open `https://sre.azure.com`.
 2. Select the `sre-arc-demo` agent.
@@ -84,16 +88,22 @@ Use this fallback if MCP custom-agent creation fails:
 4. Go to **Builder** > **Agent Canvas**.
 5. Create a subagent named `sre-arc-demo`.
 6. Paste the handler instructions from `docs\sre-response-plan-automation.md`.
-7. Use MCP `sreagent_incidents_plans_create` to create:
+7. List/read existing plans first; create only when absence is verified:
    - `container-app-restart-review-v2`
    - `lob-arc-app-review-v2`
 8. Verify with `sreagent_incidents_plans_list`.
+
+Read full handler instructions and plan source/severity/title/status/Review in
+Builder. After a timeout read back before retrying; plan creation is not
+idempotent. Supported MCP exposes no complete handler read or plan update.
+Report quickstart conflicts; do not remove them without scoped authorization.
 
 ## Do not do these
 
 - Do not change response plans to Autonomous for customer demos.
 - Do not claim T11 autonomous Arc repair or reliable SRE RCA.
-- Do not leave `rg-arc-demo-sre` running after a rehearsal unless the user asks.
+- Keep desired Ready versus Hibernated explicit; never hibernate a requested
+  running demo automatically. Hibernation is destructive and needs authorization.
 - Do not modify `C:\src\arc-demo` from this repo; layer on top only.
 
 ## Hibernation
@@ -107,3 +117,9 @@ Use this fallback if MCP custom-agent creation fails:
 
 Then hibernate the Arc estate from `C:\src\arc-demo` if the whole lab should be
 parked.
+
+Save the SRE identity principal ID and evidence before deletion. Verify
+`Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <ID>`.
+Reactivation rebuilds parent, handler and plans; deleted thread/history/memory and
+repository connector authorization are not restored from this repo. No destructive
+full-lifecycle test is implied by local mocked tests.

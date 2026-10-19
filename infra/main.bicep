@@ -31,6 +31,15 @@ param additionalManagedResourceIds array = []
 ])
 param accessLevel string = 'High'
 
+@allowed([
+  'User'
+  'ServicePrincipal'
+])
+param deployerPrincipalType string
+
+param arcRoleAssignmentNames object = {}
+param infraRoleAssignmentNames object = {}
+
 @description('Tags to apply to resources created by this layer.')
 param tags object = {
   owner: 'demo'
@@ -40,12 +49,14 @@ param tags object = {
 }
 
 var lowAccessRoleDefinitionIds = [
-  '92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Reader
+  '73c42c96-874c-492b-b04d-ab87d138a893' // Log Analytics Reader
   'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
 ]
-var highAccessRoleDefinitionIds = concat(lowAccessRoleDefinitionIds, [
+var highAccessRoleDefinitionIds = [
+  '92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor (existing demo compatibility)
+  'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
   'b24988ac-6180-42a0-ab88-20f7382dd24c' // Contributor
-])
+]
 var selectedRoleDefinitionIds = accessLevel == 'High' ? highAccessRoleDefinitionIds : lowAccessRoleDefinitionIds
 var managedResourceIds = union([
   arcDemoRg.id
@@ -78,6 +89,7 @@ module sreAgent 'modules/sre-agent.bicep' = {
     accessLevel: accessLevel
     appInsightsWorkspaceId: arcDemoWorkspaceId
     managedResourceIds: managedResourceIds
+    deployerPrincipalType: deployerPrincipalType
   }
 }
 
@@ -88,6 +100,7 @@ module arcDemoRoleAssignments 'modules/role-assignments.bicep' = {
     principalId: sreAgent.outputs.managedIdentityPrincipalId
     roleDefinitionIds: selectedRoleDefinitionIds
     roleAssignmentSeed: '${sreResourceGroupName}-${agentName}'
+    existingRoleAssignmentNames: arcRoleAssignmentNames
   }
 }
 
@@ -98,6 +111,7 @@ module arcDemoInfraRoleAssignments 'modules/role-assignments.bicep' = {
     principalId: sreAgent.outputs.managedIdentityPrincipalId
     roleDefinitionIds: selectedRoleDefinitionIds
     roleAssignmentSeed: '${sreResourceGroupName}-${agentName}'
+    existingRoleAssignmentNames: infraRoleAssignmentNames
   }
 }
 

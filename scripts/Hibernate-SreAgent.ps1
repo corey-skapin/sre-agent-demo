@@ -1,118 +1,97 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-    Puts the optional SRE Agent layer into an off state.
-
+Removes only the optional SRE layer after explicit operator approval.
 .DESCRIPTION
-    Azure SRE Agent currently has no "deallocated" or "stopped" state. Because
-    the agent has an always-on hourly charge, the off-state for this optional
-    repo removes only the SRE Agent resource group and cleans up RBAC granted to
-    the agent identity on the existing arc-demo resource groups. It does not
-    delete or modify the arc-demo estate; recreate the SRE layer with
-    Deploy-SreAgent.ps1 when needed.
+Deletion loses custom agents, plans, threads, memory and connector configuration.
+Export required evidence first. The Arc estate remains running. WhatIf performs
+read-only discovery and does not select an account, revoke roles or delete resources.
 #>
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$SubscriptionId,
-
-    [Parameter(Mandatory = $true)]
-    [string]$TenantId,
-
+    [Parameter(Mandatory)][string]$SubscriptionId,
+    [Parameter(Mandatory)][string]$TenantId,
     [string]$NamePrefix = 'arc-demo',
-
     [string]$SreResourceGroupName,
-
     [string]$AgentName,
-
     [string]$ArcResourceGroupName,
-
     [string]$InfraResourceGroupName,
-
-    [string]$SkinPath = ''
+    [string]$SkinPath = '',
+    [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]
+    [string]$PreviousIdentityPrincipalId
 )
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-function Invoke-AzCli {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-    return $text
-}
-
-function Get-SafeAgentName {
-    param([Parameter(Mandatory = $true)][string]$RawName)
-    $safe = ($RawName -replace '[^A-Za-z0-9-]', '-') -replace '-+', '-'
-    $safe = $safe.Trim('-')
-    if ($safe -notmatch '^[A-Za-z]') { $safe = "sre-$safe" }
-    if ($safe.Length -gt 32) { $safe = $safe.Substring(0, 32).TrimEnd('-') }
-    if ($safe -notmatch '[A-Za-z0-9]$') { $safe = "${safe}0" }
-    return $safe
-}
-
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
-Import-Module $skinModule -Force
-$skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
-if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = Get-DemoSkinValue -Skin $skin -Path 'azure.namePrefix' -Default $NamePrefix }
-if (-not $PSBoundParameters.ContainsKey('AgentName')) { $AgentName = Get-DemoSkinValue -Skin $skin -Path 'labels.agentName' -Default $AgentName }
-
+Import-Module (Join-Path $PSScriptRoot 'lib\DemoSkin.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
+$skin = Get-DemoSkin -Path $SkinPath
+if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = $skin.azure.namePrefix }
+if (-not $AgentName) { $AgentName = $skin.labels.agentName }
 if (-not $SreResourceGroupName) { $SreResourceGroupName = "rg-$NamePrefix-sre" }
-if (-not $AgentName) { $AgentName = Get-SafeAgentName -RawName "sre-$NamePrefix" }
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $InfraResourceGroupName) { $InfraResourceGroupName = "rg-$NamePrefix-infra" }
-
-Write-Host "Selecting subscription $SubscriptionId in tenant $TenantId..."
-Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-$accountTenant = Invoke-AzCli -Arguments @('account', 'show', '--query', 'tenantId', '--output', 'tsv', '--only-show-errors')
-if ($accountTenant -ne $TenantId) {
-    throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
+foreach ($name in @($SreResourceGroupName, $ArcResourceGroupName, $InfraResourceGroupName)) {
+    Assert-SreName -Value $name -Description 'resource group'
 }
-
-Write-Host "Hibernating SRE Agent layer '$AgentName' in '$SreResourceGroupName'..."
-$identityPrincipalId = Invoke-AzCli -Arguments @(
-    'identity', 'show',
-    '--resource-group', $SreResourceGroupName,
-    '--name', "$AgentName-uami",
-    '--query', 'principalId',
-    '--output', 'tsv',
-    '--only-show-errors'
-) 2>$null
-
-if ($identityPrincipalId) {
-    foreach ($rg in @($ArcResourceGroupName, $InfraResourceGroupName)) {
-        $scope = Invoke-AzCli -Arguments @('group', 'show', '--name', $rg, '--query', 'id', '--output', 'tsv', '--only-show-errors')
-        $assignments = Invoke-AzCli -Arguments @(
-            'role', 'assignment', 'list',
-            '--scope', $scope,
-            '--query', "[?principalId=='$identityPrincipalId'].id",
-            '--output', 'tsv',
-            '--only-show-errors'
-        ) 2>$null
-        foreach ($assignmentId in (($assignments -split "`n") | Where-Object { $_ })) {
-            if ($PSCmdlet.ShouldProcess($assignmentId, 'delete SRE Agent RBAC assignment')) {
-                az role assignment delete --ids $assignmentId --only-show-errors
-                Write-Host "Deleted role assignment $assignmentId"
-            }
+Assert-SreName -Value $AgentName -Description 'agent name' -Pattern '^[A-Za-z][-A-Za-z0-9]{0,30}[A-Za-z0-9]$'
+if ($SreResourceGroupName -in @($ArcResourceGroupName, $InfraResourceGroupName)) { throw 'SRE and Arc groups must be separate.' }
+Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
+function Read-AzJson([string[]]$Arguments) {
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments ($Arguments + @('-o', 'json')) | ConvertFrom-Json -Depth 100
+}
+$exists = Read-AzJson @('group', 'exists', '-n', $SreResourceGroupName)
+$principalId = $PreviousIdentityPrincipalId
+if ($exists) {
+    $resources = @(Read-AzJson @('resource', 'list', '-g', $SreResourceGroupName))
+    $allowedResources = @(
+        "Microsoft.App/agents/$AgentName",
+        "Microsoft.ManagedIdentity/userAssignedIdentities/$AgentName-uami",
+        "Microsoft.Insights/components/$AgentName-appi",
+        'Microsoft.Insights/actionGroups/Application Insights Smart Detection'
+    )
+    $unexpected = @($resources | Where-Object { "$($_.type)/$($_.name)" -notin $allowedResources })
+    if ($unexpected.Count) { throw "Unexpected resources in SRE group. Refusing group deletion: $($unexpected.name -join ', ')" }
+    $identities = @(Read-AzJson @('identity', 'list', '-g', $SreResourceGroupName))
+    $identity = $identities | Where-Object name -EQ "$AgentName-uami" | Select-Object -First 1
+    if ($identity) {
+        if ($principalId -and $principalId -ne $identity.principalId) { throw 'Previous principal differs from live identity; clean it up separately.' }
+        $principalId = $identity.principalId
+    }
+}
+$roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
+$assignments = @()
+$scopes = @("/subscriptions/$SubscriptionId")
+foreach ($rg in @($ArcResourceGroupName, $InfraResourceGroupName)) {
+    if (Read-AzJson @('group', 'exists', '-n', $rg)) { $scopes += "/subscriptions/$SubscriptionId/resourceGroups/$rg" }
+}
+foreach ($scope in $scopes) {
+    $atScope = @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited'))
+    if ($principalId) {
+        $owned = @($atScope | Where-Object { $_.principalId -eq $principalId })
+        if (@($owned | Where-Object { $_.scope -notin $scopes }).Count) {
+            throw 'Identity-owned grant outside the known subscription/RG scopes requires separate explicit cleanup.'
         }
+        $unknown = @($owned | Where-Object { ($_.roleDefinitionId -split '/')[-1] -notin $roles })
+        if ($unknown.Count) { throw "Unexpected grants for the SRE identity at $scope; approve a separate scoped cleanup before deletion." }
+        $assignments += $owned
     }
-} else {
-    Write-Warning "Managed identity '$AgentName-uami' not found; RBAC cleanup skipped."
+    $assignments = @($assignments | Sort-Object -Property id -Unique)
 }
-
-if (az group exists --name $SreResourceGroupName) {
-    if ($PSCmdlet.ShouldProcess($SreResourceGroupName, 'delete SRE Agent resource group')) {
-        az group delete --name $SreResourceGroupName --yes --no-wait --only-show-errors
-        Write-Host "Delete submitted for $SreResourceGroupName"
+if (-not $principalId) {
+    Write-Warning 'Identity absent. No grants were deleted. Legacy orphan RBAC cannot be verified without -PreviousIdentityPrincipalId.'
+}
+if (-not $exists -and -not $assignments.Count) {
+    Write-Host 'SRE resource group already absent. No cloud mutation performed.'
+    return
+}
+$assignmentIds = @($assignments | ForEach-Object { $_.id })
+$cleanupTarget = "$SreResourceGroupName and identity-owned grants: $($assignmentIds -join ', ')"
+if ($PSCmdlet.ShouldProcess($cleanupTarget, 'delete optional SRE group and known identity-owned grants including inherited grants; lose agent history/configuration')) {
+    foreach ($assignment in $assignments) {
+        Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('role', 'assignment', 'delete', '--ids', $assignment.id) | Out-Null
     }
-} else {
-    Write-Host "$SreResourceGroupName already absent"
+    if ($exists) {
+        Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('group', 'delete', '-n', $SreResourceGroupName, '--yes', '--no-wait') | Out-Null
+    }
+    Write-Host 'Hibernation submitted, not verified. Run Test-SreReadiness.ps1 -DesiredState Hibernated with the saved principal ID after deletion completes.'
 }
-
-Write-Host 'SRE Agent layer off-state submitted. Recreate with scripts\Deploy-SreAgent.ps1.'

@@ -65,14 +65,7 @@ function Invoke-AzCli {
         [string[]]$Arguments
     )
 
-    $output = & az @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    $text = ($output | Out-String).Trim()
-    if ($exitCode -ne 0) {
-        throw "az $($Arguments -join ' ') failed with exit code $exitCode`n$text"
-    }
-
-    return $text
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments $Arguments
 }
 
 function Get-AzTsv {
@@ -179,9 +172,7 @@ try {
         New-EventLog -LogName Application -Source $EventSource
     }
 }
-catch {
-    Write-Warning "Could not create event source '$EventSource': $($_.Exception.Message)"
-}
+catch { throw "Could not create required event source '$EventSource': $($_.Exception.Message)" }
 
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -206,6 +197,7 @@ Start-Sleep -Seconds 3
 
 $task = Get-ScheduledTask -TaskName $TaskName
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
+if ($task.State -ne 'Running') { throw "LOB task did not remain running; LastTaskResult=$($info.LastTaskResult)." }
 [pscustomobject]@{
     Action = 'Deploy'
     AppRoot = $AppRoot
@@ -234,6 +226,7 @@ Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 2
 $task = Get-ScheduledTask -TaskName $TaskName
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
+if ($task.State -ne 'Running') { throw "LOB task did not remain running; LastTaskResult=$($info.LastTaskResult)." }
 [pscustomobject]@{ Action = 'Start'; TaskName = $TaskName; TaskState = $task.State; LastTaskResult = $info.LastTaskResult }
 '@
 
@@ -245,7 +238,7 @@ function New-StopGuestScript {
 $AppRoot = __APP_ROOT__
 $TaskName = __TASK_NAME__
 $pidPath = Join-Path $AppRoot 'lob-arc-app.pid'
-Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+Stop-ScheduledTask -TaskName $TaskName -ErrorAction Stop
 if (Test-Path -LiteralPath $pidPath) {
     $pidText = Get-Content -LiteralPath $pidPath -Raw
     if ($pidText -match '^\s*(\d+)\s*$') {
@@ -254,6 +247,7 @@ if (Test-Path -LiteralPath $pidPath) {
 }
 $task = Get-ScheduledTask -TaskName $TaskName
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
+if ($task.State -eq 'Running') { throw 'LOB task remained running after Stop.' }
 [pscustomobject]@{ Action = 'Stop'; TaskName = $TaskName; TaskState = $task.State; LastTaskResult = $info.LastTaskResult }
 '@
 
@@ -406,30 +400,22 @@ function Invoke-ArcRunCommand {
     $scriptPath = Join-Path $env:TEMP "$runCommandName.ps1"
     [System.IO.File]::WriteAllText($scriptPath, $Script, [System.Text.UTF8Encoding]::new($false))
     try {
-        $resultText = Invoke-AzCli -Arguments @(
+        Invoke-AzCli -Arguments @(
             'connectedmachine', 'run-command', 'create',
             '--name', $runCommandName,
             '--machine-name', $MachineName,
             '--resource-group', $ArcResourceGroupName,
             '--script', "@$scriptPath",
+            '--async-execution', 'false', '--timeout-in-seconds', '300',
             '--only-show-errors',
             '-o', 'json'
-        )
+        ) | Out-Null
     } finally {
         Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
     }
 
-    $result = $null
-    try {
-        $jsonStart = $resultText.IndexOf('{')
-        if ($jsonStart -ge 0) {
-            $result = $resultText.Substring($jsonStart) | ConvertFrom-Json -Depth 100
-        } else {
-            $result = [pscustomobject]@{ rawOutput = $resultText }
-        }
-    } catch {
-        $result = [pscustomobject]@{ rawOutput = $resultText; parseError = $_.Exception.Message }
-    }
+    $result = Invoke-AzCli -Arguments @('connectedmachine', 'run-command', 'show', '--name', $runCommandName, '--machine-name', $MachineName, '-g', $ArcResourceGroupName, '-o', 'json')
+    $result = Assert-SreRunCommandResult -Result $result
 
     [pscustomobject]@{
         Action = $Action
@@ -440,6 +426,7 @@ function Invoke-ArcRunCommand {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 Import-Module $skinModule -Force
 $skin = Get-DemoSkin -Path $SkinPath -RepoRoot $repoRoot
@@ -457,11 +444,17 @@ if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $AppSourcePath) {
     $AppSourcePath = Join-Path $repoRoot 'samples\lob-arc-app\LobArcBridgeApp.ps1'
 }
+foreach ($name in @($ArcResourceGroupName, $MachineName)) { Assert-SreName -Value $name -Description 'resource name' }
+Assert-SreName -Value $EventSource -Description 'event source' -Pattern '^[A-Za-z][A-Za-z0-9_.-]{0,79}$'
+Assert-SreName -Value $TaskName -Description 'task name' -Pattern '^[A-Za-z][A-Za-z0-9_.-]{0,63}$'
+if ($FaultMode -notin @('CrashOnProcessing', 'Degraded')) { throw 'Invalid LOB fault mode in skin.' }
+Assert-SreContextIds -SubscriptionId $SubscriptionId -TenantId $TenantId
 
-$guestScript = Get-GuestScript
+$guestScript = "`$ErrorActionPreference = 'Stop'`n$(Get-GuestScript)"
 
 if ($GuestScriptOutputPath) {
     $resolvedGuestScriptPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($GuestScriptOutputPath)
+    if (-not $PSCmdlet.ShouldProcess($resolvedGuestScriptPath, 'write manual guest script')) { return }
     Set-Content -LiteralPath $resolvedGuestScriptPath -Value $guestScript -Encoding UTF8
     [pscustomobject]@{
         Action = $Action
@@ -475,10 +468,6 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI (az) is required unless -GuestScriptOutputPath is used for manual fallback.'
 }
 
-Invoke-AzCli -Arguments @('account', 'set', '--subscription', $SubscriptionId, '--only-show-errors') | Out-Null
-$accountTenant = Get-AzTsv -Arguments @('account', 'show', '--query', 'tenantId') -Description 'current Azure CLI tenant'
-if ($accountTenant -ne $TenantId) {
-    throw "Azure CLI is signed in to tenant $accountTenant, but -TenantId is $TenantId. Run az login --tenant $TenantId."
-}
+Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
 
 Invoke-ArcRunCommand -Script $guestScript
