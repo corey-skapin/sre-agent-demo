@@ -139,14 +139,38 @@ preserved. Existing Monitoring Contributor is tolerated for High demo compatibil
 not added by the standard profile; High retains its historical Log Analytics
 Contributor grant, while Low now correctly uses true Log Analytics Reader.
 
-Plan title summaries contained `OR` strings requiring portal review. The approved
-two filter edits were not performed because available browser observation could
-not reliably identify the target window/URL. The live T11 alert still has a display
-name without the desired keyword; changing that alert was not authorized. Readiness
-therefore reports T11 title alignment failed and service gates pending, not Ready.
-Timestamped read-only/reconciliation evidence and rollback IDs were saved outside
-git. No fault injection, grant removal, plan recreation or destructive lifecycle
-test was performed. This is not evidence of a fresh end-to-end closed loop.
+After additional user approval, a second narrow ARM PATCH changed only the existing
+T11 alert display name from `Arc Demo - LOB Arc app fault` to
+`Arc Demo - lob-arc-app-fault`. Read-back confirmed the same resource ID, location,
+enabled state, query, severity, actions and all other alert properties. No rule
+rename/recreation or region change occurred.
+
+The latest read-only check on 2026-10-19 passed all implemented required ARM,
+identity/RBAC, managed-resource, actual revision-health and alert-configuration
+checks. Overall status is **pending** (exit 2), not Ready: handler instructions,
+plan status/Review, filters/handler mapping, routing conflicts and telemetry/service
+read-back remain unverified.
+
+The two approved filter edits remain **unexecuted**. Even after the user opened
+the portal visibly, available browser observation could not expose verified web
+content/URL. Do not bypass that fail-closed boundary. The last supported MCP list
+recorded the following enabled Review plans; these are observations, not proof
+that the current filter behavior has been corrected:
+
+| Existing plan/filter ID | Last observed title condition | Approved intended keyword |
+|---|---|---|
+| `container-app-restart-review-v2` | `alert-arc-demo-containerapp-restarts OR containerapp-restarts` | `containerapp-restarts` |
+| `lob-arc-app-review-v2` | `lob-arc-app-fault OR ArcLobBridgeApp` | `lob-arc-app-fault` |
+
+An authorized operator must inspect actual alert/incident titles, then edit only
+the title condition on those same existing plans in Builder. Preserve status On,
+Review, custom handler, severity, services, steps and every other setting; read
+back the saved values. Never create duplicate plans or remove quickstart.
+
+Timestamped parent/alert before-after-rollback and current-readiness evidence were
+saved outside git. No fault injection, grant removal, plan recreation, destructive
+lifecycle test or fresh end-to-end alert loop was performed. Code/CI completion is
+not certification of those remaining live data-plane and lifecycle gates.
 
 T09 remains the primary historically proven Review closed-loop wow path.
 T10/T11 remain hybrid signal/evidence plus governed **operator** Arc Run Command

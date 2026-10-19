@@ -191,6 +191,13 @@ guest script.
 
 ## Current validation stance
 
+The 2026-10-19 read-only baseline passes implemented ARM/resource/alert checks but
+is overall **pending** for handler/plan/routing/telemetry verification. Approved
+parent scope and T11 display-name-only corrections were read-back verified;
+the two existing response-plan title edits remain unexecuted because browser
+observation is fail-closed. Historical scenario evidence below is not a new
+full-lifecycle or alert-to-recovery rehearsal.
+
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.
