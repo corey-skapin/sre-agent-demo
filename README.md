@@ -127,6 +127,9 @@ Microsoft IaC template protocols for full reads, named upserts and verification.
 Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
 P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review,
 and instructions/tools on the handling custom agent. No parent deletion is needed.
+Default v3 routes are staged disabled before explicitly retired v2 routes are
+disabled; only then are v3 routes enabled. Old objects/history remain. The
+unsupported existing legacy-handler update path is blocked before any write.
 
 Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
 -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.

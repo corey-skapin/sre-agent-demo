@@ -31,7 +31,7 @@ try {
         $snapshot = Get-SreConfigurationSnapshot $session
         @{
             desired = $desired; observed = $snapshot
-            reconciliation = Get-SreConfigurationPlan $desired $snapshot
+            reconciliation = Get-SreCompleteConfigurationPlan $desired $snapshot
         } | ConvertTo-Json -Depth 100
     } else {
         Invoke-SreConfigurationReconcile -Desired $desired -Session $session -BackupPath $BackupPath -AllowLegacyMigration:$AllowLegacyMigration -WhatIf:$WhatIfPreference |

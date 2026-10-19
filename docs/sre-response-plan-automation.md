@@ -20,7 +20,7 @@ The pinned sources establish these contracts:
 |---|---|
 | `bicep/Apply-Extras.ps1`, incidentFilters and subagents sections | Named PUT envelopes `{name,type,tags,properties}` to `/api/v2/extendedAgent/incidentFilters/{name}` and `/api/v2/extendedAgent/agents/{name}` |
 | `bin/ps/Export-Agent.ps1`, filters/subagents/handlers sections | Full GET lists on those v2 collections and `/api/v1/incidentPlayground/handlers` |
-| `bicep/Apply-Extras.ps1`, legacy handler section | Named handler PUT on `/api/v1/incidentPlayground/handlers/{id}` with the existing ID, filter ID, descriptive fields, instructions, tools, steps and incidents |
+| `bicep/Apply-Extras.ps1`, legacy handler section | Optional legacy handler creation only when `customInstructions` is nonempty; not needed by modern filters |
 | `recipes/azmon-lawappinsights` | `incidentPlatform: AzMonitor`, `Sev*` priorities, handling custom agent and built-in tool identifiers |
 
 The current official templates route children through the data plane because ARM
@@ -63,9 +63,10 @@ filename in an existing directory outside the repo. It refuses to overwrite a
 backup. An already-correct repeat run performs no PUT.
 
 For clean reconstruction after an authorized parent deployment, `-Apply` creates
-only the verified-absent named custom agent and filters. It does not create legacy
-response handlers. For an existing deployment, it updates those same objects.
-`-AllowLegacyMigration` is not needed for clean current-schema state, and is not
+only the verified-absent named custom agent and current filters. It does not
+create legacy response handlers. For existing modern state it updates the same
+objects; configured old routing is retired through the staged cutover below.
+`-AllowLegacyMigration` is not needed for clean current-schema state and is not
 itself user authorization.
 
 ## Exact desired demo configuration
@@ -89,37 +90,54 @@ The custom agent investigates T09 and proposes only the expected app repair.
 T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
 Do not claim reliable T11 RCA or autonomous Arc repair.
 
-## Existing legacy-plan migration: no parent deletion needed
+## Legacy routing replacement: no parent deletion or legacy-handler update
 
 User-observed portal errors on 2026-10-19 established two independent faults:
 `P1/P2` are invalid priorities for `AzMonitor`, and legacy response-level
 instructions/tools must move onto the handling custom agent. Title-only edits
 cannot fix these errors. Full supported read-back confirmed the same faults.
 
-The safest proposed migration reuses the existing parent, identity, custom agent,
-both filter IDs and both response-handler IDs:
+An approved in-place attempt verified the custom-agent update, then stopped when
+the service rejected PUT on an existing legacy handler: "same ID already exists;
+use POST to update." Both pinned Microsoft templates and public Azure MCP source
+show PUT, not a verified existing-handler POST contract. Do not infer or invent
+POST from the error. The adapter now blocks such an entire plan before any write
+with `SRE_EXISTING_HANDLER_UPDATE_UNVERIFIED`; it never retries that collision.
 
-1. Back up all observed subagents, filters and legacy response handlers before
-   any PUT. Refuse unreviewed enabled extra plans, duplicate handlers or an
-   instruction override. Review exact old/new objects from `-Inspect`.
-2. Update the existing handling custom agent with the rendered instructions and
-   explicit tools first. T09 and hybrid recovery steps now live there.
-3. On each existing legacy response handler, clear `customInstructions`, `tools`
-   and `incidentProcessingGuide`. Preserve its ID, name, description, filter ID
-   and incident associations. Do not create a second handler.
-4. Update the same filter to `Sev2`, the single keyword, intended handling agent,
-   enabled state and `Review`. Preserve unrelated fields such as merge window.
-5. Immediately read back after each PUT, then verify the complete desired state.
-   A concurrent change detected before a write stops the operation. A timeout is
-   read back before any retry; only transient failures are retried, at most three
-   attempts. A 400/401/403 is never bypassed or retried.
+Modern filters route directly to `handlingAgent` without those legacy handlers:
+the official AzMonitor recipe has no `customInstructions`, and the official
+apply script creates a legacy handler only when that optional field is nonempty.
+Default skins therefore use deterministic `container-app-restart-review-v3`
+and `lob-arc-app-review-v3`. `sre.retiredResponsePlanNames` explicitly owns the
+two v2 filters for retirement; never infer ownership from a name prefix.
 
-This is not an atomic multi-object transaction. Retain the backup and inspect
-partial state if any step fails. Do not automatically restore invalid P1/P2
-payloads, delete plans, or claim a failed legacy rollback succeeded.
-Changing a plan beyond the old title-only approval needs fresh scoped approval.
-No agent replacement, new identity, role change or history deletion is necessary
-for this proposed migration.
+The exact supported replacement preview preserves parent, identity, verified
+custom agent, old filters/handlers and incident history:
+
+1. Back up full objects before any PUT. Refuse unreviewed enabled extra plans,
+   duplicate handlers, instruction overrides or an already-overlapping cutover.
+2. Create/verify both new v3 filters **disabled**, with AzMonitor, Sev2, exact
+   keywords, same custom handling agent and Review. No v1 handler is created.
+3. Disable the explicitly retired v2 filters via the supported v2 filter PUT.
+   Normalize invalid P1/P2 to Sev2 so the filter validates even while disabling.
+   Preserve old titles, merge settings and all other unrelated fields. Never
+   modify their legacy response handlers or delete their history.
+4. Only after both old routes are verified off, enable the verified modern
+   filters. There is a short routing gap, not duplicate routing or workload
+   downtime; do not induce a fault during cutover.
+5. Read back every operation and the complete final state. Each write compares
+   the latest object against the expected backup/prior read-back, preserving
+   server defaults for a newly staged object. Stop on concurrent target changes.
+   Read back an ambiguous timeout before retrying. At most three transient
+   attempts; never bypass/retry 400/401/403.
+
+This is not an atomic multi-object transaction. On failure stop with the backup
+and staged/retired objects retained; rerun inspection before a separately approved
+resume. Supported rollback can disable the modern filters, but does not certify
+reactivation of legacy instructions. Never automatically restore invalid P1/P2
+payloads, delete plans, or claim legacy rollback is functional. Replacement IDs
+and retirement changes need approval distinct from the earlier same-ID/title
+approval. No agent replacement, identity/role change or history deletion is needed.
 
 ## Deployment, readiness and lifecycle
 
@@ -145,9 +163,10 @@ parent overrides require explicit reskinning or parent-only intent.
 ```
 
 Readiness now uses full supported reads for instructions/tools, On/Review,
-AzMonitor/Sev2/title/handler/service mapping, legacy response fields and unreviewed
-enabled extra plans. Invalid priorities or retained legacy settings are **fail**,
-not merely unknown/pending. Missing/denied reads fail explicitly.
+AzMonitor/Sev2/title/handler/service mapping, retired routing, active legacy
+response fields and unreviewed enabled extra plans. Invalid active priorities,
+active legacy settings or still-enabled retired routes are **fail**, not merely
+unknown/pending. Retained disabled history is allowed. Missing/denied reads fail explicitly.
 Fresh telemetry/alert-to-thread/RCA/approval/recovery remains **pending** until
 a separately authorized rehearsal supplies evidence. No read-only preflight
 injects a fault or certifies a new closed loop.

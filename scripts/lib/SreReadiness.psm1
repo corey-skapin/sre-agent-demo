@@ -107,16 +107,19 @@ function Get-SreReadinessReport {
                     $modeValid = $modeValid -and $properties.isEnabled -and $properties.agentMode -ieq 'Review'
                     $filtersValid = $filtersValid -and (Test-SreProperties $properties $plan.properties)
                     $observedPlans += @{ name = $plan.name; mode = $properties.agentMode; enabled = $properties.isEnabled; priorities = $properties.priorities; title = $properties.titleContains; handler = $properties.handlingAgent }
-                    $legacyHandlers += @($snapshot.handlers | Where-Object {
-                        $_.incidentFilterId -ceq $plan.name -and -not $_['isDeleted'] -and
-                        ($_.customInstructions -or @($_.tools).Count -or @($_.incidentProcessingGuide).Count)
-                    } | ForEach-Object { $_.id })
                 }
+                $activeNames = @($snapshot.filters | Where-Object { $_.properties.isEnabled } | ForEach-Object { $_.name })
+                $legacyHandlers = @($snapshot.handlers | Where-Object {
+                    $_.incidentFilterId -in $activeNames -and -not $_['isDeleted'] -and
+                    ($_.customInstructions -or @($_.tools).Count -or @($_.incidentProcessingGuide).Count)
+                } | ForEach-Object { $_.id })
                 Add-Check 'plan-status-review' $agentId $(if ($modeValid) { 'pass' } else { 'fail' }) 'Each required existing plan enabled and Review' $observedPlans 'Reads actual plan properties, not MCP summary or parent mode.'
                 Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service and custom agent' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2.'
-                Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Response-level instructions/tools/steps must be migrated to the handling custom agent, not retained on legacy handlers.'
+                Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Active routing must not depend on legacy response settings. Retired disabled plans and their history may remain untouched.'
                 $owned = @($desired.plans | ForEach-Object { $_.name })
-                $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $owned } | ForEach-Object { $_.name })
+                $retiredActive = @($activeNames | Where-Object { $_ -in $desired.retiredPlanNames })
+                Add-Check 'retired-routing-disabled' $agentId $(if ($retiredActive.Count) { 'fail' } else { 'pass' }) @() $retiredActive 'Explicitly retired routing must be disabled before modern routing is enabled; old objects/history are not deleted.'
+                $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin ($owned + @($desired.retiredPlanNames)) } | ForEach-Object { $_.name })
                 Add-Check 'routing-conflicts' $agentId $(if ($extra.Count) { 'fail' } else { 'pass' }) 'No unreviewed enabled extra plans' $extra 'Conservatively requires review of every enabled unowned plan; never deletes quickstart automatically.'
             } catch {
                 Add-Check 'data-plane-inspection' $agentId 'fail' 'Successful supported full configuration read' $null $_.Exception.Message

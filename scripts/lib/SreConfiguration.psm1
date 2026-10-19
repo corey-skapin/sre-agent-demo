@@ -41,6 +41,7 @@ function Get-SreDesiredConfiguration {
         subscriptionId = $SubscriptionId; tenantId = $TenantId
         resourceGroup = "rg-$prefix-sre"; agentName = $skin.labels.agentName
         requiredScenarios = $scenarios
+        retiredPlanNames = @(Get-DemoSkinValue -Skin $skin -Path 'sre.retiredResponsePlanNames' -Default @())
         handler = @{
             name = $skin.labels.agentName; type = 'ExtendedAgent'; tags = @()
             properties = @{
@@ -180,7 +181,9 @@ function Get-SreConfigurationPlan {
     $operations = [Collections.Generic.List[object]]::new()
     $legacy = $false
     $ownedNames = @($Desired.plans | ForEach-Object { $_.name })
-    $conflicts = @($Snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $ownedNames })
+    $retiredNames = @($Desired.retiredPlanNames)
+    if (@($retiredNames | Where-Object { $_ -in $ownedNames }).Count) { throw 'Active and retired response-plan names must be disjoint.' }
+    $conflicts = @($Snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin ($ownedNames + $retiredNames) })
     if ($conflicts.Count) { throw "Unowned enabled routing requires review: $($conflicts.name -join ', '). No plans were changed." }
     foreach ($entry in (, @('subagents', 'agents', $Desired.handler))) {
         $matches = @($Snapshot[$entry[0]] | Where-Object name -CEQ $entry[2].name)
@@ -192,8 +195,45 @@ function Get-SreConfigurationPlan {
         $after = if ($before) { $before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable } else { $entry[2] | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable }
         foreach ($key in $entry[2].properties.Keys) { $after.properties[$key] = $entry[2].properties[$key] }
         if (-not $before -or -not (Test-SreProperties $before.properties $entry[2].properties)) {
-            $operations.Add(@{ collection = $entry[0]; path = "/api/v2/extendedAgent/$($entry[1])/$([uri]::EscapeDataString($after.name))"; name = $after.name; before = $before; after = $after })
+            $operations.Add(@{ collection = $entry[0]; method = 'Put'; path = "/api/v2/extendedAgent/$($entry[1])/$([uri]::EscapeDataString($after.name))"; name = $after.name; before = $before; after = $after })
         }
+    }
+    function Add-FilterChange($Before, $DesiredFilter, [string]$Phase) {
+        $after = if ($Before) { $Before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable } else { $DesiredFilter | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable }
+        $null = $after.Remove('scenario')
+        foreach ($key in @('createdAt', 'updatedAt', 'configurationWarning')) { $null = $after.properties.Remove($key) }
+        foreach ($key in $DesiredFilter.properties.Keys) { $after.properties[$key] = $DesiredFilter.properties[$key] }
+        if (-not $Before -or -not (Test-SreProperties $Before.properties $DesiredFilter.properties)) {
+            $operations.Add(@{
+                collection = 'filters'; method = 'Put'; phase = $Phase
+                path = "/api/v2/extendedAgent/incidentFilters/$([uri]::EscapeDataString($DesiredFilter.name))"
+                name = $DesiredFilter.name; before = $Before; after = $after
+            })
+        }
+    }
+    $activeRetired = @($Snapshot.filters | Where-Object { $_.name -in $retiredNames -and $_.properties.isEnabled })
+    if ($activeRetired.Count) {
+        foreach ($plan in $Desired.plans) {
+            $matches = @($Snapshot.filters | Where-Object name -CEQ $plan.name)
+            if ($matches.Count -gt 1) { throw "Duplicate modern filter $($plan.name)." }
+            $before = if ($matches.Count) { $matches[0] } else { $null }
+            if ($before -and $before.properties.isEnabled) { throw 'Both modern and retired routing are enabled. Inspect this conflict before cutover.' }
+            $staged = $plan | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            $staged.properties.isEnabled = $false
+            Add-FilterChange $before $staged 'stage-disabled'
+        }
+        if (@($operations | Where-Object collection -EQ 'filters').Count) {
+            return @{ legacyMigrationRequired = $true; operations = @($operations.ToArray()) }
+        }
+        foreach ($before in $activeRetired) {
+            if ($before.properties.incidentPlatform -ne 'AzMonitor') { throw "Retired filter $($before.name) is not the expected AzMonitor platform." }
+            $disabled = @{ name = $before.name; properties = @{ isEnabled = $false } }
+            if (@($before.properties.priorities | Where-Object { $_ -notmatch '^Sev[0-4]$' }).Count) {
+                $disabled.properties.priorities = @('Sev2')
+            }
+            Add-FilterChange $before $disabled 'disable-retired'
+        }
+        return @{ legacyMigrationRequired = $true; operations = @($operations.ToArray()) }
     }
     foreach ($plan in $Desired.plans) {
         $matches = @($Snapshot.filters | Where-Object name -CEQ $plan.name)
@@ -213,6 +253,8 @@ function Get-SreConfigurationPlan {
                 $operations.Add(@{
                     collection = 'handlers'; path = "/api/v1/incidentPlayground/handlers/$([uri]::EscapeDataString($handler.id))"
                     name = $handler.id; before = $handler; after = $clean
+                    method = $null
+                    capabilityRequirement = 'Existing legacy handler update: public examples only show PUT, but live service rejects existing IDs and requests POST. A supported update contract or portal migration is required; do not guess POST.'
                 })
             }
         }
@@ -221,10 +263,28 @@ function Get-SreConfigurationPlan {
         foreach ($key in @('createdAt', 'updatedAt', 'configurationWarning')) { $null = $after.properties.Remove($key) }
         foreach ($key in $plan.properties.Keys) { $after.properties[$key] = $plan.properties[$key] }
         if (-not $before -or -not (Test-SreProperties $before.properties $plan.properties)) {
-            $operations.Add(@{ collection = 'filters'; path = "/api/v2/extendedAgent/incidentFilters/$([uri]::EscapeDataString($plan.name))"; name = $plan.name; before = $before; after = $after })
+            $operations.Add(@{ collection = 'filters'; method = 'Put'; path = "/api/v2/extendedAgent/incidentFilters/$([uri]::EscapeDataString($plan.name))"; name = $plan.name; before = $before; after = $after })
         }
     }
     @{ legacyMigrationRequired = $legacy; operations = @($operations.ToArray()) }
+}
+
+function Get-SreCompleteConfigurationPlan {
+    param([Collections.IDictionary]$Desired, [Collections.IDictionary]$Snapshot)
+    $simulation = $Snapshot | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+    $all = [Collections.Generic.List[object]]::new()
+    $legacy = $false
+    for ($phase = 0; $phase -lt 4; $phase++) {
+        $plan = Get-SreConfigurationPlan $Desired $simulation
+        $legacy = $legacy -or $plan.legacyMigrationRequired
+        if (-not $plan.operations.Count) { return @{ legacyMigrationRequired = $legacy; operations = @($all.ToArray()) } }
+        foreach ($operation in $plan.operations) {
+            $all.Add($operation)
+            $key = if ($operation.collection -eq 'handlers') { 'id' } else { 'name' }
+            $simulation[$operation.collection] = @($simulation[$operation.collection] | Where-Object { $_[$key] -cne $operation.name }) + @($operation.after)
+        }
+    }
+    throw 'Configuration planning did not converge within four phases.'
 }
 
 function Find-SreConfigurationObject {
@@ -239,6 +299,7 @@ function Find-SreConfigurationObject {
 
 function Set-SreConfigurationOperation {
     param([Collections.IDictionary]$Session, [Collections.IDictionary]$Operation)
+    if ($Operation.method -ne 'Put') { throw 'SRE_EXISTING_HANDLER_UPDATE_UNVERIFIED: no source-verified update method; no write attempted.' }
     $current = Find-SreConfigurationObject (Get-SreConfigurationSnapshot $Session) $Operation
     if ((Get-SreComparableJson $current) -cne (Get-SreComparableJson $Operation.before)) {
         throw "Concurrent change detected for $($Operation.name); stop and create a new backup/preview."
@@ -261,7 +322,7 @@ function Set-SreConfigurationOperation {
         } elseif ($matches) {
             $matches = Test-SreProperties $observed.properties $Operation.after.properties
         }
-        if ($matches) { return }
+        if ($matches) { return $observed }
         if (-not $writeError) { throw "PUT returned but desired state is not verified for $($Operation.name); do not claim success." }
         if ($attempt -eq 3) { throw $writeError }
         if ((Get-SreComparableJson $observed) -cne (Get-SreComparableJson $Operation.before)) {
@@ -276,13 +337,17 @@ function Invoke-SreConfigurationReconcile {
     param([Collections.IDictionary]$Desired, [Collections.IDictionary]$Session,
         [Parameter(Mandatory)][string]$BackupPath, [switch]$AllowLegacyMigration)
     $before = Get-SreConfigurationSnapshot $Session
-    $plan = Get-SreConfigurationPlan $Desired $before
+    $plan = Get-SreCompleteConfigurationPlan $Desired $before
     if ($plan.legacyMigrationRequired -and -not $AllowLegacyMigration) {
         throw 'SRE_LEGACY_MIGRATION_REQUIRED: AzMonitor P1/P2 and response-level instructions/tools/steps need a separately approved migration. Preview first; pass -AllowLegacyMigration only with that scope authorized.'
     }
     if (-not $plan.operations.Count) { return @{ changed = $false; verified = $true; operations = @() } }
     if (-not $PSCmdlet.ShouldProcess($Session.resourceId, "Back up and reconcile $($plan.operations.Count) named SRE configuration objects (Review only, no delete)")) {
         return @{ changed = $false; verified = $false; preview = $plan }
+    }
+    $unsupported = @($plan.operations | Where-Object { -not $_.method })
+    if ($unsupported.Count) {
+        throw "SRE_EXISTING_HANDLER_UPDATE_UNVERIFIED: $($unsupported.name -join ', '). Public PUT examples collide with existing handler IDs. Migrate these existing response settings through the supported portal or establish a public update contract. No objects were written."
     }
     $fullPath = [IO.Path]::GetFullPath($BackupPath)
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..')) + [IO.Path]::DirectorySeparatorChar
@@ -294,11 +359,24 @@ function Invoke-SreConfigurationReconcile {
         $bytes = [Text.Encoding]::UTF8.GetBytes($json)
         $stream.Write($bytes, 0, $bytes.Length)
     } finally { $stream.Dispose() }
-    foreach ($operation in $plan.operations) { Set-SreConfigurationOperation -Session $Session -Operation $operation }
+    $expected = $before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+    foreach ($planned in $plan.operations) {
+        $operation = $planned | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+        $operation.before = Find-SreConfigurationObject $expected $operation
+        if ($operation.before -and $operation.collection -ne 'handlers') {
+            $body = $operation.before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            foreach ($key in $operation.after.properties.Keys) { $body.properties[$key] = $operation.after.properties[$key] }
+            foreach ($key in @('createdAt', 'updatedAt', 'configurationWarning')) { $null = $body.properties.Remove($key) }
+            $operation.after = $body
+        }
+        $observed = Set-SreConfigurationOperation -Session $Session -Operation $operation
+        $key = if ($operation.collection -eq 'handlers') { 'id' } else { 'name' }
+        $expected[$operation.collection] = @($expected[$operation.collection] | Where-Object { $_[$key] -cne $operation.name }) + @($observed)
+    }
     $after = Get-SreConfigurationSnapshot $Session
     $remaining = Get-SreConfigurationPlan $Desired $after
     if ($remaining.operations.Count) { throw 'Final SRE configuration verification failed; retain backup and inspect partial state.' }
     @{ changed = $true; verified = $true; backupPath = $fullPath; before = $before; after = $after; operations = @($plan.operations | ForEach-Object { $_.path }) }
 }
 
-Export-ModuleMember -Function Get-SreDesiredConfiguration, New-SreConfigurationSession, Get-SreConfigurationSnapshot, Get-SreConfigurationPlan, Invoke-SreConfigurationReconcile, Test-SreProperties
+Export-ModuleMember -Function Get-SreDesiredConfiguration, New-SreConfigurationSession, Get-SreConfigurationSnapshot, Get-SreConfigurationPlan, Get-SreCompleteConfigurationPlan, Invoke-SreConfigurationReconcile, Test-SreProperties

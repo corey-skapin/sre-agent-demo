@@ -131,7 +131,7 @@ In the SRE Agent portal:
 5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
 6. Verify the existing response plan; create only if its absence is verified:
    - Platform: **Azure Monitor**
-   - Name: `container-app-restart-review-v2`
+   - Name: `container-app-restart-review-v3` (skin-driven current route; retain old v2 disabled during approved cutover)
    - Severity: `Sev2`
    - Title contains: `containerapp-restarts`
    - Response custom agent: `sre-arc-demo`

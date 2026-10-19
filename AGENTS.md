@@ -84,8 +84,12 @@ produced invalid AzMonitor P1/P2 plus legacy response-level instructions.
 Current schema uses `priorities: ["Sev2"]`, single-keyword titles, explicit
 Review, and instructions/tools on the handling custom agent. Migrating old
 response fields requires scoped approval plus `-AllowLegacyMigration`.
-Retain the same parent, identity, agent/filter/handler IDs and incident history;
-do not delete the agent just to repair plans. Full exports stay outside git.
+Retain parent, identity, custom agent and old history. Default v3 routing replaces
+explicitly listed v2 routes through disabled staging -> old-route disable ->
+new-route enable, without legacy-handler updates. Existing legacy-handler PUT
+collides in the live service; no public POST contract was established, so block
+that path rather than guessing. Do not delete the agent to repair plans.
+Full exports stay outside git.
 After ambiguous writes read back before retrying. No duplicate plan creation.
 Report enabled extra/quickstart conflicts; do not remove them automatically.
 
