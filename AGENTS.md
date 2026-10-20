@@ -57,9 +57,9 @@ Assumes `arc-demo` already exists and is active.
 ```powershell
 cd C:\src\sre-agent
 az login --tenant <TENANT_ID>
-az account set --subscription <SUBSCRIPTION_ID>
 
 $targetArcId = az connectedmachine show `
+  --subscription <SUBSCRIPTION_ID> `
   --resource-group rg-arc-demo `
   --name win-app-01 `
   --query id `
@@ -79,7 +79,10 @@ Parent-only is not Ready. Render and `-Inspect`
 with a new external `-BackupPath` using
 `docs\sre-response-plan-automation.md`. Run `scripts\Test-SreReadiness.ps1`
 with the same explicit subscription/tenant/skin and resolve its failed/pending
-gates before delivery. Failed service authentication/read-back is an explicit blocker.
+gates before delivery. The Ready command always leaves its external
+`telemetry-and-alerts` gate pending: it does not ingest saved rehearsal evidence.
+Pair that report with a separately authorized recorded run; do not rewrite it to
+exit 0. Failed service authentication/read-back is an explicit blocker.
 
 ## SRE data-plane setup reality
 
@@ -117,18 +120,28 @@ Report enabled extra/quickstart conflicts; do not remove them automatically.
 
 ## Hibernation
 
+Use the complete export, preview, verification and reactivation sequence in
+`docs\sre-response-plan-automation.md`. Record the live identity principal and
+export needed configuration/evidence outside git before deletion. The export is
+a reference, not an automatic history/memory restore or a payload to replay.
+
 ```powershell
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath .\config\demo-skin.json -WhatIf
 ```
 
-Then hibernate the Arc estate from `C:\src\arc-demo` if the whole lab should be
-parked.
+Remove `-WhatIf` only for the approved scope. This deletes the SRE group and known
+identity-owned grants at the subscription/Arc-group/infra-group scopes, not
+external grants belonging to other identities. Unexpected resources or grants stop cleanup.
+Deletion submission is asynchronous, not verified hibernation.
+Finish and verify SRE hibernation **before** the Arc owner parks the estate.
 
 Save the SRE identity principal ID and evidence before deletion. Verify
 `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <ID>`.
 Reactivation rebuilds parent, handler and plans; deleted thread/history/memory and
 repository connector authorization are not restored from this repo. No destructive
-full-lifecycle test is implied by local mocked tests.
+full-lifecycle test is implied by local mocked tests or the successful T09 retry.
+Resume Arc first; recreate the SRE parent/identity, then modern custom agent/v3
+filters from versioned assets. Do not recreate retired legacy routing/history.

@@ -25,7 +25,9 @@ For Ready:
    and -AllowLegacyMigration; do not replay the legacy MCP high-severity recipe.
    No parent deletion is required. Never invent endpoints or duplicate plans.
 6. Run Test-SreReadiness.ps1: handler, plan, Sev2 filters, legacy fields, Review
-   and overlap now have full read-back. Separately verify the telemetry gate.
+   and overlap now have full read-back. Its telemetry gate always remains pending
+   because the command does not ingest external run evidence. Pair the report
+   with a separately authorized rehearsal; never rewrite JSON/exit2 as exit0.
    Existing ARM success is not routing
    readiness. Do not induce a fault merely to answer a read-only readiness check.
 7. Present T09 as primary proven Review closed loop; T10/T11 as hybrid evidence
@@ -33,12 +35,14 @@ For Ready:
 8. Leave a requested Ready demo running. Do not automatically hibernate.
 
 For Hibernated:
-1. Obtain explicit authorization for deletion and export required evidence.
+1. Obtain explicit authorization for deletion and export current Inspect output
+   plus required incident/audit evidence outside git. This is not a history restore.
 2. Save the SRE user-assigned identity principal ID.
 3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
-4. Verify deletion and external RBAC with Test-SreReadiness.ps1
+4. Group deletion is asynchronous. Verify deletion and external RBAC with Test-SreReadiness.ps1
    -DesiredState Hibernated -PreviousIdentityPrincipalId <saved ID>.
-5. Arc lifecycle is separately owned; do not stop its workloads from this repo.
+5. Finish SRE verification before Arc hibernation. Arc lifecycle is separately
+   owned; do not stop its workloads from this repo. Wake/verify Arc before SRE.
 
 Never change plans to Autonomous, remove quickstart plans, revoke extra grants,
 connect a repository, or induce faults without the appropriate scoped approval.
@@ -64,6 +68,18 @@ az bicep build --file .\infra\main.bicep --stdout
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json
 
+# Read full actual objects/preview before approving any writes.
+.\scripts\Initialize-SreConfiguration.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -Inspect
+
+# Only after that exact scope is approved. Add -AllowLegacyMigration only
+# for an explicitly approved existing-legacy cutover, not clean reconstruction.
+.\scripts\Initialize-SreConfiguration.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -Apply `
+  -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
+
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json
@@ -80,6 +96,9 @@ SRE has a deletion-based off state, not VM-style deallocation. Deletion discards
 handler/plan/history/memory/connector state. Parent redeployment is only stage one
 of reconstruction. Resume requires data-plane setup and verification again.
 Save evidence before cleanup and reauthorize optional repository connections.
+Versioned assets recreate the modern custom agent/v3 filters, not retired
+legacy objects, saved threads or learned memory. The new identity principal
+changes; use deterministic repo RBAC for that new principal, not old grants.
 
 The deploying identity may be User or ServicePrincipal (including managed
 identity). The script infers known Azure CLI identity types; pass
@@ -93,8 +112,13 @@ Existing Monitoring Contributor grants are explicitly tolerated, not copied into
 the standard profile. Low uses true Log Analytics Reader, not the formerly
 mislabeled Log Analytics Contributor ID. Hibernation discovers known identity-owned
 inherited grants too, shows their IDs in the deletion confirmation and deduplicates
-them; no role grants are removed while the desired state is Ready.
+them at the known subscription/Arc-group/infra-group scopes. Unexpected grants or
+SRE-group resources block cleanup; no grants are removed while desired state is Ready.
 
 Local checks cover parser/schema/rendering/mocked failures and safety behavior.
 They do not prove Azure data-plane create reliability, destructive lifecycle
 rebuild, live guest execution or a new T09 alert-to-recovery run.
+The 2026-10-20 fresh T09 retry separately proved SRE repair and actual Monitor
+recovery; its earlier operator fallback is distinct. User-confirmed portal
+approval and independent write/tool evidence are recorded, but no independent
+ApprovalDecision event was captured. It did not exercise deletion-to-Ready.

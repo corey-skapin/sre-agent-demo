@@ -137,8 +137,10 @@ It is read-only and bounded (`-TimeoutSeconds`, default 180). The common Arc/SRE
 contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pending.
 It checks parent/Review/identity/RBAC/managed resources/scenario resource health
 and reads full handler/plan/legacy-settings/routing configuration. Invalid
-priorities or legacy settings fail explicitly. Fresh telemetry/closed-loop
-rehearsal evidence remains a separate pending gate.
+priorities or legacy settings fail explicitly. The command does not ingest
+external rehearsal evidence: `telemetry-and-alerts` always remains pending in
+Ready mode, even after a separately proven run. Pair the JSON/exit 2 with that
+run's evidence; do not modify the report to manufacture exit 0.
 Parent success is never a routing-readiness certificate.
 
 Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
@@ -156,17 +158,34 @@ User, service-principal and managed-identity deployers are supported through
 
 Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
 an always-on charge, the off-state for this optional repo removes only the SRE
-Agent resource group and its RBAC grants on the Arc demo resource groups. The
-Arc demo estate stays intact.
+Agent resource group and known identity-owned RBAC grants at the subscription,
+Arc/observability-group and infra-group scopes. Other identities' external grants and
+the Arc estate stay intact. Unexpected resources or grants block deletion.
 
 ```powershell
-# Only after separately approving destructive cleanup; save principal/evidence first
+# Only after approved destructive cleanup; export configuration/evidence and
+# save the live identity principal first. See the complete lifecycle procedure:
+# docs\sre-response-plan-automation.md
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> `
+  -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -WhatIf
+
+# Execute only the approved preview.
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json
 
+# Submission is asynchronous; repeat this read-only check within a bounded
+# observation window until pass, or report pending/failure without resubmitting.
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
+
 # Before the next demo — recreate the optional SRE layer
+# First reactivate and verify Arc through its own repo.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
@@ -174,7 +193,9 @@ Arc demo estate stays intact.
   -SkinPath .\config\demo-skin.json
 ```
 
-Reactivation also requires the handler/plan ensure and verification above.
+Verify SRE hibernation before parking Arc; wake Arc before reconstructing SRE.
+Reactivation also requires modern handler/v3-plan ensure and verification above,
+with a new external backup path and approval for actual changes.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
 re-established; a URL in the skin is not authentication. Save the old identity
@@ -183,6 +204,11 @@ principal and use readiness `-DesiredState Hibernated
 identity/partial state is safe to inspect; orphan checks without an old principal
 remain pending. WhatIf never selects a global account, revokes grants or writes a
 guest script.
+The saved Inspect export is a reference, not a replayable history/connector
+backup. Recreated SRE identity has a new principal; do not reuse old grants or
+reactivate retained legacy v2 handlers. A fresh deletion-to-Ready reconstruction
+has not been live-tested by the T09 rehearsal. Residual Arc/storage/monitoring
+charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 ## Scenario runbooks
 

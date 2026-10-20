@@ -1,5 +1,11 @@
 # Clean-room shareability test - 2026-10-12
 
+**Historical preview evidence, not a current bootstrap recipe.** This predates
+the modern v3 Review-filter implementation and the 2026-10-20 T09 retry.
+Use `sre-response-plan-automation.md` for current setup. Legacy MCP-create/browser
+experiments below are historical only; do not repeat them to rebuild this demo.
+The later in-place repair does not close the fresh deletion-to-Ready test gap.
+
 ## Scope
 
 No-cost clean-room preview of the two-repo handoff workflow:
@@ -19,9 +25,7 @@ passes and caught one important fix.
 | Item | Value |
 |---|---|
 | Clean-room path | `C:\src\_cleanroom\arc-sre-demo-n06` |
-| Subscription | `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5` |
-| Tenant | `4a2e6a7b-9d04-4e89-9d8b-01c75a2444c1` |
-| Account | `coreyskapin@MngEnvMCAP823865.onmicrosoft.com` |
+| Subscription / tenant / account | Recorded privately for that run; runtime identities are not public handoff inputs. |
 | Arc repo clean-room head | `b400a04` initially, then patched source repo to `fe1fabf` |
 | SRE repo clean-room head | `0ff23ab` |
 
@@ -87,14 +91,14 @@ Not live-tested in this no-cost run:
 
 **No-cost clean-room preview: pass with fix.**
 
-The repos are now shareable enough for an SE/AI assistant to clone, read the
+At that historical revision the repos were shareable enough for an SE/AI assistant to clone, read the
 handbooks, run local validation, and run no-cost deployment previews. The remaining
 validation gap is the full live workflow:
 
 1. Reactivate/deploy Arc demo from clean clone.
 2. Deploy SRE layer from clean clone.
-3. Validate `sreagent_agents_create`.
-4. Validate response-plan creation.
+3. Reconstruct the custom agent through the pinned current-schema initializer.
+4. Verify modern v3 filters, Review, literal titles and no duplicate routing.
 5. Induce T09 and verify automatic handoff plus Review-mode repair.
 6. Hibernate both layers.
 

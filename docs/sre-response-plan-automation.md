@@ -86,6 +86,12 @@ RBAC and human approval. No connector or new RBAC grant is created.
 Filters are enabled. The literal title is one keyword, never an `OR` expression.
 The default impacted services remain `Azure Container Apps` and `Azure Arc`;
 verify actual incident matching in the separately authorized rehearsal.
+The renderer does not manage cooldown fields. Existing merge settings are
+preserved; new filters receive service defaults. The validated live routes had
+`mergeEnabled=true` and a three-hour window, not a repo-enforced universal default.
+Inspect actual cooldown before a repeat: a recurring fire can merge into/reopen
+an existing thread. Any temporary disable and exact restoration need scoped
+approval; neither closing a thread nor a resolved alert guarantees a fresh one.
 The custom agent investigates T09 and proposes only the expected app repair.
 T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
 Do not claim reliable T11 RCA or autonomous Arc repair.
@@ -188,9 +194,11 @@ AzMonitor/Sev2/title/handler/service mapping, retired routing, active legacy
 response fields and unreviewed enabled extra plans. Invalid active priorities,
 active legacy settings or still-enabled retired routes are **fail**, not merely
 unknown/pending. Retained disabled history is allowed. Missing/denied reads fail explicitly.
-Fresh telemetry/alert-to-thread/RCA/approval/recovery remains **pending** until
-a separately authorized rehearsal supplies evidence. No read-only preflight
-injects a fault or certifies a new closed loop.
+The Ready command does not ingest external rehearsal artifacts, so
+`telemetry-and-alerts` always remains **pending** in that report, including after
+the successful recorded retry. Pair its JSON/exit 2 with the separately authorized
+run's actual evidence; do not fabricate exit 0 or rerun a fault to clear this
+static gate. No read-only preflight certifies a new closed loop.
 
 The Arc/SRE readiness JSON contract remains schemaVersion 1; status is
 `pass|fail|pending|skipped`, exits 0 pass, 1 fail/error, 2 pending. The desired
@@ -199,12 +207,65 @@ Worker warnings are captured before job remoting and included as optional
 `inspection-warnings` data, never printed ahead of the JSON document. They do not
 hide required failures or change a required check's outcome.
 
-For separately authorized hibernation, export incident/thread/audit evidence and
-save the user-assigned identity principal ID first. Deletion loses custom agents,
-plans, incidents/threads, memory and connector state. Arc workspace records follow
-its own retention. Verify Hibernated using the saved principal ID. Re-enable Arc,
-then parent, current-schema custom agent/plans, read-back and rehearsal.
-Repository authentication remains a separate opt-in authorization.
+### Approved hibernation and later reactivation
+
+Hibernation deletes the named SRE group: parent, UAMI, Application Insights and
+the allowed service-created smart-detection Action Group if present. It removes
+only known-role assignments for that UAMI at the subscription and existing
+Arc/observability and infra group scopes. Other principals' external assignments
+are not selected. Extra group resources, unexpected roles or out-of-scope grants
+block cleanup; do not bypass the guard. Arc workloads remain untouched here.
+
+Before deletion, save the live UAMI principal and full Inspect output, plus any
+needed incident/tool/Activity Log evidence outside git. The narrow Inspect
+export contains custom agents, filters and legacy handlers; it does **not**
+export learned memory, thread history or connector credentials. Tokens are never
+exported. Use a new filename in an existing private directory:
+
+```powershell
+az identity show --subscription <SUBSCRIPTION_ID> `
+  --resource-group rg-<PREFIX>-sre --name <AGENT_NAME>-uami `
+  --query principalId --output tsv --only-show-errors
+# Record that value privately as <SAVED_PRINCIPAL_ID>; do not infer a deleted ID.
+
+.\scripts\Initialize-SreConfiguration.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -Inspect |
+  Out-File -LiteralPath <NEW_PRIVATE_EXPORT_PATH.json> -Encoding utf8 -NoClobber
+
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -WhatIf
+
+# Only after authorizing the exact preview:
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>
+
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> `
+  -OutputFormat Json -TimeoutSeconds 180
+```
+
+Check each command's exit status before continuing. Group deletion uses
+`--no-wait`: submission is not completion. Recheck Hibernated readiness within
+a bounded observation window; stop/report failures or pending timeout rather
+than resubmitting deletion blindly. A missing old principal leaves orphan-RBAC
+verification pending. Only after SRE is verified off should the Arc owner park
+Arc/networking. SRE deletion avoids the agent's always-on cost, not all remaining
+storage, monitoring or Arc-service charges.
+
+For the next demo, activate and verify Arc first. Deploy the SRE parent and new
+identity, then render/Inspect/approve/Apply the versioned modern custom agent and
+v3 filters with a new external backup, or use complete deployment above.
+Old principal grants, retired v2 objects, learned memory and deleted history are
+not restored. Do not replay an old full export as a PUT payload: it is reference
+evidence, not a supported restore input. Optional repository authentication needs
+explicit reauthorization. An in-place T09 repair proves neither a fresh bootstrap
+nor a deletion-to-Ready round trip; those live lifecycle gates remain untested.
 
 ## Evidence boundaries
 

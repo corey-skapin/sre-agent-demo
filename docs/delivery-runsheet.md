@@ -15,7 +15,7 @@ Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping
 | **Live lab required** | Requires a deployed Azure subscription/portal run before claiming it worked live. |
 | **Pending verdict** | Do not sell as proven. State it is the next empirical lab question. |
 
-Current status for T13:
+Recorded scenario status (not a fresh lifecycle certification):
 
 The scenario claims below include current and historical live evidence, not an
 automatic future go/no-go. Before presenting a new T09 fault, read back both existing title filters,
@@ -80,12 +80,12 @@ The two phrases to repeat:
 
 Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/subscription IDs as runtime inputs.
 
-1. Deploy or activate the Arc/Monitor spine:
+1. For a new estate, deploy the Arc/Monitor spine. For retained parked resources,
+   use the activation sequence below instead of treating deployment as wake:
 
    ```powershell
    cd C:\src\arc-demo
    az login --tenant <TENANT_ID>
-   az account set --subscription <SUBSCRIPTION_ID>
 
    .\scripts\Deploy-ArcDemo.ps1 `
      -SubscriptionId <SUBSCRIPTION_ID> `
@@ -96,6 +96,9 @@ Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/
    ```
 
    Optional: add `-DeployAks $true` if you want the AKS beat and have time/cost headroom. Keep `-DeployArcOnPrem $true` for the core DTF-shaped story.
+   Verify Arc Ready with explicit tenant/subscription/prefix/retained skin before
+   SRE setup. Earlier targeted starts and 79 required checks do not prove the
+   complete `Activate-ArcDemo.ps1` lifecycle.
 
 2. For Act 2 live rehearsal only, deploy the SRE layer after `arc-demo` exists:
 
@@ -115,7 +118,9 @@ Use a clean/new subscription in the **same tenant** for both repos. Keep tenant/
    instructions/tools belong to the handling custom agent, not response-level fields.
    Run `Test-SreReadiness.ps1 -DesiredState Ready -OutputFormat Json` with explicit
    tenant/subscription. Resolve failures and separately verify pending service
-   gates. Parent success is not routing readiness. Do not induce a fault during
+   gates. The SRE command's required telemetry gate stays pending/exit 2 because
+   it does not ingest external run evidence; pair it with the captured rehearsal,
+   not a fabricated static pass. Parent success is not routing readiness. Do not induce a fault during
    this read-only preflight. Pinned official IaC protocols provide full service
    read/upsert without browser automation; stop on auth/schema/read-back failure.
 
@@ -211,32 +216,83 @@ Goal: move from one demo to a reusable customer motion without changing the tech
 | T11 LOB-on-Arc bridge details | `C:\src\sre-agent\docs\t11-lob-app-on-arc-bridge.md` |
 | Reskin / reuse | both repos' `docs\reskin-guide.md` and `config\demo-skin.json` |
 
-## Reset checklist
+## Authorized parking and later wake
 
-Only when cleanup is requested and authorized after a live rehearsal; otherwise
-leave the desired Ready demo running. Save SRE identity principal and evidence
-before deletion:
+Leave desired Ready running unless hibernation is explicitly requested. Reset
+only faults actually induced within their authorized recovery scope; a blanket
+T09/T10/T11 reset is not part of parking. Preserve healthy false state and export
+SRE configuration/identity, thread/tool/Activity Log and alert evidence first,
+using `sre-response-plan-automation.md`.
+
+**Park SRE first, then Arc.** Run each repo's commands from its own checkout with
+its retained skin; coordinated owners must not race. Public placeholders below
+are mandatory runtime inputs, not permission to use an ambient subscription:
 
 ```powershell
 cd C:\src\sre-agent
-.\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -State Repair
-.\scripts\Invoke-T10ArcFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action Reset
-.\scripts\Invoke-LobArcAppOnArc.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action ResetFault
+$sreTarget = @{
+  SubscriptionId = '<SUBSCRIPTION_ID>'
+  TenantId = '<TENANT_ID>'
+  SkinPath = '<RETAINED_SRE_SKIN_PATH>'
+}
+.\scripts\Hibernate-SreAgent.ps1 @sreTarget -WhatIf
+.\scripts\Hibernate-SreAgent.ps1 @sreTarget -PreviousIdentityPrincipalId '<SAVED_SRE_PRINCIPAL_ID>'
+.\scripts\Test-SreReadiness.ps1 @sreTarget -DesiredState Hibernated `
+  -PreviousIdentityPrincipalId '<SAVED_SRE_PRINCIPAL_ID>' -OutputFormat Json -TimeoutSeconds 180
 
+# Continue only after SRE deletion and owned-grant removal are verified.
 cd C:\src\arc-demo
-.\scripts\Hibernate-ArcDemo.ps1 -SkinPath .\config\demo-skin.json
-
-cd C:\src\sre-agent
-.\scripts\Hibernate-SreAgent.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
+$arcTarget = @{
+  SubscriptionId = '<SUBSCRIPTION_ID>'
+  TenantId = '<TENANT_ID>'
+  NamePrefix = '<PREFIX>'
+  SkinPath = '<RETAINED_ARC_SKIN_PATH>'
+}
+.\scripts\Hibernate-ArcDemo.ps1 @arcTarget -WhatIf
+.\scripts\Hibernate-ArcDemo.ps1 @arcTarget
+.\scripts\Test-ArcDemoReadiness.ps1 @arcTarget -DesiredState Hibernated -OutputFormat Json -TimeoutSeconds 300
 ```
 
-Only include reset commands for scenarios you actually induced. Capture SRE threads, alert history, Activity Log entries, and KQL snippets before resetting.
+Check exit status at every step; SRE deletion is asynchronous. Recheck read-only
+within a bounded observation window rather than blindly repeat deletion.
+SRE removes its dedicated group/identity and known external UAMI grants; custom
+configuration, history, memory and connector state are lost, not suspended.
+Versioned modern agent/v3 routes can be recreated; an Inspect export is a reference,
+not a history/credential restore.
 
-SRE hibernation deletes configuration/history/memory, not just compute allocation.
-Verify `Test-SreReadiness.ps1 -DesiredState Hibernated` with the saved principal ID.
-Rebuild parent, handler and Review plans before the next run; optional code
-repository connections require explicit reauthorization. Local mocked checks and
-read-only inventory do not prove a destructive rebuild or a fresh end-to-end loop.
+Arc Hibernate accepts only the four target fields plus common ShouldProcess
+flags, not deployment-feature, cost or keep-network flags. It discovers retained
+resources even when skin toggles are now false, deallocates retained VMs, stops
+retained AKS if present, deactivates active Container App revisions and verifies
+compute parked before detaching/deleting only the expected NAT/PIP. The audited
+lab had eight Arc backing VMs, one Container App and no retained native VM/AKS;
+that inventory is not a permanent deployment assumption. RGs, disks/data,
+identities, Key Vault credentials, monitoring, policy, budget, Defender and fault
+flags remain. Storage/services can still be billable; no fixed hibernation-cost
+promise. Destructive `Remove-*` cleanup is separate.
+
+**Wake Arc first, then SRE:**
+
+```powershell
+# From Arc checkout, reuse the retained $arcTarget defined above.
+.\scripts\Activate-ArcDemo.ps1 @arcTarget -Location '<REGION>' -WhatIf
+.\scripts\Activate-ArcDemo.ps1 @arcTarget -Location '<REGION>'
+.\scripts\Test-ArcDemoReadiness.ps1 @arcTarget -DesiredState Ready -OutputFormat Json -TimeoutSeconds 600
+# Only after Arc Ready: switch to SRE checkout and follow the complete bootstrap
+# in sre-response-plan-automation.md with the retained SRE skin/new external backup.
+```
+
+Arc activation recreates expected NAT/PIP before starts, activates the latest
+Container App revision if needed, can restart guest Arc/AMA services and submits
+asynchronous patch assessments. It does not reset faults or credentials. Arc
+readiness timeout bounds retries, not hard per-service wall-clock cancellation;
+it is already read-only and has no `-WhatIf`.
+
+Rebuild the SRE parent/new identity, custom handler and Review filters, read back
+and perform read-only readiness; optional repository authentication needs explicit
+reauthorization. A new live fault needs separate approval. Local mocked checks,
+the earlier targeted starts and the T09 repair do **not** prove a complete
+destructive parking/reactivation round trip.
 
 ## Remaining live-validation gaps
 
