@@ -12,6 +12,7 @@
   "sre": {
     "accessLevel": "High",
     "requiredScenarios": ["T09", "T11"],
+    "retiredResponsePlanNames": ["container-app-restart-review-v2", "lob-arc-app-review-v2"],
     "targetArcMachine": "win-app-01",
     "nativeContainerFaultState": "Status",
     "t10Scenario": "HeartbeatByBackingVm",
@@ -20,8 +21,8 @@
   "labels": {
     "demoTitle": "Contoso Arc Demo",
     "agentName": "sre-contoso-arc",
-    "containerResponsePlan": "container-app-restart-review-v2",
-    "lobResponsePlan": "lob-arc-app-review-v2",
+    "containerResponsePlan": "container-app-restart-review-v3",
+    "lobResponsePlan": "lob-arc-app-review-v3",
     "lobAlertTitleContains": "lob-arc-app-fault",
     "lobAppName": "Contoso LOB Bridge App",
     "lobEventSource": "ContosoLobBridgeApp",

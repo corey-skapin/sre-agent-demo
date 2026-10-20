@@ -78,12 +78,13 @@ Assert-True ($success.instanceView.exitCode -eq 0) 'Guest success requires both 
 $initialize = Join-Path $root 'scripts\Initialize-SreConfiguration.ps1'
 $desired = & $initialize -SubscriptionId $subscription -TenantId $tenant | ConvertFrom-Json
 Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
-Assert-True ($desired.plans[0].parameters.'trigger-condition' -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
-Assert-True (@($desired.plans | Where-Object { $_.parameters.'agent-mode' -ne 'review' }).Count -eq 0) 'Every plan explicitly uses Review'
-Assert-True ($desired.handler.parameters.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
-Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'SRE_BOOTSTRAP_CAPABILITY_REQUIRED'
+Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
+Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
+Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
+Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'BackupPath'
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'
+& (Join-Path $PSScriptRoot 'Test-SreConfiguration.ps1')
 
 Import-Module (Join-Path $root 'scripts\lib\SreReadiness.psm1') -Force
 $hibernated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
@@ -93,6 +94,37 @@ Assert-True ($hibernatedKnown.status -eq 'pass') 'Known old identity and absent 
 $ready = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
 Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
+$fixture = Join-Path ([IO.Path]::GetTempPath()) "sre-readiness-cli-$([guid]::NewGuid())"
+$fixtureModule = Join-Path $fixture 'lib'
+$fixtureScript = Join-Path $fixture 'Test-SreReadiness.ps1'
+$fixtureModuleFile = Join-Path $fixtureModule 'SreReadiness.psm1'
+try {
+    New-Item -ItemType Directory -Path $fixtureModule -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root 'scripts\Test-SreReadiness.ps1') -Destination $fixtureScript
+    @'
+function Get-SreReadinessReport {
+    param($SubscriptionId, $TenantId, $SkinPath, $DesiredState, $PreviousIdentityPrincipalId)
+    Write-Warning 'Synthetic CLI diagnostic'
+    @{
+        schemaVersion = 1; workload = 'sre-agent'; checkedAtUtc = [DateTime]::UtcNow.ToString('o')
+        subscriptionId = $SubscriptionId; tenantId = $TenantId; resourceGroups = @()
+        desiredState = $DesiredState; status = 'pass'; checks = @()
+    }
+}
+Export-ModuleMember -Function Get-SreReadinessReport
+'@ | Set-Content -LiteralPath $fixtureModuleFile
+    $raw = & (Get-Command pwsh).Source -NoProfile -File $fixtureScript -SubscriptionId $subscription -TenantId $tenant -OutputFormat Json
+    $readinessExit = $LASTEXITCODE
+    $jsonReport = ($raw -join "`n") | ConvertFrom-Json
+    Assert-True ($readinessExit -eq 0 -and $jsonReport.status -eq 'pass') 'Worker warnings never corrupt CLI JSON or change required-check status'
+    Assert-True ($jsonReport.checks[-1].id -eq 'inspection-warnings' -and $jsonReport.checks[-1].observed[0] -match 'Synthetic CLI diagnostic') 'Worker warning diagnostics are retained in machine-readable checks'
+} finally {
+    foreach ($file in @($fixtureScript, $fixtureModuleFile)) {
+        if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+    }
+    if (Test-Path -LiteralPath $fixtureModule) { Remove-Item -LiteralPath $fixtureModule -Force }
+    if (Test-Path -LiteralPath $fixture) { Remove-Item -LiteralPath $fixture -Force }
+}
 $global:AzCalls.Clear()
 & (Join-Path $root 'scripts\Hibernate-SreAgent.ps1') -SubscriptionId $subscription -TenantId $tenant -WhatIf
 Assert-True (@($global:AzCalls | Where-Object { $_ -match 'delete|account set' }).Count -eq 0) 'Absent-state WhatIf has no mutation or context-selection side effects'

@@ -5,6 +5,10 @@ SRE Agent one-pager, the PoC datasheet, the SRE Agent spend workbook, Microsoft
 Learn SRE Agent docs, and the current Arc + Monitor + SRE demo validation.
 
 Use this as account-team guidance, not as a customer-facing datasheet.
+Account, spend and pipeline figures below are a historical source-workbook/chat
+snapshot, not current verified customer usage, eligibility or pricing. Refresh
+those sources and official commercial terms before using figures in a proposal.
+They do not establish the cost of this demo or a zero-cost hibernation state.
 
 ## Positioning
 
@@ -179,4 +183,3 @@ Avoid:
 - “SRE Agent replaces your SRE team.”
 - “A two-day PoC includes workload remediation.”
 - “Existing SRE spend means there is already a qualified opportunity.”
-

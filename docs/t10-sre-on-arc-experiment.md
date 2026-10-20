@@ -97,6 +97,9 @@ Avoid for first run:
 
 ## Safety boundaries
 
+- Each guest deployment, fault, reset or backing-VM power operation requires
+  separate explicit scope and a bounded recovery owner. These examples are not
+  authorization or part of read-only readiness.
 - Run only in the `arc-demo` lab subscription/resource groups.
 - Keep SRE Agent in **Review** mode; do not enable or imply unattended Arc server remediation.
 - Do not stop `azcmagent`, AMA, networking, firewall, or RDP/SSH access during the first pass. If those are needed later, require console/hypervisor access and a reset plan first.
@@ -110,6 +113,7 @@ Avoid for first run:
 
 ```powershell
 $targetArcId = az connectedmachine show `
+  --subscription <SUBSCRIPTION_ID> `
   --resource-group rg-arc-demo `
   --name win-app-01 `
   --query id `
@@ -122,6 +126,10 @@ $targetArcId = az connectedmachine show `
   -ParentOnly `
   -AdditionalManagedResourceIds $targetArcId
 ```
+
+Parent-only does not configure the handling agent or Review routes. Complete the
+current-schema Inspect/approved Apply/read-back procedure in
+`sre-response-plan-automation.md` before any independently authorized scenario.
 
 ## Baseline evidence queries
 
@@ -368,7 +376,7 @@ Verdict:
 Follow-up:
 ```
 
-## Live-verdict status
+## Historical live-verdict evidence - not current readiness
 
 Status as of 2026-10-10:
 
@@ -378,11 +386,11 @@ Status as of 2026-10-10:
 - Guest-local evidence was confirmed through Arc Run Command:
   - Event `1010` / Provider `T10ArcFault` / Level `Error`
   - Reset marker event `1011` / Provider `T10ArcFault` / Level `Information`
-- SRE Agent manual investigation thread `49acabac-7d88-402f-895f-d774085e985e`
+- The historical SRE Agent manual investigation thread (ID retained privately)
   started and attempted evidence collection, but tool result messages were often
   blank and no final RCA was produced without repeated prompting.
 
-Current verdict:
+Verdict for that historical run:
 
 | Area | Verdict |
 |---|---|
@@ -412,7 +420,7 @@ Live run evidence on 2026-10-12:
 |---|---|
 | Fault command | `t10-writeevent-induce-1012015102` |
 | Fault output | `Wrote Application Error event source=T10ArcFault eventId=1010.` |
-| SRE thread | `eb16884a-8769-4dfb-a471-235b7726ab92` |
+| SRE thread | Historical transcript retained privately; not the current T09/v3 evidence. |
 | SRE RCA | Identified `win-app-01` as Connected/healthy and the event as deliberate fault injection; confirmed Arc Run Command is viable |
 | Agent reset attempt | Agent attempted to execute reset via Arc Run Command, but no EventID 1011 was observed from the agent action |
 | Manual reset command | `t10-writeevent-reset-1012020229` |

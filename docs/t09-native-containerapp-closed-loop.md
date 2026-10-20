@@ -1,6 +1,23 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: live lab validation complete for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. Source-code repository connection remains optional and was not captured in this run.
+Status: live validated for current-schema v3 Review routing on 2026-10-20. The Container App fault, automatic Azure Monitor handoff, SRE RCA, actual SRE repair, healthy endpoint and MonitorCondition recovery were exercised. Verify handler instructions, filters, Review mode, routing and workload health again before any future authorized rehearsal. Source-code repository connection remains optional and was not captured.
+
+Latest current-schema retry (2026-10-20): a separately authorized fault generated
+a new Sev2 alert and independent v3 Review investigation. The user reported
+approving the exact new `SIMULATE_CRASH=false` card. Matching tool completion and
+Azure Activity Log prove that the SRE managed identity, not the operator,
+executed the repair. Revision `0000028` became healthy/ready with one replica,
+100% traffic and HTTP 200; the guard issued no operator reset. Its temporary
+cooldown disable was restored to the original three-hour setting.
+MonitorCondition resolved at 01:45:58 UTC, observed at 01:46:38 UTC; the separate
+alert workflow state remained Acknowledged.
+
+The earlier run used an operator fallback and is a separate outcome. The bounded
+audit did not return an independent `ApprovalDecision` event, so approval evidence
+is the user's actual portal report, not a fabricated telemetry record or the
+agent's narration. Read actual MonitorCondition recovery separately from alert
+workflow closure. Do not infer an outage from zero request-volume metrics alone;
+use revision/log evidence for the crash and an actual HTTP probe for availability.
 
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
@@ -28,11 +45,14 @@ For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
 
 ## Prerequisites
 
-- Azure CLI 2.60+ with the target tenant/subscription selected.
+- Azure CLI 2.60+ authenticated to the explicit target tenant/subscription; pass
+  the subscription on every request rather than relying on ambient selection.
 - `C:\src\arc-demo` at T05 or later and `C:\src\sre-agent` at T08 or later.
 - Permission to deploy `arc-demo`, deploy this SRE Agent layer, create role assignments, and approve SRE Agent actions.
 - SRE Agent response plan set to **Review** mode. Review mode is required for the one-click **Approve** step.
-- Optional but recommended: connect `corey-skapin/arc-demo` as a source-code repository in the SRE Agent knowledge base so RCA can cite:
+- Optional, after separate explicit authentication/consent: connect
+  `corey-skapin/arc-demo` as a source-code repository in the SRE Agent knowledge
+  base so RCA can cite:
   - `bicep/modules/container-apps.bicep`
   - `docs/container-app-fault.md`
 
@@ -44,13 +64,11 @@ References used for this runbook: Azure SRE Agent overview, run modes, incident 
 cd C:\src\arc-demo
 
 az login --tenant <TENANT_ID>
-az account set --subscription <SUBSCRIPTION_ID>
 
 .\scripts\Deploy-ArcDemo.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
-  -ParentOnly `
   -DeployContainerApps $true
 ```
 
@@ -66,12 +84,14 @@ $containerAppName = "ca-$namePrefix-fault"
 $alertName = "alert-$namePrefix-containerapp-restarts"
 
 $containerAppId = az containerapp show `
+  --subscription $subscriptionId `
   --resource-group $infraRg `
   --name $containerAppName `
   --query id `
   --output tsv
 
 $containerAlertId = az monitor metrics alert show `
+  --subscription $subscriptionId `
   --resource-group $infraRg `
   --name $alertName `
   --query id `
@@ -87,11 +107,12 @@ cd C:\src\sre-agent
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
+  -ParentOnly `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
 
-`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval.
+`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval. `-ParentOnly` explicitly acknowledges that this deploy does not complete the data-plane setup below. For an already running demo, do not redeploy merely to rehearse: use read-only readiness and verify the existing configuration first.
 
 ## 3. Connect code context
 
@@ -108,12 +129,16 @@ Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` 
 
 ## 4. Create the Review-mode response plan
 
-Preferred automation path, portal fallback, and optional browser-agent prompt are tracked in
+The supported pinned automation path and its capability boundaries are tracked in
 [`sre-response-plan-automation.md`](sre-response-plan-automation.md). The short
-version: create the parent SRE Agent through Bicep, try the MCP custom-agent
-creation path, and if it times out use the SRE portal/Scout browser fallback to
-create the custom handling agent. After the handler exists, create the response
-plan with `sreagent_incidents_plans_create`.
+version: render desired configuration with `Initialize-SreConfiguration.ps1`;
+list and inspect existing plans and the custom handler first. Create only when
+absence is verified. After an ambiguous timeout read back before retrying.
+The initializer uses pinned Microsoft IaC template protocols for full handler and
+plan reads/upserts. Do not use legacy MCP `severity: high`: it creates invalid
+AzMonitor P1/P2 and response-level instructions. Existing legacy configuration
+requires approved migration to exact Sev2 and handler-owned instructions/tools,
+not just a title edit. See the automation doc for backup/preview/apply/verify.
 
 In the SRE Agent portal:
 
@@ -122,12 +147,12 @@ In the SRE Agent portal:
 3. Create or verify a custom agent named `sre-arc-demo`:
    - Instructions: handle Azure Monitor incidents for `alert-arc-demo-containerapp-restarts`; investigate `ca-arc-demo-fault`, `RestartCount`, revision health, and the `SIMULATE_CRASH` environment variable.
    - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
-   - Tools: leave empty to inherit the parent agent's global Azure tools, or explicitly select the Azure Monitor/Azure resource tools required by the environment.
+   - Tools: use the rendered explicit built-in tool selection on this custom agent; keep the plan in Review. Do not configure legacy response-level tools or instructions.
 4. Go to **Builder** > **Incident response plans**.
 5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
-6. Create a response plan:
+6. Verify the existing response plan; create only if its absence is verified:
    - Platform: **Azure Monitor**
-   - Name: `container-app-restart-review-v2`
+   - Name: `container-app-restart-review-v3` (skin-driven current route; retain old v2 disabled during approved cutover)
    - Severity: `Sev2`
    - Title contains: `containerapp-restarts`
    - Response custom agent: `sre-arc-demo`
@@ -135,53 +160,30 @@ In the SRE Agent portal:
    - Reinvestigation cooldown: enabled, 3 hours
 7. Save and enable the plan.
 
-### F04 live setup status
+### Historical F04 setup status - not a deployment recipe
 
 Validated state on 2026-10-12:
 
 - `sre-arc-demo` was running in `rg-arc-demo-sre` with Review mode and High access.
 - The required custom handling agent could not be created through MCP during the first pass, but portal creation through **Builder** > **Agent Canvas** succeeded.
 - After the portal custom agent existed, the response plan `container-app-restart-review-v2` was enabled and automatic Azure Monitor handoff worked.
-- Thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd` captured alert payload, RCA, approved Azure CLI remediation, successful execution, recovery confirmation, and alert closure.
+- The historical transcript captured alert payload, RCA, approved Azure CLI
+  remediation, execution and recovery. Runtime thread/alert IDs stay private.
 
-Historical MCP setup attempt:
-
-```powershell
-# Handler YAML validation passed.
-sreagent_workflows_validate `
-  --yaml-content <ExtendedAgent YAML with metadata.name sre-arc-demo>
-
-# Applying the same YAML failed in the SRE Agent data plane.
-sreagent_workflows_apply `
-  --tenant <TENANT_ID> `
-  --subscription <SUBSCRIPTION_ID> `
-  --resource-group rg-arc-demo-sre `
-  --agent sre-arc-demo `
-  --yaml-content <ExtendedAgent YAML>
-# 400 from /api/v2/extendedAgent/agents/sre-arc-demo:
-# The JSON value could not be converted ...; request field is required.
-
-# Creating the response plan still fails until the custom handling agent exists.
-sreagent_incidents_plans_create `
-  --name container-app-restart-review-v2 `
-  --severity high `
-  --trigger-condition "alert-arc-demo-containerapp-restarts OR containerapp-restarts" `
-  --services Azure Container Apps,ca-arc-demo-fault,rg-arc-demo-infra `
-  --agent-mode review `
-  --agent sre-arc-demo
-# 400 from /api/v1/incidentplayground/filters/container-app-restart-review:
-# "Handling agent 'sre-arc-demo' does not exist."
-```
-
-The historical `OR` title example above is not current desired configuration:
-use the single keyword `containerapp-restarts`. Read existing plans before
-creating; never replay a timed-out non-idempotent create. Run the read-only
+The historical MCP workflow YAML validated but its apply failed server-side;
+plan-create also failed before the custom handler existed. That interface is
+**not a deploy recipe**: `high` can produce invalid AzMonitor P1/P2 and legacy
+response fields, while an `OR` expression is literal title text.
+Use the current initializer's `AzMonitor`/`["Sev2"]` schema and single keyword
+`containerapp-restarts`. Read existing plans before creating; never replay a
+timed-out non-idempotent create. Run the read-only
 readiness command and separately verify pending service gates before inducing.
 
-Current reproducible setup path: complete first-run onboarding if prompted,
-create the custom agent in the SRE portal, then create the response plan either
-in the portal or through MCP after the custom agent exists. Do not rely on
-`sreagent_workflows_apply` until the data-plane schema issue is resolved.
+Current reproducible setup path: render/inspect `Initialize-SreConfiguration.ps1`,
+approve its exact changes, then apply with a new external backup path. For legacy
+state use separately authorized `-AllowLegacyMigration`. Verify full read-back,
+then separately authorize a bounded incident/recovery rehearsal. Portal operation
+is optional, not the only automation path.
 
 ## 5. Induce the fault
 
@@ -202,6 +204,7 @@ Equivalent raw command:
 
 ```powershell
 az containerapp update `
+  --subscription $subscriptionId `
   --resource-group rg-arc-demo-infra `
   --name ca-arc-demo-fault `
   --set-env-vars SIMULATE_CRASH=true
@@ -220,20 +223,46 @@ Expected SRE Agent thread evidence:
 - RCA identifies the startup script intentionally exits when the env var is true.
 - If code context is connected, RCA includes file references to the fault mechanism and/or runbook.
 
-Do not manually reset the app before the agent proposes a fix.
+Before starting, assign a recovery owner and a hard observation deadline with
+best-effort reset to false on any error, timeout or unavailable approval.
+Normally wait for the agent's proposal, but never extend a safety deadline while
+waiting for it. Restore through the operator helper at the deadline and label
+that outcome as fallback. Do not repeat the fault to compensate for a missed
+approval without a new authorization.
+
+For a repeat rehearsal, first check the actual plan's **Reinvestigation
+cooldown**. Enabled cooldown merges recurring fires into the existing
+investigation and reopens resolved threads during the configured window; a
+resolved alert does not guarantee a new thread or approval card. The current
+demo plan uses the three-hour window. Do not change this setting or replay an
+old request merely to obtain a fresh approval. Any temporary change needs
+separate scoped authorization, a before-state backup and exact restoration.
+See [Azure Monitor reinvestigation cooldown](https://learn.microsoft.com/azure/sre-agent/response-plan).
 
 ## 7. Approve the governed fix
+
+Before the authorized fault, sign in to `https://sre.azure.com`, select the
+configured agent and be ready to open the new incident investigation. Expand
+the actual Azure infrastructure operation card, not just the RCA prose.
+Confirm the current thread, affected app, resource group, subscription and
+complete command. Narration such as "approved" or "applying" is not an approval
+record. If there is no actual card, do not send an approval message or enable
+Autonomous mode as a substitute.
 
 In the SRE Agent thread, the desired Review-mode action is:
 
 ```powershell
 az containerapp update `
+  --subscription $subscriptionId `
   --resource-group rg-arc-demo-infra `
   --name ca-arc-demo-fault `
   --set-env-vars SIMULATE_CRASH=false
 ```
 
-Select **Approve** on the Azure infrastructure operation card. Only an SRE Agent Administrator can approve the action. If the agent proposes a different write action, deny it and ask it to reset only `SIMULATE_CRASH=false` on the affected Container App.
+Select **Approve** only for the authorized reset on the current run's operation
+card. Only an SRE Agent Administrator can approve the action. If the agent
+proposes a different write, do not approve it; obtain a scoped decision before
+denying, cancelling or requesting another operation.
 
 Manual recovery fallback, only if live SRE remediation is unavailable:
 
@@ -247,6 +276,9 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 ```
 
 If this fallback is used, label the demo as "manual reset fallback"; do not claim closed-loop SRE remediation.
+After fallback, do not approve a stale pending repair card. Inspect current state
+and obtain scoped authorization before the signed-in administrator denies or
+cancels an obsolete request. Do not infer action-card status from thread narration.
 
 ## 8. Verify recovery
 
@@ -259,6 +291,7 @@ If this fallback is used, label the demo as "manual reset fallback"; do not clai
   -ShowMetrics
 
 $fqdn = az containerapp show `
+  --subscription $subscriptionId `
   --resource-group rg-arc-demo-infra `
   --name ca-arc-demo-fault `
   --query properties.configuration.ingress.fqdn `
@@ -273,7 +306,10 @@ Expected result:
 - new revision becomes healthy
 - app endpoint returns HTTP 200
 - `RestartCount` stops increasing
-- Azure Monitor alert resolves after the next evaluation cycle
+- Azure Monitor condition resolves after its healthy evaluation window; read it
+  separately from app recovery and alert workflow state. This run took about
+  17 minutes after the SRE write, not one immediate evaluation. Do not force-close
+  an alert or change its rule just to manufacture a pass.
 
 ## 9. Show the audit trail
 
@@ -284,6 +320,7 @@ Use three evidence points:
 
    ```powershell
    az monitor activity-log list `
+     --subscription $subscriptionId `
      --resource-id $containerAppId `
      --offset 2h `
      --query "[?operationName.value=='Microsoft.App/containerApps/write'].{time:eventTimestamp,caller:caller,status:status.value,operation:operationName.value}" `
@@ -292,21 +329,59 @@ Use three evidence points:
 
 3. Azure Monitor alert history showing fired and resolved states for `alert-arc-demo-containerapp-restarts`.
 
-## Evidence capture checklist
+For independent supported tool and routing evidence, open the agent's
+**Monitor > Logs** and query its Application Insights resource:
+
+```kusto
+customEvents
+| where timestamp > ago(2h)
+| where tostring(customDimensions.ThreadId) == "<CURRENT_THREAD_ID>"
+| where name in ("AgentToolExecution", "ApprovalDecision",
+    "AgentAzCliExecution", "IncidentActivitySnapshot")
+| project timestamp, name, customDimensions
+| order by timestamp asc
+```
+
+`ToolStart` confirms a request and its exact input, not completed execution.
+Correlate its `CallId` with `ToolEnd`, any `ApprovalDecision`, the actual Azure
+write caller and recovery. `IncidentActivitySnapshot` records the
+`ResponsePlanId`, mode and assisted/mitigated outcome. Absence of an event in a
+bounded query is not authoritative current approval-card state.
+See [Audit agent actions](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions).
+
+## Recorded evidence and future capture checklist
+
+### Current-schema retry - 2026-10-20
+
+| Evidence | Recorded result |
+|---|---|
+| Routing | New v3 Review investigation; old v2 routes remained disabled. |
+| Alert / investigation / RCA | Fired 01:20:55 UTC; independent thread 01:22:23; concrete crash-loop RCA and exact false-reset request 01:23:36. |
+| Approval | User reported clicking that exact new portal card; no independent ApprovalDecision event returned. |
+| Actual executor | Matching ToolEnd 01:28:35 plus Activity Log attribute the write to SRE UAMI; zero operator repair writes. |
+| App recovery | Revision28 healthy/ready, one replica/100% traffic and HTTP200; rechecked 01:47:47. |
+| Monitor recovery | Actual MonitorCondition resolved 01:45:58; separate workflow state remained Acknowledged; SRE thread Closed. |
+| Safety / preservation | Original enabled three-hour cooldown restored; all agent/filter/handler definitions unchanged apart from server metadata. |
+| Limits | Earlier run used operator fallback; last lifecycle snapshot predating closure is not current status. No destructive deletion-to-Ready or optional connector test. |
+
+Keep raw exports and runtime IDs private. Capture the same evidence for a
+separately authorized future run; this table does not certify its fresh state.
+
+### Historical F04 ledger - 2026-10-12, not current configuration
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| Arc-demo Container App deployed | Yes | Validated in subscription `6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5`; active healthy revision after SRE repair: `ca-arc-demo-fault--0000012` |
+| Arc-demo Container App deployed | Yes | Historical lab; active healthy revision after the recorded repair: `ca-arc-demo-fault--0000012` |
 | SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
 | Review-mode response plan enabled | Yes | Created through SRE portal after creating custom subagent `sre-arc-demo`; MCP `incidents_plans_list` shows `container-app-restart-review-v2` enabled, Sev2, mode `review` |
 | `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000011` became unhealthy with `RestartCount` > 0 |
-| Azure Monitor alert fired | Yes | Alert thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd`, alert ID `56ca7acd-84ad-4ff0-b660-26647566f000`, fired at `2026-10-12T01:38:34Z` |
+| Azure Monitor alert fired | Yes | Historical thread/alert IDs retained privately; fired at `2026-10-12T01:38:34Z`. |
 | SRE Agent RCA produced | Yes | RCA identified `SIMULATE_CRASH=true`, entrypoint exits with code 1, RestartCount starts at `01:36 UTC`, and previous revision `--0000010` was last healthy |
-| Review-mode action approved | Yes | Portal approval card executed `az containerapp update --name ca-arc-demo-fault --resource-group rg-arc-demo-infra --subscription 6ff7d039-8bfd-4cdb-8d74-f7a9f1eb9ff5 --set-env-vars SIMULATE_CRASH=false` |
+| Review-mode action approved | Yes | Historical portal card requested the exact Container App false reset in the confirmed lab subscription. |
 | Agent reset `SIMULATE_CRASH=false` | Yes | SRE Agent reported `SIMULATE_CRASH=false` applied and created revision `ca-arc-demo-fault--0000012` |
 | App recovered and alert resolved | Yes | Revision `ca-arc-demo-fault--0000012` became ready, RestartCount returned to 0, and SRE Agent closed the Sev2 alert |
-| Audit trail captured | Yes | Thread `e604887e-51c0-4249-9ffd-7bc6af6d82dd` includes alert payload, RCA, approved Azure CLI action, execution completion, recovery confirmation, and alert closure |
+| Audit trail captured | Yes | Historical transcript includes alert payload, RCA, approved Azure CLI action, execution, recovery and closure. It is not the current retry's independent write-actor evidence. |
 
 ## Local validation completed for this task
 

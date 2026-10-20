@@ -28,7 +28,7 @@ samples/lob-arc-app source repo
   -> Application log source ArcLobBridgeApp + text log under C:\ProgramData\ArcSreLobApp
   -> Log Analytics Event table through arc-demo AMA/DCR
   -> scheduled-query alert routed to ag-arc-demo
-  -> SRE Agent AzMonitor incident source + connected app code repository
+  -> SRE Agent AzMonitor incident source + optional explicitly authenticated code repository
 ```
 
 This is intentionally different from the earlier tasks:
@@ -44,14 +44,17 @@ This is intentionally different from the earlier tasks:
 ## App source and code context
 
 The sample app source used for SRE code context now lives in the public
-`arc-demo` repo at `samples/lob-arc-app`. Connect that repository in the SRE
-Agent portal:
+`arc-demo` repo at `samples/lob-arc-app`. Optionally connect that repository in the
+SRE Agent portal only after separate explicit authentication/consent:
 
 1. Open the SRE Agent.
 2. Go to **Builder** > **Knowledge sources**.
 3. Add `https://github.com/corey-skapin/arc-demo`.
 4. Deploy with `-SourceRepositoryUrl`, `-SourceCommit`, and `-SourcePath` so those
    values appear in the emitted Application events.
+
+A public URL in an event is not connector authentication. Neither connection nor
+source citation is required for the current signal-plus-operator-recovery claim.
 
 The previous 2026-10-12 lab run stamped events with the private
 `corey-skapin/sre-agent-demo` repo, so SRE could not read source code directly.
@@ -92,6 +95,7 @@ $namePrefix = 'arc-demo'
 $machineName = 'win-app-01'
 
 $targetArcId = az connectedmachine show `
+  --subscription $subscriptionId `
   --resource-group rg-arc-demo `
   --name $machineName `
   --query id `
@@ -111,10 +115,17 @@ Deploy or update the SRE Agent with the target Arc machine in scope:
 ```
 
 `High` assigns broad Contributor in the lab; keep the response plan in Review mode.
+Parent-only is not complete setup: Inspect and apply approved current-schema
+agent/v3 filters through `sre-response-plan-automation.md`, then read back routing.
+Do not redeploy merely to inspect an already configured running demo.
 For production-style hardening, reduce this to Reader + Log Analytics Reader +
 Arc Run command permissions.
 
 ## 2. Deploy and start the LOB app on the Arc server
+
+Guest deployment/fault/reset commands require separate authorization, an active
+Arc target and a bounded recovery owner. Do not run them during read-only
+readiness or as an unconditional hibernation step.
 
 ```powershell
 .\scripts\Invoke-LobArcAppOnArc.ps1 `
@@ -178,9 +189,10 @@ Create the scheduled-query alert routed to the existing arc-demo Action Group:
   -Action Create
 ```
 
-Then add the alert resource ID to the SRE Agent managed resources on the next
-SRE deployment/update, or at minimum ensure the response plan matches Azure Monitor
-alerts whose title contains `lob-arc-app-fault`.
+Verify the alert is in the intended managed-resource/access scope and that the
+existing v3 AzMonitor filter matches literal `lob-arc-app-fault`/Sev2, is enabled
+and routes to the intended custom handler in Review. A title match alone does not
+prove access or end-to-end readiness.
 
 ## 4. Induce and reset the app fault
 
@@ -200,8 +212,9 @@ Expected signal:
 - `ArcLobBridgeApp` Application Error event ID `4100`.
 - Log Analytics `Event` row within the ingestion window.
 - Scheduled-query alert fires and routes through `ag-arc-demo`.
-- SRE Agent opens an Azure Monitor incident and can inspect the Arc machine,
-  Log Analytics evidence, and the connected LOB app code repository.
+- SRE Agent opens an Azure Monitor incident. Arc/Log Analytics evidence supports
+  operator diagnosis; code inspection additionally depends on an authenticated
+  optional connector. Reliable final SRE RCA is not yet proven.
 
 Reset:
 
@@ -225,16 +238,20 @@ Collect logs/events:
 
 ## 5. SRE Agent response plan
 
-In the SRE Agent portal:
+Use the initializer in `sre-response-plan-automation.md` to converge and read back
+the existing `lob-arc-app-review-v3` filter rather than create a duplicate.
+In the SRE Agent portal, inspect:
 
 1. Open `sre-arc-demo`.
-2. Create or update an Azure Monitor response plan.
+2. Open the existing `lob-arc-app-review-v3` Azure Monitor route.
 3. Match alert title contains `lob-arc-app-fault`.
 4. Set severity `Sev2`.
 5. Keep autonomy level **Review**.
-6. Confirm the LOB app GitHub repository is connected in the knowledge base.
+6. Confirm the intended custom handling agent owns instructions/tools; no legacy
+   response-level fields or competing enabled v2 route.
+7. Inspect code knowledge only if separately connected and authorized.
 
-Desired investigation evidence:
+Desired future RCA evidence (not all currently reliable):
 
 - Incident source is Azure Monitor.
 - Alert query names `ArcLobBridgeApp` and `win-app-01`.
@@ -244,7 +261,7 @@ Desired investigation evidence:
 - Any proposed remediation is governed and limited to resetting the app config to
   `FaultMode=Healthy` and restarting the scheduled task via operator Arc Run Command.
 
-## Evidence capture checklist
+## Historical 2026-10-12 evidence ledger - not current readiness
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
@@ -256,7 +273,7 @@ Desired investigation evidence:
 | Scheduled-query alert created and routed to `ag-arc-demo` | Yes | Created through `New-LobArcAppMonitorAlert.ps1` ARM REST path; alert name `alert-arc-demo-lob-arc-app-fault`. |
 | `CrashOnProcessing` induced | Yes | Fault event Event ID `4100`, incident `t11-20261012022201`, generated from `win-app-01`. |
 | Log Analytics `Event` row observed | Yes | Event ID `4100` observed from `ArcLobBridgeApp` with repo, commit, source path, and incident ID in the payload. |
-| SRE Agent incident opened | Yes | Thread `b2e5a213-b4ed-45c2-a3c1-28bd7f2d653f` opened from Azure Monitor alert ID `fa2d5357-846b-ee76-c972-4745ac76001f`. |
+| SRE Agent incident opened | Yes | Historical thread and Azure Monitor alert IDs retained in private evidence. |
 | RCA cites Arc machine + app code context | Not reliable yet | Earlier SRE output had useful details, but the latest response-plan run stalled before final RCA. Do not use this as a live demo claim. |
 | Review-mode remediation proposed/executed | Partial | SRE proposed Arc Run Command reset. First generated command was too long; shorter follow-up returned a blank action result and did not reset the app. |
 | Reset verified healthy | Yes | Operator helper run command `t11-lob-resetfault-1012025040` set `FaultMode=Healthy`; status `t11-lob-status-1012025316` showed task Running, process alive, and healthy Event ID `4000` heartbeats. |
@@ -273,7 +290,7 @@ Desired investigation evidence:
   Monitor signal plus operator-approved/manual Arc Run Command recovery.
   SRE-executed Arc app repair is future investigation only.
 - Connect `https://github.com/corey-skapin/arc-demo` in the SRE Agent knowledge base
-  only if you want to continue hardening code-context RCA.
+  only with separate explicit authentication/consent when hardening code-context RCA.
 - Keep `arc-demo` standalone: no files in `C:\src\arc-demo` are changed for T11.
 
 ## Local validation completed for this package

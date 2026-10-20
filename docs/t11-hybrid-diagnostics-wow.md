@@ -23,8 +23,9 @@ Use this setup before touching the portal:
 > policy posture, logs, and alerts. At 2 AM, order processing starts failing. In
 > the old world, the first hour is figuring out which server, which logs, who owns
 > the app, and what changed. In this demo, Azure Monitor catches the application
-> event from the Arc server, SRE Agent investigates the incident, and the operator
-> gets a clear recovery action through Arc Run Command.
+> event from the Arc server and opens an SRE incident. The event/log evidence
+> gives the operator a clear recovery action through Arc Run Command; final SRE
+> RCA is not yet a reliable live claim.
 
 Key line:
 
@@ -47,6 +48,9 @@ Key line:
 ## Live commands
 
 Assumes `arc-demo` and `sre-agent` are deployed and the SRE response plan is ready.
+These are separately authorized guest/config/fault writes, not read-only
+preflight. Use a bounded recovery owner; prefer captured evidence unless the
+specific new fault/reset window is approved.
 
 ```powershell
 cd C:\src\sre-agent
@@ -133,7 +137,7 @@ hardened.
 
 Say:
 
-> The operator approves or performs the recovery through Arc Run Command. The
+> The operator performs the authorized recovery through Arc Run Command. The
 > important point is not that the agent magically repairs a datacenter server. The
 > important point is that the incident moved from an opaque server problem to a
 > precise diagnosis and governed Azure-side action.
@@ -149,7 +153,7 @@ If automatic SRE handoff does not fire during the meeting:
 1. Show the fault event in Log Analytics.
 2. Show the T11 evidence table in `t11-lob-app-on-arc-bridge.md`.
 3. Open the prior SRE thread evidence if available.
-4. Run `Status` and `ResetFault` live to prove Arc Run Command recovery.
+4. Run `Status`; use `ResetFault` only for the authorized, actually induced fault.
 5. State that the response-plan route is the part being troubleshot, not the Arc
    diagnostic model.
 

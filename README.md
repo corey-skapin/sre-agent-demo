@@ -118,19 +118,29 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 ### Complete Ready state
 
 `-ParentOnly` explicitly acknowledges that Bicep deploys only the control plane.
-Without it (or `-WhatIf`), deployment fails before cloud changes rather than
-claiming complete bootstrap. Run `Initialize-SreConfiguration.ps1` to render the
-versioned skin-specific handler/plans, then use the supported MCP/browser
-[ensure procedure](docs/sre-response-plan-automation.md). MCP lacks complete
-custom-handler read-back and plan update; `-Apply` on the initializer fails with an
-actionable capability requirement. No zero-touch data-plane guarantee is claimed.
+For complete parent-plus-configuration deployment supply a new
+`-ConfigurationBackupPath` outside git. For an already running parent, use
+`Initialize-SreConfiguration.ps1 -Inspect`, then separately authorized `-Apply
+-BackupPath <NEW_PATH>`; existing legacy plans also require `-AllowLegacyMigration`.
+The [current-schema procedure](docs/sre-response-plan-automation.md) uses pinned
+Microsoft IaC template protocols for full reads, named upserts and verification.
+Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
+P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review,
+and instructions/tools on the handling custom agent. No parent deletion is needed.
+Default v3 routes are staged disabled before explicitly retired v2 routes are
+disabled; only then are v3 routes enabled. Old objects/history remain. The
+unsupported existing legacy-handler update path is blocked before any write.
 
 Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
 -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.
 It is read-only and bounded (`-TimeoutSeconds`, default 180). The common Arc/SRE
 contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pending.
 It checks parent/Review/identity/RBAC/managed resources/scenario resource health
-and explicitly leaves unsupported handler/plan/telemetry verification pending.
+and reads full handler/plan/legacy-settings/routing configuration. Invalid
+priorities or legacy settings fail explicitly. The command does not ingest
+external rehearsal evidence: `telemetry-and-alerts` always remains pending in
+Ready mode, even after a separately proven run. Pair the JSON/exit 2 with that
+run's evidence; do not modify the report to manufacture exit 0.
 Parent success is never a routing-readiness certificate.
 
 Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
@@ -148,17 +158,34 @@ User, service-principal and managed-identity deployers are supported through
 
 Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
 an always-on charge, the off-state for this optional repo removes only the SRE
-Agent resource group and its RBAC grants on the Arc demo resource groups. The
-Arc demo estate stays intact.
+Agent resource group and known identity-owned RBAC grants at the subscription,
+Arc/observability-group and infra-group scopes. Other identities' external grants and
+the Arc estate stay intact. Unexpected resources or grants block deletion.
 
 ```powershell
-# Only after separately approving destructive cleanup; save principal/evidence first
+# Only after approved destructive cleanup; export configuration/evidence and
+# save the live identity principal first. See the complete lifecycle procedure:
+# docs\sre-response-plan-automation.md
+.\scripts\Hibernate-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> `
+  -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -WhatIf
+
+# Execute only the approved preview.
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json
 
+# Submission is asynchronous; repeat this read-only check within a bounded
+# observation window until pass, or report pending/failure without resubmitting.
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
+
 # Before the next demo — recreate the optional SRE layer
+# First reactivate and verify Arc through its own repo.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
@@ -166,7 +193,9 @@ Arc demo estate stays intact.
   -SkinPath .\config\demo-skin.json
 ```
 
-Reactivation also requires the handler/plan ensure and verification above.
+Verify SRE hibernation before parking Arc; wake Arc before reconstructing SRE.
+Reactivation also requires modern handler/v3-plan ensure and verification above,
+with a new external backup path and approval for actual changes.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
 re-established; a URL in the skin is not authentication. Save the old identity
@@ -175,6 +204,11 @@ principal and use readiness `-DesiredState Hibernated
 identity/partial state is safe to inspect; orphan checks without an old principal
 remain pending. WhatIf never selects a global account, revokes grants or writes a
 guest script.
+The saved Inspect export is a reference, not a replayable history/connector
+backup. Recreated SRE identity has a new principal; do not reuse old grants or
+reactivate retained legacy v2 handlers. A fresh deletion-to-Ready reconstruction
+has not been live-tested by the T09 rehearsal. Residual Arc/storage/monitoring
+charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 ## Scenario runbooks
 
@@ -191,13 +225,26 @@ guest script.
 
 ## Current validation stance
 
-The 2026-10-19 read-only baseline passes implemented ARM/resource/alert checks but
-is overall **pending** for handler/plan/routing/telemetry verification. Approved
-parent scope and T11 display-name-only corrections were read-back verified;
-the two existing response-plan title edits remain unexecuted because browser
-observation is fail-closed. Historical scenario evidence below is not a new
-full-lifecycle or alert-to-recovery rehearsal.
+The approved current-schema cutover was read-back verified: modern v3 routes
+enabled with Review/Sev2, old v2 routes disabled, handlers/history retained, and
+repeat inspection reporting zero changes. Title-only edits were insufficient.
+The separately authorized fresh T09 retry on 2026-10-20 verified the restart
+metric, new Azure Monitor alert, independent v3 Review investigation, concrete
+RCA and **SRE-executed repair**. The user reported approving the exact new reset
+card; the matching tool completion and Activity Log independently attribute the
+write to the SRE managed identity. The app recovered to a healthy ready revision,
+100% traffic and HTTP 200 with **zero operator fallback writes**. The original
+cooldown was restored. The earlier rehearsal's operator fallback is a distinct
+outcome, not the repair evidence for this retry.
+Actual MonitorCondition resolved at 01:45:58 UTC; the separate alert workflow
+state remained Acknowledged.
 
-- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
+The bounded audit did not return an independent `ApprovalDecision` event; retain
+that evidence limit rather than inventing one. Read actual MonitorCondition
+recovery separately from the agent closing an alert. Do not infer approval or
+execution from narration, approve an old card, or repeat a consumed one-shot
+fault authorization.
+
+- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.

@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'DemoSkin.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreConfiguration.psm1')
 
 function Get-SreReadinessReport {
     [CmdletBinding()]
@@ -86,9 +87,46 @@ function Get-SreReadinessReport {
                     }
                 }
             }
-            foreach ($id in @('handler-instructions', 'plan-status-review', 'plan-filters-handler', 'routing-conflicts', 'telemetry-and-alerts')) {
-                Add-Check $id $agentId 'pending' 'Verified supported MCP/browser read-back' $null 'Supported MCP lacks complete custom-handler read and plan update/read schema. Follow docs\sre-response-plan-automation.md; ARM success is not routing readiness.'
+            $session = $null
+            try {
+                $desired = Get-SreDesiredConfiguration -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath
+                $session = New-SreConfigurationSession -Desired $desired
+                $snapshot = Get-SreConfigurationSnapshot $session
+                $handlers = @($snapshot.subagents | Where-Object name -CEQ $desired.handler.name)
+                $handlerValid = $handlers.Count -eq 1 -and (Test-SreProperties $handlers[0].properties $desired.handler.properties)
+                if ($handlerValid -and $handlers[0].properties.Contains('instructionsOverride') -and $handlers[0].properties.instructionsOverride) { $handlerValid = $false }
+                Add-Check 'handler-instructions' $agentId $(if ($handlerValid) { 'pass' } else { 'fail' }) 'Versioned handler instructions and tools, no instructionsOverride' @($handlers | ForEach-Object { $_.name }) 'Full custom-agent read via pinned official export protocol; names alone are insufficient.'
+                $modeValid = $true
+                $filtersValid = $true
+                $observedPlans = @()
+                $legacyHandlers = @()
+                foreach ($plan in $desired.plans) {
+                    $matches = @($snapshot.filters | Where-Object name -CEQ $plan.name)
+                    if ($matches.Count -ne 1) { $modeValid = $false; $filtersValid = $false; continue }
+                    $properties = $matches[0].properties
+                    $modeValid = $modeValid -and $properties.isEnabled -and $properties.agentMode -ieq 'Review'
+                    $filtersValid = $filtersValid -and (Test-SreProperties $properties $plan.properties)
+                    $observedPlans += @{ name = $plan.name; mode = $properties.agentMode; enabled = $properties.isEnabled; priorities = $properties.priorities; title = $properties.titleContains; handler = $properties.handlingAgent }
+                }
+                $activeNames = @($snapshot.filters | Where-Object { $_.properties.isEnabled } | ForEach-Object { $_.name })
+                $legacyHandlers = @($snapshot.handlers | Where-Object {
+                    $_.incidentFilterId -in $activeNames -and -not $_['isDeleted'] -and
+                    ($_.customInstructions -or @($_.tools).Count -or @($_.incidentProcessingGuide).Count)
+                } | ForEach-Object { $_.id })
+                Add-Check 'plan-status-review' $agentId $(if ($modeValid) { 'pass' } else { 'fail' }) 'Each required existing plan enabled and Review' $observedPlans 'Reads actual plan properties, not MCP summary or parent mode.'
+                Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service and custom agent' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2.'
+                Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Active routing must not depend on legacy response settings. Retired disabled plans and their history may remain untouched.'
+                $owned = @($desired.plans | ForEach-Object { $_.name })
+                $retiredActive = @($activeNames | Where-Object { $_ -in $desired.retiredPlanNames })
+                Add-Check 'retired-routing-disabled' $agentId $(if ($retiredActive.Count) { 'fail' } else { 'pass' }) @() $retiredActive 'Explicitly retired routing must be disabled before modern routing is enabled; old objects/history are not deleted.'
+                $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin ($owned + @($desired.retiredPlanNames)) } | ForEach-Object { $_.name })
+                Add-Check 'routing-conflicts' $agentId $(if ($extra.Count) { 'fail' } else { 'pass' }) 'No unreviewed enabled extra plans' $extra 'Conservatively requires review of every enabled unowned plan; never deletes quickstart automatically.'
+            } catch {
+                Add-Check 'data-plane-inspection' $agentId 'fail' 'Successful supported full configuration read' $null $_.Exception.Message
+            } finally {
+                if ($session) { $session.token = $null }
             }
+            Add-Check 'telemetry-and-alerts' $agentId 'pending' 'Fresh separately authorized alert-to-thread/RCA/Review/recovery evidence' $null 'Configuration correctness does not certify a new automatic incident loop. This read-only command never injects a fault.'
             Add-Check 'code-repository-connection' $agentId 'skipped' 'Separate explicit authorization if needed' $null 'Public source context is not connector authentication.' $false
         }
         $expectedRoles = @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
