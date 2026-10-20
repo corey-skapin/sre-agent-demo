@@ -127,7 +127,9 @@ custom agent, old filters/handlers and incident history:
    downtime; do not induce a fault during cutover.
 5. Read back every operation and the complete final state. Each write compares
    the latest object against the expected backup/prior read-back, preserving
-   server defaults for a newly staged object. Stop on concurrent target changes.
+   server defaults for a newly staged object. Recheck for unowned enabled routes
+   before every write and confirm retired routes remain off before each modern
+   enable. Stop on concurrent target or routing changes.
    Read back an ambiguous timeout before retrying. At most three transient
    attempts; never bypass/retry 400/401/403.
 

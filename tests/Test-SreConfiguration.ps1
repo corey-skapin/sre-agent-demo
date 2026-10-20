@@ -57,11 +57,21 @@ try {
         $script:TestAgentReads = 0
         $script:TestOverlap = $false
         $script:TestRetiredNames = @()
+        $script:TestRoutingDrift = ''
         function script:Invoke-RestMethod {
             param($Uri, $Method, $TimeoutSec, $Headers, $ErrorAction, $ContentType, $Body)
             $script:TestCalls.Add("$Method $Uri")
             $collection = if ($Uri -match '/incidentPlayground/handlers') { 'handlers' } elseif ($Uri -match '/incidentFilters') { 'filters' } else { 'subagents' }
             if ($Method -eq 'Get') {
+                if ($collection -eq 'filters' -and $script:TestRoutingDrift -and
+                    @($script:TestCalls | Where-Object { $_ -like 'Put *' }).Count -eq 4) {
+                    if ($script:TestRoutingDrift -eq 'retired') {
+                        @($script:TestSnapshot.filters | Where-Object name -EQ $script:TestRetiredNames[0])[0].properties.isEnabled = $true
+                    } else {
+                        $script:TestSnapshot.filters += @{ name = 'concurrent-quickstart'; properties = @{ isEnabled = $true } }
+                    }
+                    $script:TestRoutingDrift = ''
+                }
                 if ($collection -eq 'subagents') {
                     $script:TestAgentReads++
                     if ($script:TestConcurrent -and $script:TestAgentReads -eq 2) {
@@ -121,7 +131,7 @@ try {
     Check (@($cutover.operations | Where-Object collection -EQ 'handlers').Count -eq 0) 'Modern reconstruction never updates legacy response handlers'
     & $module {
         param($Fixture, $RetiredNames)
-        $script:TestSnapshot = $Fixture
+        $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
         $script:TestRetiredNames = $RetiredNames
         $script:TestOverlap = $false; $script:TestForbidden = $false; $script:TestCalls.Clear()
     } $cutoverFixture $desired.retiredPlanNames
@@ -135,6 +145,19 @@ try {
         $again = Invoke-SreConfigurationReconcile $desired $session -BackupPath $other
         Check ($again.verified -and -not $again.changed) 'Cutover converges idempotently with retained disabled legacy objects'
     } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
+    foreach ($drift in @('retired', 'unowned')) {
+        & $module {
+            param($Fixture, $Drift)
+            $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            foreach ($filter in $script:TestSnapshot.filters) { $filter.properties.isEnabled = $true }
+            $script:TestCalls.Clear(); $script:TestRoutingDrift = $Drift
+        } $cutoverFixture $drift
+        $other = Join-Path ([IO.Path]::GetTempPath()) "sre-config-$([guid]::NewGuid()).json"
+        try {
+            Throws { Invoke-SreConfigurationReconcile $desired $session -BackupPath $other -AllowLegacyMigration } 'Concurrent routing change'
+            Check ((& $module { @($script:TestCalls | Where-Object { $_ -like 'Put *' }).Count }) -eq 4) "Concurrent $drift routing stops before any modern enable"
+        } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
+    }
     & $module {
         param($Fixture)
         $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
@@ -161,6 +184,6 @@ try {
     } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
 } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
-    & $module { Remove-Item Function:\Invoke-RestMethod; Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestOverlap,TestRetiredNames -Scope Script }
+    & $module { Remove-Item Function:\Invoke-RestMethod; Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestOverlap,TestRetiredNames,TestRoutingDrift -Scope Script }
 }
 Write-Host "SRE configuration: $count assertions passed."

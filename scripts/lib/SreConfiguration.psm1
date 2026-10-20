@@ -298,9 +298,18 @@ function Find-SreConfigurationObject {
 }
 
 function Set-SreConfigurationOperation {
-    param([Collections.IDictionary]$Session, [Collections.IDictionary]$Operation)
+    param([Collections.IDictionary]$Session, [Collections.IDictionary]$Operation, [Collections.IDictionary]$Desired)
     if ($Operation.method -ne 'Put') { throw 'SRE_EXISTING_HANDLER_UPDATE_UNVERIFIED: no source-verified update method; no write attempted.' }
-    $current = Find-SreConfigurationObject (Get-SreConfigurationSnapshot $Session) $Operation
+    $snapshot = Get-SreConfigurationSnapshot $Session
+    $ownedNames = @($Desired.plans | ForEach-Object { $_.name }) + @($Desired.retiredPlanNames)
+    if (@($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $ownedNames }).Count) {
+        throw 'Concurrent routing change: unowned enabled filter appeared during reconciliation; stop with the saved backup.'
+    }
+    if ($Operation.collection -eq 'filters' -and $Operation.after.properties.isEnabled -and
+        @($snapshot.filters | Where-Object { $_.name -in $Desired.retiredPlanNames -and $_.properties.isEnabled }).Count) {
+        throw 'Concurrent routing change: retired routing must remain disabled before enabling a modern filter.'
+    }
+    $current = Find-SreConfigurationObject $snapshot $Operation
     if ((Get-SreComparableJson $current) -cne (Get-SreComparableJson $Operation.before)) {
         throw "Concurrent change detected for $($Operation.name); stop and create a new backup/preview."
     }
@@ -369,7 +378,7 @@ function Invoke-SreConfigurationReconcile {
             foreach ($key in @('createdAt', 'updatedAt', 'configurationWarning')) { $null = $body.properties.Remove($key) }
             $operation.after = $body
         }
-        $observed = Set-SreConfigurationOperation -Session $Session -Operation $operation
+        $observed = Set-SreConfigurationOperation -Session $Session -Operation $operation -Desired $Desired
         $key = if ($operation.collection -eq 'handlers') { 'id' } else { 'name' }
         $expected[$operation.collection] = @($expected[$operation.collection] | Where-Object { $_[$key] -cne $operation.name }) + @($observed)
     }
