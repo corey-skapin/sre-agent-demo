@@ -1,14 +1,23 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: historically live validated for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. This is not certification of the current deployment: verify current handler instructions, existing plan title filters, Review mode and routing before a new rehearsal. Source-code repository connection remains optional and was not captured in the historical run.
+Status: live validated for current-schema v3 Review routing on 2026-10-20. The Container App fault, automatic Azure Monitor handoff, SRE RCA, actual SRE repair, healthy endpoint and MonitorCondition recovery were exercised. Verify handler instructions, filters, Review mode, routing and workload health again before any future authorized rehearsal. Source-code repository connection remains optional and was not captured.
 
-Latest current-schema rehearsal (2026-10-20): v3 Review routing generated a fired
-Sev2 alert, automatic SRE incident and concrete crash-loop RCA. No SRE write was
-verified during the bounded approval window; the authorized operator fallback
-reset the flag and verified a new healthy revision, full traffic and HTTP 200.
-Do not call this latest run SRE-executed repair or infer approval from the agent's
-own narration. Historical end-to-end proof remains distinct. Monitor alert
-recovery must be read back separately from app recovery.
+Latest current-schema retry (2026-10-20): a separately authorized fault generated
+a new Sev2 alert and independent v3 Review investigation. The user reported
+approving the exact new `SIMULATE_CRASH=false` card. Matching tool completion and
+Azure Activity Log prove that the SRE managed identity, not the operator,
+executed the repair. Revision `0000028` became healthy/ready with one replica,
+100% traffic and HTTP 200; the guard issued no operator reset. Its temporary
+cooldown disable was restored to the original three-hour setting.
+MonitorCondition resolved at 01:45:58 UTC, observed at 01:46:38 UTC; the separate
+alert workflow state remained Acknowledged.
+
+The earlier run used an operator fallback and is a separate outcome. The bounded
+audit did not return an independent `ApprovalDecision` event, so approval evidence
+is the user's actual portal report, not a fabricated telemetry record or the
+agent's narration. Read actual MonitorCondition recovery separately from alert
+workflow closure. Do not infer an outage from zero request-volume metrics alone;
+use revision/log evidence for the crash and an actual HTTP probe for availability.
 
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
@@ -316,7 +325,10 @@ Expected result:
 - new revision becomes healthy
 - app endpoint returns HTTP 200
 - `RestartCount` stops increasing
-- Azure Monitor alert resolves after the next evaluation cycle
+- Azure Monitor condition resolves after its healthy evaluation window; read it
+  separately from app recovery and alert workflow state. This run took about
+  17 minutes after the SRE write, not one immediate evaluation. Do not force-close
+  an alert or change its rule just to manufacture a pass.
 
 ## 9. Show the audit trail
 

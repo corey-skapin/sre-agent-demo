@@ -202,14 +202,23 @@ guest script.
 The approved current-schema cutover was read-back verified: modern v3 routes
 enabled with Review/Sev2, old v2 routes disabled, handlers/history retained, and
 repeat inspection reporting zero changes. Title-only edits were insufficient.
-The 2026-10-20 single controlled T09 rehearsal proved the restart metric, fired
-Azure Monitor alert, automatic SRE incident and concrete RCA. Review execution
-was not verified within the bounded window, so the authorized operator fallback
-restored the app to a healthy revision and HTTP 200. This is **not a fresh
-SRE-executed closed-loop pass**. Do not infer approval/execution from agent
-narration, repeat the fault without authorization, or present historical
-end-to-end evidence below as today's completed loop.
+The separately authorized fresh T09 retry on 2026-10-20 verified the restart
+metric, new Azure Monitor alert, independent v3 Review investigation, concrete
+RCA and **SRE-executed repair**. The user reported approving the exact new reset
+card; the matching tool completion and Activity Log independently attribute the
+write to the SRE managed identity. The app recovered to a healthy ready revision,
+100% traffic and HTTP 200 with **zero operator fallback writes**. The original
+cooldown was restored. The earlier rehearsal's operator fallback is a distinct
+outcome, not the repair evidence for this retry.
+Actual MonitorCondition resolved at 01:45:58 UTC; the separate alert workflow
+state remained Acknowledged.
 
-- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
+The bounded audit did not return an independent `ApprovalDecision` event; retain
+that evidence limit rather than inventing one. Read actual MonitorCondition
+recovery separately from the agent closing an alert. Do not infer approval or
+execution from narration, approve an old card, or repeat a consumed one-shot
+fault authorization.
+
+- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.

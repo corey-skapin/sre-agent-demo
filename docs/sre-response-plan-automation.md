@@ -145,9 +145,17 @@ The approved six-write cutover was verified live on 2026-10-19 through these
 published v2 contracts: both modern filters enabled in Review/Sev2, both retired
 filters disabled, and old handlers/history retained. This validates configuration
 reconciliation, not a fresh incident/recovery rehearsal or destructive rebuild.
-The subsequent 2026-10-20 one-shot rehearsal verified fired alert, automatic
-incident and concrete T09 RCA. The bounded operator fallback restored the app
-when Review execution was not verified in time; that is not SRE-executed repair.
+The first 2026-10-20 rehearsal verified alert/incident/RCA and operator fallback.
+A separately authorized fresh retry then verified an independent v3 Review
+investigation and actual SRE-managed-identity repair, matching tool completion,
+healthy ready revision, full traffic and HTTP 200 with no operator reset.
+The user reported approving the exact new portal card. No independent
+`ApprovalDecision` event was returned in the bounded official audit query.
+Only T09 cooldown was temporarily disabled to avoid configured thread merging;
+the independent new thread was verified. The original enabled three-hour value
+and Review mode were read-back restored.
+Actual MonitorCondition resolved at 01:45:58 UTC, independently read back;
+alert workflow state remained Acknowledged. This is separate from closing an incident.
 Supported MCP thread reads expose narration, not an actionable approval
 contract. Never use unrestricted approval/yolo to bridge that capability gap,
 and never treat the agent saying "approved" as proof of approval or execution.

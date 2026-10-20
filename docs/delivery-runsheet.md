@@ -17,24 +17,30 @@ Recommended delivery: **60-70 minutes** plus pre-demo setup. Shorten by skipping
 
 Current status for T13:
 
-The scenario claims below describe historical live evidence, not today's
-go/no-go. Before presenting T09 live, read back both existing title filters,
+The scenario claims below include current and historical live evidence, not an
+automatic future go/no-go. Before presenting a new T09 fault, read back both existing title filters,
 handler instructions, enabled/Review settings and routing conflicts, then perform
 an explicitly authorized bounded rehearsal with recovery. A healthy app and
 passing ARM checks alone are not proof of automatic SRE handoff. If these gates
 remain pending, show historical T09 evidence honestly and use the current healthy
 Arc/Monitor estate for the live walkthrough; do not induce a fault to find out.
 
-Latest current-schema T09 rehearsal (2026-10-20) proved automatic alert handoff
-and concrete RCA. The bounded operator fallback restored the app because actual
-Review-approved SRE execution was not verified in time. Present that as
-**automatic diagnosis plus operator recovery**, not a fresh closed-loop pass.
-Use the captured incident/RCA for this run; its single-fault authorization is
-consumed. A new live fault needs fresh authorization and an available signed-in
-SRE Agent Administrator for the exact Review action.
+Latest current-schema T09 retry (2026-10-20) proved new automatic alert handoff,
+independent v3 Review investigation, concrete RCA and **SRE-executed repair**.
+The user reported clicking the exact new approval card; matching tool completion
+and Activity Log attribute repair to the SRE identity, with no operator fallback.
+The app was verified healthy/ready with full traffic and HTTP 200; original
+cooldown was restored. The earlier operator-assisted rehearsal is separate.
+Actual MonitorCondition resolved at 01:45:58 UTC while alert workflow state
+remained Acknowledged.
+No independent `ApprovalDecision` event was returned in the bounded audit, and
+MonitorCondition recovery must be verified separately from alert closure.
+Use the captured new investigation and actual audit, not stale approval cards.
+Both one-shot authorizations are consumed. Any new live fault needs fresh
+authorization, a bounded recovery owner and a ready SRE Agent Administrator.
 
 - Act 1 Arc/Monitor assets are built in `C:\src\arc-demo`; portal visuals depend on a live deployment and data ingestion.
-- T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, recovery, and alert closure.
+- T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, healthy app and actual MonitorCondition recovery.
 - T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready** and should be described only as possible future capability.
 - T11 LOB-on-Arc bridge is live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do **not** present T11 as a proven SRE RCA or autonomous repair path.
 - Present T09 as the fully closed-loop "wow" path. Present T10/T11 as hybrid signal, diagnosis package, and governed operator remediation through Arc Run Command.
@@ -159,7 +165,7 @@ what safe action to take." Keep governance explicit.
 |---|---:|---|---|---|---|
 | 2.1 Honest status reset | 1 min | State which SRE paths are live-proven today. | This runsheet; T09/T10/T11 evidence checklists | "The Azure-native Container App path is closed-loop proven. The Arc-server paths are proven for signal, evidence, and operator Arc Run Command recovery. We are not selling autonomous Arc server repair in this demo." | Required honesty marker |
 | 2.2 Optional SRE layer architecture | 3 min | Show `sre-agent` README, Review mode, AzMonitor incident source, RBAC profiles, and separation from `arc-demo`. | `C:\src\sre-agent\README.md`, `infra\main.bicep`, `scripts\Deploy-SreAgent.ps1` | "The agent layers on top. It reads existing Arc/Monitor resources; it does not redeploy or modify arc-demo." | Built / locally validated |
-| 2.3 T09 native Container App wow | 10-12 min | Induce `SIMULATE_CRASH=true`, wait for `alert-arc-demo-containerapp-restarts`, show SRE RCA, approve reset to `false`, verify endpoint and audit. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "This shows the closed-loop future that is already real for Azure-native workloads." | Live validated |
+| 2.3 T09 native Container App wow | 10-12 min | Show the captured current incident, RCA, exact Review action, SRE write caller and live healthy endpoint. Induce a new fault only in a separately authorized bounded window with the administrator ready. | `docs\t09-native-containerapp-closed-loop.md`, `scripts\Invoke-NativeContainerAppFault.ps1`, `C:\src\arc-demo\docs\container-app-fault.md` | "This shows governed SRE execution for Azure-native workloads, with the actual repair actor independently verified." | Current SRE repair verified; keep MonitorCondition and approval-record evidence boundaries explicit |
 | 2.4 T11 hybrid diagnostics wow | 8-10 min | Show the LOB app fault on an Arc server: Event ID `4100`, Azure Monitor alert, SRE incident creation if configured, evidence package, and operator Arc Run Command recovery. | `docs\t11-hybrid-diagnostics-wow.md`, `docs\t11-lob-app-on-arc-bridge.md`, `scripts\Invoke-LobArcAppOnArc.ps1`, `scripts\New-LobArcAppMonitorAlert.ps1` | "This is the on-prem-shaped wow: Arc turns an opaque datacenter app failure into Azure-side evidence and a governed operator action. The current proven claim is signal plus operator recovery, not autonomous repair." | Live validated for alert + incident creation + manual Arc recovery; SRE RCA generation is not yet reliable |
 | 2.5 T10 backstage evidence | 2-3 min | Mention only if the audience wants proof of the mechanics: Arc Run Command works, SRE can reason over Arc evidence, autonomous Arc repair is future-only. Do not run T10 as the main demo scene. | `docs\t10-sre-on-arc-experiment.md`, `scripts\Invoke-T10ArcFault.ps1` | "T10 is the engineering proof behind the T11 story, not the main customer scene." | Backstage evidence |
 | 2.6 Governance and audit | 2 min | Reinforce Review mode, approval card, RBAC, Activity Log, SRE thread audit. | T09 section 9; README RBAC table | "AI can recommend and execute only inside Azure RBAC, Review approval, and auditable operations." | Built design; live audit requires run |
