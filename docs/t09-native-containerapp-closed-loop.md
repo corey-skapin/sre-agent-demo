@@ -242,7 +242,24 @@ waiting for it. Restore through the operator helper at the deadline and label
 that outcome as fallback. Do not repeat the fault to compensate for a missed
 approval without a new authorization.
 
+For a repeat rehearsal, first check the actual plan's **Reinvestigation
+cooldown**. Enabled cooldown merges recurring fires into the existing
+investigation and reopens resolved threads during the configured window; a
+resolved alert does not guarantee a new thread or approval card. The current
+demo plan uses the three-hour window. Do not change this setting or replay an
+old request merely to obtain a fresh approval. Any temporary change needs
+separate scoped authorization, a before-state backup and exact restoration.
+See [Azure Monitor reinvestigation cooldown](https://learn.microsoft.com/azure/sre-agent/response-plan).
+
 ## 7. Approve the governed fix
+
+Before the authorized fault, sign in to `https://sre.azure.com`, select the
+configured agent and be ready to open the new incident investigation. Expand
+the actual Azure infrastructure operation card, not just the RCA prose.
+Confirm the current thread, affected app, resource group, subscription and
+complete command. Narration such as "approved" or "applying" is not an approval
+record. If there is no actual card, do not send an approval message or enable
+Autonomous mode as a substitute.
 
 In the SRE Agent thread, the desired Review-mode action is:
 
@@ -253,7 +270,10 @@ az containerapp update `
   --set-env-vars SIMULATE_CRASH=false
 ```
 
-Select **Approve** on the Azure infrastructure operation card. Only an SRE Agent Administrator can approve the action. If the agent proposes a different write action, deny it and ask it to reset only `SIMULATE_CRASH=false` on the affected Container App.
+Select **Approve** only for the authorized reset on the current run's operation
+card. Only an SRE Agent Administrator can approve the action. If the agent
+proposes a different write, do not approve it; obtain a scoped decision before
+denying, cancelling or requesting another operation.
 
 Manual recovery fallback, only if live SRE remediation is unavailable:
 
@@ -268,7 +288,8 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 
 If this fallback is used, label the demo as "manual reset fallback"; do not claim closed-loop SRE remediation.
 After fallback, do not approve a stale pending repair card. Inspect current state
-and have the signed-in administrator deny/dismiss an obsolete request if present.
+and obtain scoped authorization before the signed-in administrator denies or
+cancels an obsolete request. Do not infer action-card status from thread narration.
 
 ## 8. Verify recovery
 
@@ -313,6 +334,26 @@ Use three evidence points:
    ```
 
 3. Azure Monitor alert history showing fired and resolved states for `alert-arc-demo-containerapp-restarts`.
+
+For independent supported tool and routing evidence, open the agent's
+**Monitor > Logs** and query its Application Insights resource:
+
+```kusto
+customEvents
+| where timestamp > ago(2h)
+| where tostring(customDimensions.ThreadId) == "<CURRENT_THREAD_ID>"
+| where name in ("AgentToolExecution", "ApprovalDecision",
+    "AgentAzCliExecution", "IncidentActivitySnapshot")
+| project timestamp, name, customDimensions
+| order by timestamp asc
+```
+
+`ToolStart` confirms a request and its exact input, not completed execution.
+Correlate its `CallId` with `ToolEnd`, any `ApprovalDecision`, the actual Azure
+write caller and recovery. `IncidentActivitySnapshot` records the
+`ResponsePlanId`, mode and assisted/mitigated outcome. Absence of an event in a
+bounded query is not authoritative current approval-card state.
+See [Audit agent actions](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions).
 
 ## Evidence capture checklist
 
