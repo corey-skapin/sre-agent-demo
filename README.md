@@ -199,12 +199,16 @@ guest script.
 
 ## Current validation stance
 
-The 2026-10-19 ARM/resource/alert baseline passed, and approved parent scope/T11
-display-name corrections were verified. Subsequent portal and full supported
-service reads found invalid AzMonitor P1/P2 plus legacy response-level settings.
-Title-only edits are insufficient; use the current-schema migration procedure.
-The new code and preview do not imply that migration or a new alert-to-recovery
-rehearsal has run. Historical scenario evidence below is not today's routing proof.
+The approved current-schema cutover was read-back verified: modern v3 routes
+enabled with Review/Sev2, old v2 routes disabled, handlers/history retained, and
+repeat inspection reporting zero changes. Title-only edits were insufficient.
+The 2026-10-20 single controlled T09 rehearsal proved the restart metric, fired
+Azure Monitor alert, automatic SRE incident and concrete RCA. Review execution
+was not verified within the bounded window, so the authorized operator fallback
+restored the app to a healthy revision and HTTP 200. This is **not a fresh
+SRE-executed closed-loop pass**. Do not infer approval/execution from agent
+narration, repeat the fault without authorization, or present historical
+end-to-end evidence below as today's completed loop.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, recovery, and alert closure.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.

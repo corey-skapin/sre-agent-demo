@@ -10,7 +10,7 @@ adds the T09/T10/T11 SRE scenarios.
 
 ## Current validated stance
 
-- **T09 Container App** is the only fully validated closed-loop SRE path:
+- **T09 Container App** is the only historically fully validated closed-loop SRE path:
   Azure Monitor alert -> SRE RCA -> Review approval -> SRE-executed repair ->
   recovery verification.
 - **T10/T11 Arc paths** are validated for signal/evidence plus governed operator
@@ -19,6 +19,13 @@ adds the T09/T10/T11 SRE scenarios.
   Monitor alerting, SRE incident creation, and operator recovery. The latest live
   run showed SRE RCA generation can stall, so do not present T11 as reliable SRE
   RCA yet.
+
+The current-schema rehearsal on 2026-10-20 verified automatic T09 alert handoff
+and concrete RCA, but not Review-approved SRE execution. The bounded operator
+fallback restored a healthy app; do not call that a new closed-loop pass.
+Inspect actual approval/executor evidence, not the agent's "approved" narration.
+Do not repeat an already-consumed one-shot fault authorization or approve a stale
+repair after operator recovery.
 
 ## Start here
 

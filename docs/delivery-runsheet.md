@@ -25,6 +25,14 @@ passing ARM checks alone are not proof of automatic SRE handoff. If these gates
 remain pending, show historical T09 evidence honestly and use the current healthy
 Arc/Monitor estate for the live walkthrough; do not induce a fault to find out.
 
+Latest current-schema T09 rehearsal (2026-10-20) proved automatic alert handoff
+and concrete RCA. The bounded operator fallback restored the app because actual
+Review-approved SRE execution was not verified in time. Present that as
+**automatic diagnosis plus operator recovery**, not a fresh closed-loop pass.
+Use the captured incident/RCA for this run; its single-fault authorization is
+consumed. A new live fault needs fresh authorization and an available signed-in
+SRE Agent Administrator for the exact Review action.
+
 - Act 1 Arc/Monitor assets are built in `C:\src\arc-demo`; portal visuals depend on a live deployment and data ingestion.
 - T09 native Container App SRE loop is live validated end to end: alert, RCA, Review approval, SRE repair, recovery, and alert closure.
 - T10 Arc-server value is live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready** and should be described only as possible future capability.

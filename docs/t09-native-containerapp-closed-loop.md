@@ -2,6 +2,14 @@
 
 Status: historically live validated for the Azure-native path. The Container App fault, automatic Azure Monitor incident handoff, SRE RCA, Review-mode approval, SRE-executed repair, recovery verification, and alert closure were exercised in Azure. This is not certification of the current deployment: verify current handler instructions, existing plan title filters, Review mode and routing before a new rehearsal. Source-code repository connection remains optional and was not captured in the historical run.
 
+Latest current-schema rehearsal (2026-10-20): v3 Review routing generated a fired
+Sev2 alert, automatic SRE incident and concrete crash-loop RCA. No SRE write was
+verified during the bounded approval window; the authorized operator fallback
+reset the flag and verified a new healthy revision, full traffic and HTTP 200.
+Do not call this latest run SRE-executed repair or infer approval from the agent's
+own narration. Historical end-to-end proof remains distinct. Monitor alert
+recovery must be read back separately from app recovery.
+
 This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo` Container App workload:
 
 1. deploy `arc-demo` with `-DeployContainerApps $true`
@@ -227,7 +235,12 @@ Expected SRE Agent thread evidence:
 - RCA identifies the startup script intentionally exits when the env var is true.
 - If code context is connected, RCA includes file references to the fault mechanism and/or runbook.
 
-Do not manually reset the app before the agent proposes a fix.
+Before starting, assign a recovery owner and a hard observation deadline with
+best-effort reset to false on any error, timeout or unavailable approval.
+Normally wait for the agent's proposal, but never extend a safety deadline while
+waiting for it. Restore through the operator helper at the deadline and label
+that outcome as fallback. Do not repeat the fault to compensate for a missed
+approval without a new authorization.
 
 ## 7. Approve the governed fix
 
@@ -254,6 +267,8 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 ```
 
 If this fallback is used, label the demo as "manual reset fallback"; do not claim closed-loop SRE remediation.
+After fallback, do not approve a stale pending repair card. Inspect current state
+and have the signed-in administrator deny/dismiss an obsolete request if present.
 
 ## 8. Verify recovery
 

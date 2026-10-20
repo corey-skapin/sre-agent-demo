@@ -145,6 +145,12 @@ The approved six-write cutover was verified live on 2026-10-19 through these
 published v2 contracts: both modern filters enabled in Review/Sev2, both retired
 filters disabled, and old handlers/history retained. This validates configuration
 reconciliation, not a fresh incident/recovery rehearsal or destructive rebuild.
+The subsequent 2026-10-20 one-shot rehearsal verified fired alert, automatic
+incident and concrete T09 RCA. The bounded operator fallback restored the app
+when Review execution was not verified in time; that is not SRE-executed repair.
+Supported MCP thread reads expose narration, not an actionable approval
+contract. Never use unrestricted approval/yolo to bridge that capability gap,
+and never treat the agent saying "approved" as proof of approval or execution.
 
 ## Deployment, readiness and lifecycle
 
