@@ -244,9 +244,18 @@ future reuse follow identical IaC without an extra identity group or manual iden
 Full removal of the retained group/identity requires separate explicit approval;
 `Hibernate-SreAgent.ps1` deliberately has no group/identity deletion path.
 
+SRE Agent's [always-on charge](https://learn.microsoft.com/azure/sre-agent/pricing-billing)
+is **4 Azure Agent Units per agent-hour while the parent exists**, including when
+it is Stopped. Stopping is not the repo's deletion-based hibernation and does not
+remove that baseline charge. `High`/`Low` are permission profiles, not pricing tiers.
+See `docs\sre-cost-and-demo-fidelity.md` for billing assumptions, remaining Monitor
+costs and why a cheaper-looking model, retention setting or cap is not a safe
+automatic demo downgrade. Keep a requested running demo running.
+
 ## Scenario runbooks
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
+- `docs\sre-cost-and-demo-fidelity.md` - SRE cost levers, parking tradeoffs and demo-preserving boundaries.
 - `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
 - `docs\sre-sales-rollout-guidance.md` - Internal sales, PoC and rollout guidance for SRE Agent conversations.
 - `docs\clean-room-shareability-test-2026-10-12.md` - No-cost clean-room preview result across both repos.
