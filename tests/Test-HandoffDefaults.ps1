@@ -37,4 +37,10 @@ foreach ($name in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
 }
 $manifest = Get-Content (Join-Path $root 'samples\lob-arc-app\source-context.example.json') -Raw | ConvertFrom-Json
 Check ($manifest.repositoryUrl -eq '' -and $manifest.commit -eq '') 'Sample manifest requires operator-supplied external source context'
+$docsRoot = Join-Path $root 'docs'
+$docsIndex = Get-Content -LiteralPath (Join-Path $docsRoot 'README.md') -Raw
+foreach ($document in $files | Where-Object { $_.StartsWith('docs/') -and $_.EndsWith('.md') }) {
+    $link = $document.Substring('docs/'.Length)
+    Check ($docsIndex.Contains("]($link)")) "Docs index links every Markdown document: $link"
+}
 Write-Host "$count handoff assertions passed across $($files.Count) tracked files. This checks reusable defaults, not all possible identifying text or secrets."

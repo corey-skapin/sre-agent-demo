@@ -6,6 +6,8 @@ account, territory, internal-chat, pipeline or consumption dataset.
 Confirm current product prerequisites, capabilities and commercial terms before
 using this in a proposal. This is not a customer-specific eligibility assessment,
 pricing offer or a zero-cost hibernation claim.
+This is optional workshop planning, not a portal runsheet; presenters start with
+[the docs map](README.md) and [canonical combined guide](delivery-runsheet.md).
 
 ## Positioning
 
@@ -133,7 +135,9 @@ For the Arc + Monitor + SRE demo, the suggested path is:
 
 1. Use the Arc + Monitor demo to earn the operations-plane conversation.
 2. Use Defender for Cloud recommendations as the security co-sell.
-3. Use T09 as the live closed-loop SRE proof.
+3. Use T09 as live closed-loop SRE proof only after a separately authorized
+   current-instance rehearsal; otherwise label historical evidence or show the
+   configured healthy workload without claiming a new completed loop.
 4. Use T11 as the hybrid evidence and operator recovery proof.
 5. Close on a two-day PoC or workshop, not on broad autonomous remediation.
 
@@ -147,7 +151,9 @@ During Act 1, establish the customer already has:
 - data in Azure Monitor.
 
 During Act 2, show SRE Agent on the Azure-native Container App path first. This
-is the reliable closed-loop proof.
+is the validated closed-loop capability, not an unconditional claim that a newly
+reconstructed instance has completed it. Follow the canonical guide's live gates
+and evidence-only fallback.
 
 Then position hybrid Arc scenarios as the next trust-building step:
 
@@ -160,7 +166,7 @@ Then position hybrid Arc scenarios as the next trust-building step:
 
 Use:
 
-- “Start in Review mode so engineers approve proposed actions.”
+- “Start in Review mode so engineers approve proposed Azure infrastructure actions.”
 - “The first win is investigation quality, not autonomous repair.”
 - “The PoC should use a real non-production workload and a real alert.”
 - “Consumption tells us where adoption exists, but it does not replace account

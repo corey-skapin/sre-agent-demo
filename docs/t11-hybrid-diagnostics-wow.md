@@ -1,5 +1,10 @@
 # T11 hybrid diagnostics wow - LOB app on Arc
 
+**Optional story/operator reference.** The
+[canonical combined guide](delivery-runsheet.md) contains the short read-only
+presenter scene. Its navigation rehearsal does not require any command below.
+Historical evidence here does not certify a newly reconstructed SRE instance.
+
 ## Purpose
 
 This is the customer-facing Arc/on-prem SRE moment.
@@ -39,18 +44,20 @@ Key line:
 |---|---|---|
 | 1 | Arc server `win-app-01` | The affected machine is a `Microsoft.HybridCompute/machines` resource, not a native app service. |
 | 2 | LOB app code context | Local sample: `samples/lob-arc-app/LobArcBridgeApp.ps1`; external source context is optional and operator-supplied. |
-| 3 | Fault induction | `FaultMode=CrashOnProcessing` creates Event ID `4100` from `ArcLobBridgeApp`. |
+| 3 | Existing, dated fault evidence if available | Explain that `FaultMode=CrashOnProcessing` creates sample Event ID `4100` from `ArcLobBridgeApp`; do not induce it during the ordinary walkthrough. |
 | 4 | Azure Monitor alert | Alert title contains `lob-arc-app-fault`; source is Log Analytics `Event`. |
-| 5 | SRE Agent thread | Incident creation is proven when response plans are configured; RCA is the desired quality bar, but latest live run stalled before final diagnostic output. |
+| 5 | SRE Agent thread | A historical instance created an incident, but final T11 RCA stalled. A missing current thread is an evidence limit, not permission to generate a new one. |
 | 6 | Operator recovery | Arc Run Command resets app config to `Healthy` and restarts the scheduled task. |
 | 7 | Verification | Event ID `4000` healthy heartbeat returns. |
 
-## Live commands
+## Optional operator rehearsal commands, not presenter actions
 
 Assumes `arc-demo` and `sre-agent` are deployed and the SRE response plan is ready.
 These are separately authorized guest/config/fault writes, not read-only
 preflight. Use a bounded recovery owner; prefer captured evidence unless the
 specific new fault/reset window is approved.
+Even `-Action Status` executes an Arc guest Run Command. For a read-only
+navigation rehearsal use existing workspace events and recorded results instead.
 
 ```powershell
 cd C:\src\sre-agent

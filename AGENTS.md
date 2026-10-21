@@ -36,13 +36,22 @@ repair after operator recovery.
 
 ## Start here
 
-For a live demo or customer rehearsal, use only this presenter path:
+For a first-time presenter, use this minimal path:
 
-1. `docs\delivery-runsheet.md` - main story and timings across both repos.
-2. `C:\src\arc-demo\docs\runsheet.md` - Act 1 Arc/Monitor walkthrough.
-3. `docs\t09-native-containerapp-closed-loop.md` - primary SRE wow path.
-4. `docs\t11-hybrid-diagnostics-wow.md` - hybrid Arc evidence/recovery path.
-5. `docs\sre-response-plan-automation.md` - setup or repair SRE response plans.
+1. `docs\README.md` - complete document map, audience/status and reading order.
+2. `docs\delivery-runsheet.md` - single combined guide, private input card,
+   read-only rehearsal, numbered portal actions, expected results and fallback.
+3. Companion Arc `docs\runsheet.md#present-the-arcmonitor-demo` - detailed UI
+   reference for the combined guide's short Arc segment, not a second full talk.
+
+T09 is an operator fault/recovery reference, not a second presentation.
+T11 wow is an optional talk-track reference; response-plan automation is for setup
+or repair. Do not execute their writes during a navigation-only rehearsal.
+The reconstructed instance's configuration was verified, not a new end-to-end
+fault/approval/repair cycle. Preserve that caveat until actual new proof exists.
+Ground portal instructions in current Learn and actual visible controls; published
+SRE pages show different layouts. Mark unobserved UI and use verified private
+bookmarks/read-only Inspect instead of inventing a click path or approval button.
 
 Treat these as engineering references, not presenter source-of-truth:
 
