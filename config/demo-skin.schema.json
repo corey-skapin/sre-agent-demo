@@ -53,10 +53,15 @@
       "type": "object", "additionalProperties": false,
       "required": ["lobRepositoryUrl", "lobSourceCommit", "lobSourcePath"],
       "properties": {
-        "lobRepositoryUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
-        "lobSourceCommit": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "lobRepositoryUrl": { "type": "string", "pattern": "^$|^https://[^\\s]+$" },
+        "lobSourceCommit": { "type": "string", "pattern": "^$|^[A-Za-z0-9._-]+$" },
         "lobSourcePath": { "type": "string", "minLength": 1 }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "lobRepositoryUrl": { "const": "" } } },
+        "then": { "properties": { "lobSourceCommit": { "const": "" } } },
+        "else": { "properties": { "lobSourceCommit": { "minLength": 1 } } }
+      }]
     },
     "tags": { "type": "object", "additionalProperties": { "type": "string" } }
   }

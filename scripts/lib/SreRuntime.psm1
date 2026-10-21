@@ -14,19 +14,38 @@ function Assert-SreContextIds {
     }
 }
 
+function Get-SreAzInvocation {
+    param([Parameter(Mandatory)][object]$Command)
+    if ($Command.CommandType -eq 'Application' -and [IO.Path]::GetExtension($Command.Source) -in @('.cmd', '.bat')) {
+        $python = [IO.Path]::GetFullPath((Join-Path (Split-Path $Command.Source -Parent) '..\python.exe'))
+        if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
+            throw 'Windows Azure CLI launcher requires its bundled python.exe. Repair the Azure CLI installation; unsafe cmd.exe argument forwarding is not used.'
+        }
+        # Match the MSI launcher without cmd.exe interpreting query/guest arguments.
+        return @{ command = $python; prefix = @('-IBm', 'azure.cli'); installer = 'MSI' }
+    }
+    return @{ command = 'az'; prefix = @(); installer = $null }
+}
+
 function Invoke-SreAz {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$Arguments, [Parameter(Mandatory)][string]$SubscriptionId)
-    if (-not (Get-Command az -ErrorAction SilentlyContinue)) { throw 'Azure CLI (az) is required.' }
+    $az = Get-Command az -ErrorAction SilentlyContinue
+    if (-not $az) { throw 'Azure CLI (az) is required.' }
+    $invocation = Get-SreAzInvocation -Command $az
+    $prefix = $invocation.prefix
+    $previousInstaller = [Environment]::GetEnvironmentVariable('AZ_INSTALLER', 'Process')
     $stderrPath = [IO.Path]::GetTempFileName()
     try {
-        $output = & az @Arguments --subscription $SubscriptionId --only-show-errors 2> $stderrPath
+        if ($invocation.installer) { [Environment]::SetEnvironmentVariable('AZ_INSTALLER', $invocation.installer, 'Process') }
+        $output = & $invocation.command @prefix @Arguments --subscription $SubscriptionId --only-show-errors 2> $stderrPath
         $exitCode = $LASTEXITCODE
         $stderrText = Get-Content -LiteralPath $stderrPath -Raw
         if ($exitCode -ne 0) { throw "az $($Arguments -join ' ') failed ($exitCode): $stderrText" }
         if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Warning $stderrText.Trim() }
         return ($output | Out-String).Trim()
     } finally {
+        if ($invocation.installer) { [Environment]::SetEnvironmentVariable('AZ_INSTALLER', $previousInstaller, 'Process') }
         Remove-Item -LiteralPath $stderrPath -Force
     }
 }

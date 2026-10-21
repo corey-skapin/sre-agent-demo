@@ -4,7 +4,7 @@
 > Windsurf, Aider, OpenAI Codex, or another AI coding assistant.
 
 This repo is the optional Azure SRE Agent layer for the standalone
-[`arc-demo`](https://github.com/corey-skapin/arc-demo) repo. It does not deploy
+`arc-demo` companion repo supplied with this handoff. It does not deploy
 the Arc estate. It attaches SRE Agent to an existing `arc-demo` deployment and
 adds the T09/T10/T11 SRE scenarios.
 
@@ -53,6 +53,14 @@ Treat these as engineering references, not presenter source-of-truth:
 ## Happy-path setup
 
 Assumes `arc-demo` already exists and is active.
+The tracked skins use fictional organizations and no external source repository.
+Keep real customer/context values in an untracked private skin outside the repo;
+pass it explicitly. Supply your own repository URL and commit together only if
+source context is needed. Never infer another operator's target from defaults.
+Do not commit personal/customer context, contact details, live cloud IDs or
+operator-owned source URLs. Preserve reviewed public service constants and
+synthetic fixtures. Run the tracked handoff checks before publishing changes;
+they do not replace contextual review or a bounded secret scan.
 
 ```powershell
 cd C:\src\sre-agent
@@ -132,10 +140,12 @@ a reference, not an automatic history/memory restore or a payload to replay.
   -SkinPath .\config\demo-skin.json -WhatIf
 ```
 
-Remove `-WhatIf` only for the approved scope. This deletes the SRE group and known
-identity-owned grants at the subscription/Arc-group/infra-group scopes, not
-external grants belonging to other identities. Unexpected resources or grants stop cleanup.
-Deletion submission is asynchronous, not verified hibernation.
+Remove `-WhatIf` only for the approved scope. Normal parking retains the dedicated
+SRE group and `<AGENT_NAME>-uami`, deletes only the parent, its Application Insights
+and known Smart Detection Action Group, and removes known UAMI workload grants
+plus the direct parent administrator grant. Unexpected resources/grants stop
+before mutation. Never delete the group/UAMI as a normal hibernation shortcut.
+Deletion observation is bounded; failed or pending cleanup is not Hibernated.
 Finish and verify SRE hibernation **before** the Arc owner parks the estate.
 
 Save the SRE identity principal ID and evidence before deletion. Verify
@@ -143,5 +153,12 @@ Save the SRE identity principal ID and evidence before deletion. Verify
 Reactivation rebuilds parent, handler and plans; deleted thread/history/memory and
 repository connector authorization are not restored from this repo. No destructive
 full-lifecycle test is implied by local mocked tests or the successful T09 retry.
-Resume Arc first; recreate the SRE parent/identity, then modern custom agent/v3
-filters from versioned assets. Do not recreate retired legacy routing/history.
+Resume Arc first and require fresh Arc Ready; redeploy the SRE parent using the
+retained UAMI, then modern custom agent/v3 filters from versioned assets with
+enabled three-hour cooldown. Do not recreate retired legacy routing/history.
+First deployment (or recovery from historical whole-group deletion) creates one
+new UAMI through the same IaC; later normal cycles preserve its principal and
+deterministic workload assignment IDs. The validated combined system/user identity
+shape is unchanged: the system-assigned principal still rotates with the parent.
+No new external permission is granted to that system principal. Full identity/group
+removal is separate destructive cleanup, not normal parking.

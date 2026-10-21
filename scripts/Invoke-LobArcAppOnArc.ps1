@@ -40,9 +40,11 @@ param(
 
     [string]$AppSourcePath,
 
-    [string]$SourceRepositoryUrl = 'https://github.com/<org>/lob-arc-app-demo',
+    [ValidatePattern('^$|^https://[^\s]+$')]
+    [string]$SourceRepositoryUrl = '',
 
-    [string]$SourceCommit = 'pending-live-demo-commit',
+    [ValidatePattern('^$|^[A-Za-z0-9._-]+$')]
+    [string]$SourceCommit = '',
 
     [string]$SourcePath = 'LobArcBridgeApp.ps1',
 
@@ -439,6 +441,9 @@ if (-not $PSBoundParameters.ContainsKey('AppName')) { $AppName = Get-DemoSkinVal
 if (-not $PSBoundParameters.ContainsKey('SourceRepositoryUrl')) { $SourceRepositoryUrl = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobRepositoryUrl' -Default $SourceRepositoryUrl }
 if (-not $PSBoundParameters.ContainsKey('SourceCommit')) { $SourceCommit = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobSourceCommit' -Default $SourceCommit }
 if (-not $PSBoundParameters.ContainsKey('SourcePath')) { $SourcePath = Get-DemoSkinValue -Skin $skin -Path 'codeContext.lobSourcePath' -Default $SourcePath }
+if ([string]::IsNullOrWhiteSpace($SourceRepositoryUrl) -ne [string]::IsNullOrWhiteSpace($SourceCommit)) {
+    throw 'Supply SourceRepositoryUrl and SourceCommit together, or leave both empty to omit external source context.'
+}
 
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $AppSourcePath) {

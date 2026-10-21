@@ -39,7 +39,8 @@ For Hibernated:
    plus required incident/audit evidence outside git. This is not a history restore.
 2. Save the SRE user-assigned identity principal ID.
 3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
-4. Group deletion is asynchronous. Verify deletion and external RBAC with Test-SreReadiness.ps1
+4. Normal parking retains the SRE group/UAMI and deletes only parent/diagnostics.
+   Verify retained principal, resource removal, external RBAC and parent-admin absence with Test-SreReadiness.ps1
    -DesiredState Hibernated -PreviousIdentityPrincipalId <saved ID>.
 5. Finish SRE verification before Arc hibernation. Arc lifecycle is separately
    owned; do not stop its workloads from this repo. Wake/verify Arc before SRE.
@@ -97,8 +98,14 @@ handler/plan/history/memory/connector state. Parent redeployment is only stage o
 of reconstruction. Resume requires data-plane setup and verification again.
 Save evidence before cleanup and reauthorize optional repository connections.
 Versioned assets recreate the modern custom agent/v3 filters, not retired
-legacy objects, saved threads or learned memory. The new identity principal
-changes; use deterministic repo RBAC for that new principal, not old grants.
+legacy objects, saved threads or learned memory. A separate IaC module creates
+the SRE-only UAMI on first deployment; later normal cycles retain it in the SRE
+group and reuse its principal and deterministic workload grant IDs. Parent
+SystemAssigned,UserAssigned compatibility is unchanged: its system principal
+still rotates, without external workload grants. Do not promise zero directory
+churn. Historical whole-group deletion needs one replacement UAMI; that deleted
+principal cannot be restored. Full group/identity removal is separate authorized
+cleanup, never ordinary hibernation. The renderer enforces true/3-hour cooldown.
 
 The deploying identity may be User or ServicePrincipal (including managed
 identity). The script infers known Azure CLI identity types; pass

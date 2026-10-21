@@ -10,8 +10,8 @@ The later in-place repair does not close the fresh deletion-to-Ready test gap.
 
 No-cost clean-room preview of the two-repo handoff workflow:
 
-- Fresh clone of `https://github.com/corey-skapin/arc-demo`
-- Fresh clone of `https://github.com/corey-skapin/sre-agent-demo`
+- Fresh clone of the operator-supplied Arc companion repository.
+- Fresh clone of the operator-supplied SRE layer repository.
 - Local Bicep/script validation
 - Deployment `-WhatIf` previews against the current lab subscription
 - No live resource creation, alert induction, or SRE portal mutation
@@ -24,10 +24,9 @@ passes and caught one important fix.
 
 | Item | Value |
 |---|---|
-| Clean-room path | `C:\src\_cleanroom\arc-sre-demo-n06` |
+| Clean-room path | An isolated local checkout; original path retained privately. |
 | Subscription / tenant / account | Recorded privately for that run; runtime identities are not public handoff inputs. |
-| Arc repo clean-room head | `b400a04` initially, then patched source repo to `fe1fabf` |
-| SRE repo clean-room head | `0ff23ab` |
+| Source revisions | Original run revisions retained privately, not public handoff defaults. |
 
 ## Checks run
 
@@ -52,9 +51,9 @@ Issue found and fixed:
 
 - The clean-room handbook command originally relied on updating the skin file for
   `notifications.email`. In a real AI-assisted run, an operator might forget this
-  and push the placeholder `you@contoso.com` into budgets/action groups.
-- Fix committed in `arc-demo` `fe1fabf`: `Deploy-ArcDemo.ps1` now fails fast if
-  `AdminEmail` is still `you@contoso.com`, and the AI handbook deploy command
+  and push a placeholder email into budgets/action groups.
+- Historical fix in `arc-demo`: `Deploy-ArcDemo.ps1` fails fast if
+  `AdminEmail` is still a placeholder, and the AI handbook deploy command
   passes `-AdminEmail <EMAIL>` explicitly.
 
 ### sre-agent-demo

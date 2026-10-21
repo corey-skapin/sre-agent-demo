@@ -418,14 +418,14 @@ Live run evidence on 2026-10-12:
 
 | Evidence | Result |
 |---|---|
-| Fault command | `t10-writeevent-induce-1012015102` |
+| Fault command | Original command ID retained privately. |
 | Fault output | `Wrote Application Error event source=T10ArcFault eventId=1010.` |
 | SRE thread | Historical transcript retained privately; not the current T09/v3 evidence. |
 | SRE RCA | Identified `win-app-01` as Connected/healthy and the event as deliberate fault injection; confirmed Arc Run Command is viable |
 | Agent reset attempt | Agent attempted to execute reset via Arc Run Command, but no EventID 1011 was observed from the agent action |
-| Manual reset command | `t10-writeevent-reset-1012020229` |
+| Manual reset command | Original command ID retained privately. |
 | Manual reset output | `Wrote reset marker event source=T10ArcFault eventId=1011.` |
-| Final status command | `t10-writeevent-status-1012020520` confirmed EventID 1011 and prior EventID 1010 |
+| Final status command | Confirmed EventID 1011 and prior EventID 1010; original command ID retained privately. |
 
 Remaining live work:
 

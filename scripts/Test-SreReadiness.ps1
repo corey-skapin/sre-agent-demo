@@ -3,8 +3,9 @@
 .SYNOPSIS
 Read-only, bounded readiness inspection. Exit 0 pass, 1 fail/error, 2 pending.
 .DESCRIPTION
-Ready inspects ARM state but leaves unverifiable data-plane/telemetry gates pending.
-Hibernated checks SRE group absence and external RBAC with a saved principal ID.
+Ready inspects ARM and supported full service configuration; fresh incident
+telemetry/rehearsal remains a separate pending gate. Hibernated verifies the
+retained UAMI/group, absent parent/diagnostics and revoked owned grants.
 No Azure account selection, faults, guest commands or cloud mutations are performed.
 #>
 [CmdletBinding()]

@@ -14,8 +14,11 @@ function Get-SreDesiredConfiguration {
     $tokens = @{
         arcGroup = "rg-$prefix"; infraGroup = "rg-$prefix-infra"; containerApp = "ca-$prefix-fault"
         arcMachine = $skin.sre.targetArcMachine; eventSource = $skin.labels.lobEventSource
-        repositoryUrl = $skin.codeContext.lobRepositoryUrl; sourceCommit = $skin.codeContext.lobSourceCommit
-        sourcePath = $skin.codeContext.lobSourcePath
+        sourceContext = if ($skin.codeContext.lobRepositoryUrl) {
+            "Source context is optional: $($skin.codeContext.lobRepositoryUrl) at $($skin.codeContext.lobSourceCommit), path $($skin.codeContext.lobSourcePath)."
+        } else {
+            'No external source repository is configured. Use telemetry evidence and the local sample; do not guess a repository URL or commit.'
+        }
     }
     $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-handler.instructions.txt') -Raw
     foreach ($key in $tokens.Keys) { $instructions = $instructions.Replace("{$key}", $tokens[$key]) }
@@ -32,6 +35,7 @@ function Get-SreDesiredConfiguration {
                 incidentPlatform = 'AzMonitor'; priorities = @('Sev2'); titleContains = $title
                 impactedService = $service; handlingAgent = $skin.labels.agentName
                 agentMode = 'Review'; isEnabled = $true
+                mergeEnabled = $true; mergeWindowHours = 3
             }
         }
         if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }

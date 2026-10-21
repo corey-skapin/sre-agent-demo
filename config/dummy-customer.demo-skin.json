@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "customer": {
-    "name": "Contoso Energy",
-    "shortName": "Contoso",
+    "name": "Fabrikam",
+    "shortName": "Fabrikam",
     "scenarioLabel": "Hybrid Operations Readiness"
   },
   "azure": {
-    "namePrefix": "contoso-arc",
+    "namePrefix": "fabrikam-arc",
     "location": "australiaeast"
   },
   "sre": {
@@ -19,24 +19,24 @@
     "lobFaultMode": "CrashOnProcessing"
   },
   "labels": {
-    "demoTitle": "Contoso Arc Demo",
-    "agentName": "sre-contoso-arc",
+    "demoTitle": "Fabrikam Arc Demo",
+    "agentName": "sre-fabrikam-arc",
     "containerResponsePlan": "container-app-restart-review-v3",
     "lobResponsePlan": "lob-arc-app-review-v3",
     "lobAlertTitleContains": "lob-arc-app-fault",
-    "lobAppName": "Contoso LOB Bridge App",
-    "lobEventSource": "ContosoLobBridgeApp",
-    "lobTaskName": "ContosoSreLobApp"
+    "lobAppName": "Fabrikam LOB Bridge App",
+    "lobEventSource": "FabrikamLobBridgeApp",
+    "lobTaskName": "FabrikamSreLobApp"
   },
   "codeContext": {
-    "lobRepositoryUrl": "https://github.com/contoso/lob-arc-app-demo",
-    "lobSourceCommit": "pending-live-demo-commit",
+    "lobRepositoryUrl": "",
+    "lobSourceCommit": "",
     "lobSourcePath": "LobArcBridgeApp.ps1"
   },
   "tags": {
     "owner": "demo",
-    "purpose": "contoso-sre-agent",
+    "purpose": "fabrikam-sre-agent",
     "env": "demo",
-    "layersOn": "contoso-arc"
+    "layersOn": "fabrikam-arc"
   }
 }

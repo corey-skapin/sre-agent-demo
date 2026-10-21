@@ -1,11 +1,12 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-Removes only the optional SRE layer after explicit operator approval.
+Parks the optional SRE layer while retaining its dedicated user-assigned identity.
 .DESCRIPTION
-Deletion loses custom agents, plans, threads, memory and connector configuration.
-Export required evidence first. The Arc estate remains running. WhatIf performs
-read-only discovery and does not select an account, revoke roles or delete resources.
+Deletes the parent and known diagnostics, not the SRE group/UAMI or Arc resources.
+Removes known identity-owned external grants and the parent administrator grant.
+Export configuration/evidence first: parent deletion loses live history and memory.
+WhatIf performs read-only discovery only. Full identity/group removal is separate cleanup.
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
@@ -18,80 +19,69 @@ param(
     [string]$InfraResourceGroupName,
     [string]$SkinPath = '',
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]
-    [string]$PreviousIdentityPrincipalId
+    [string]$PreviousIdentityPrincipalId,
+    [ValidateRange(1, 1800)][int]$TimeoutSeconds = 300
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'lib\DemoSkin.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreLifecycle.psm1') -Force
 $skin = Get-DemoSkin -Path $SkinPath
 if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = $skin.azure.namePrefix }
 if (-not $AgentName) { $AgentName = $skin.labels.agentName }
 if (-not $SreResourceGroupName) { $SreResourceGroupName = "rg-$NamePrefix-sre" }
 if (-not $ArcResourceGroupName) { $ArcResourceGroupName = "rg-$NamePrefix" }
 if (-not $InfraResourceGroupName) { $InfraResourceGroupName = "rg-$NamePrefix-infra" }
-foreach ($name in @($SreResourceGroupName, $ArcResourceGroupName, $InfraResourceGroupName)) {
-    Assert-SreName -Value $name -Description 'resource group'
-}
+foreach ($name in @($SreResourceGroupName, $ArcResourceGroupName, $InfraResourceGroupName)) { Assert-SreName -Value $name -Description 'resource group' }
 Assert-SreName -Value $AgentName -Description 'agent name' -Pattern '^[A-Za-z][-A-Za-z0-9]{0,30}[A-Za-z0-9]$'
 if ($SreResourceGroupName -in @($ArcResourceGroupName, $InfraResourceGroupName)) { throw 'SRE and Arc groups must be separate.' }
 Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
-function Read-AzJson([string[]]$Arguments) {
-    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments ($Arguments + @('-o', 'json')) | ConvertFrom-Json -Depth 100
+$inventoryParameters = @{
+    SubscriptionId = $SubscriptionId; SreResourceGroupName = $SreResourceGroupName; AgentName = $AgentName
+    ArcResourceGroupName = $ArcResourceGroupName; InfraResourceGroupName = $InfraResourceGroupName
+    PreviousIdentityPrincipalId = $PreviousIdentityPrincipalId
 }
-$exists = Read-AzJson @('group', 'exists', '-n', $SreResourceGroupName)
-$principalId = $PreviousIdentityPrincipalId
-if ($exists) {
-    $resources = @(Read-AzJson @('resource', 'list', '-g', $SreResourceGroupName))
-    $allowedResources = @(
-        "Microsoft.App/agents/$AgentName",
-        "Microsoft.ManagedIdentity/userAssignedIdentities/$AgentName-uami",
-        "Microsoft.Insights/components/$AgentName-appi",
-        'Microsoft.Insights/actionGroups/Application Insights Smart Detection'
-    )
-    $unexpected = @($resources | Where-Object { "$($_.type)/$($_.name)" -notin $allowedResources })
-    if ($unexpected.Count) { throw "Unexpected resources in SRE group. Refusing group deletion: $($unexpected.name -join ', ')" }
-    $identities = @(Read-AzJson @('identity', 'list', '-g', $SreResourceGroupName))
-    $identity = $identities | Where-Object name -EQ "$AgentName-uami" | Select-Object -First 1
-    if ($identity) {
-        if ($principalId -and $principalId -ne $identity.principalId) { throw 'Previous principal differs from live identity; clean it up separately.' }
-        $principalId = $identity.principalId
-    }
-}
-$roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
-$assignments = @()
-$scopes = @("/subscriptions/$SubscriptionId")
-foreach ($rg in @($ArcResourceGroupName, $InfraResourceGroupName)) {
-    if (Read-AzJson @('group', 'exists', '-n', $rg)) { $scopes += "/subscriptions/$SubscriptionId/resourceGroups/$rg" }
-}
-foreach ($scope in $scopes) {
-    $atScope = @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited'))
-    if ($principalId) {
-        $owned = @($atScope | Where-Object { $_.principalId -eq $principalId })
-        if (@($owned | Where-Object { $_.scope -notin $scopes }).Count) {
-            throw 'Identity-owned grant outside the known subscription/RG scopes requires separate explicit cleanup.'
-        }
-        $unknown = @($owned | Where-Object { ($_.roleDefinitionId -split '/')[-1] -notin $roles })
-        if ($unknown.Count) { throw "Unexpected grants for the SRE identity at $scope; approve a separate scoped cleanup before deletion." }
-        $assignments += $owned
-    }
-    $assignments = @($assignments | Sort-Object -Property id -Unique)
-}
-if (-not $principalId) {
-    Write-Warning 'Identity absent. No grants were deleted. Legacy orphan RBAC cannot be verified without -PreviousIdentityPrincipalId.'
-}
-if (-not $exists -and -not $assignments.Count) {
-    Write-Host 'SRE resource group already absent. No cloud mutation performed.'
+$before = Get-SreLifecycleInventory @inventoryParameters
+$resourceIds = @($before.removableResources)
+$assignmentIds = @(@($before.externalAssignments) + @($before.parentAssignments) | ForEach-Object { $_.id } | Sort-Object -Unique)
+if (-not $resourceIds.Count -and -not $assignmentIds.Count) {
+    if ($before.identity) { Write-Host 'SRE is already parked: retained UAMI, no parent/diagnostics or owned grants. No mutation performed.' }
+    else { Write-Warning 'SRE identity is absent (legacy deletion or never deployed). Nothing to park; normal identity-retained Hibernated readiness will not pass.' }
     return
 }
-$assignmentIds = @($assignments | ForEach-Object { $_.id })
-$cleanupTarget = "$SreResourceGroupName and identity-owned grants: $($assignmentIds -join ', ')"
-if ($PSCmdlet.ShouldProcess($cleanupTarget, 'delete optional SRE group and known identity-owned grants including inherited grants; lose agent history/configuration')) {
-    foreach ($assignment in $assignments) {
-        Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('role', 'assignment', 'delete', '--ids', $assignment.id) | Out-Null
-    }
-    if ($exists) {
-        Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('group', 'delete', '-n', $SreResourceGroupName, '--yes', '--no-wait') | Out-Null
-    }
-    Write-Host 'Hibernation submitted, not verified. Run Test-SreReadiness.ps1 -DesiredState Hibernated with the saved principal ID after deletion completes.'
+if (-not $before.principalId) { throw 'Cannot verify grant cleanup without a live or saved identity principal. No resources deleted.' }
+$inventoryParameters.PreviousIdentityPrincipalId = $before.principalId
+$target = "delete resources [$($resourceIds -join ', ')]; revoke assignments [$($assignmentIds -join ', ')]; RETAIN $($before.identityId)"
+if (-not $PSCmdlet.ShouldProcess($target, 'park SRE; lose parent configuration/history, retain stable UAMI and resource group')) { return }
+$clock = [Diagnostics.Stopwatch]::StartNew()
+function Assert-RemainingScope {
+    $current = Get-SreLifecycleInventory @inventoryParameters
+    $currentAssignments = @(@($current.externalAssignments) + @($current.parentAssignments) | ForEach-Object { $_.id } | Sort-Object -Unique)
+    if ($clock.Elapsed.TotalSeconds -ge $TimeoutSeconds) { throw 'Hibernation observation deadline reached. Inspect readiness; do not blindly repeat deletion.' }
+    if ($null -ne $before.identity -and $null -eq $current.identity) { throw 'Retained UAMI disappeared; stop immediately.' }
+    if (@(Compare-Object @($resourceIds | Sort-Object) @($current.removableResources | Sort-Object)).Count -or
+        @(Compare-Object $assignmentIds $currentAssignments).Count) { throw 'Lifecycle scope drifted since preview. Stop and obtain a fresh preview.' }
+}
+foreach ($id in @($assignmentIds)) {
+    Assert-RemainingScope
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('role', 'assignment', 'delete', '--ids', $id) | Out-Null
+    $assignmentIds = @($assignmentIds | Where-Object { $_ -ne $id })
+}
+foreach ($id in @($resourceIds)) {
+    Assert-RemainingScope
+    Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('resource', 'delete', '--ids', $id) | Out-Null
+    do {
+        $remaining = @(Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('resource', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json)
+        if ($id -notin @($remaining | ForEach-Object { $_.id })) { break }
+        if ($clock.Elapsed.TotalSeconds -ge $TimeoutSeconds) { throw "Deletion remains pending for $id. Inspect readiness, do not resubmit blindly." }
+        Start-Sleep -Seconds 5
+    } while ($true)
+    $resourceIds = @($resourceIds | Where-Object { $_ -ne $id })
+}
+Assert-RemainingScope
+if ($before.identity) {
+    Write-Host 'SRE parent/diagnostics and owned grants are absent; UAMI retained. Run Test-SreReadiness.ps1 -DesiredState Hibernated with the saved principal to verify the public readiness contract.'
+} else {
+    Write-Warning 'Partial/legacy cleanup completed using the saved principal, but UAMI is absent. Normal retained-identity Hibernated readiness will fail. A separately authorized deployment is needed to rebuild; no identity was created by cleanup.'
 }

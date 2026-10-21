@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'DemoSkin.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreConfiguration.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreLifecycle.psm1')
 
 function Get-SreReadinessReport {
     [CmdletBinding()]
@@ -34,6 +35,7 @@ function Get-SreReadinessReport {
             $resources = @(Read-AzJson @('resource', 'list', '-g', $groups[0]))
             if (@($resources | Where-Object id -EQ $identityId).Count) {
                 $identity = Read-AzJson @('identity', 'show', '--ids', $identityId)
+                if ($PreviousIdentityPrincipalId -and $PreviousIdentityPrincipalId -ne $identity.principalId) { throw 'Previous principal differs from retained live identity.' }
                 $principalId = $identity.principalId
             }
             if (@($resources | Where-Object id -EQ $agentId).Count) {
@@ -41,7 +43,13 @@ function Get-SreReadinessReport {
             }
         }
         if ($DesiredState -eq 'Hibernated') {
-            Add-Check 'sre-group-absent' $sreGroupId $(if ($exists) { 'pending' } else { 'pass' }) $false $exists 'SRE hibernation is deletion-based; this command never deletes.'
+            $lifecycle = Get-SreLifecycleInventory -SubscriptionId $SubscriptionId -SreResourceGroupName $groups[0] `
+                -AgentName $skin.labels.agentName -ArcResourceGroupName $groups[1] -InfraResourceGroupName $groups[2] `
+                -PreviousIdentityPrincipalId $PreviousIdentityPrincipalId
+            $principalId = $lifecycle.principalId
+            Add-Check 'retained-identity' $identityId $(if ($lifecycle.identity) { 'pass' } else { 'fail' }) 'Dedicated UAMI retained with saved principal, if supplied' $principalId 'Normal Hibernated retains the group/UAMI. Legacy whole-group deletion is not this retained-identity state.'
+            Add-Check 'sre-resources-parked' $sreGroupId $(if ($lifecycle.removableResources.Count) { 'pending' } else { 'pass' }) @($identityId) @($lifecycle.resources | ForEach-Object { $_.id }) 'Only the expected UAMI may remain; unexpected resources fail inspection. Parent/diagnostics deletion may still be pending.'
+            Add-Check 'parent-admin-absent' $agentId $(if (-not $exists) { 'pending' } elseif ($lifecycle.parentAssignments.Count) { 'fail' } else { 'pass' }) @() @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'Direct ARM SRE-group assignment read checks the deleted parent scope, not resource-list or ARG absence.'
         } elseif (-not $agent) {
             Add-Check 'parent' $agentId 'fail' 'Succeeded/Running' $null 'Required parent agent is absent; deploy parent then configure data plane.'
         } else {
@@ -51,8 +59,10 @@ function Get-SreReadinessReport {
             Add-Check 'review-mode' $agentId $(if ($p.actionConfiguration.mode -eq 'Review') { 'pass' } else { 'fail' }) 'Review' $p.actionConfiguration.mode 'Parent mode does not prove response-plan mode.'
             Add-Check 'access-level' $agentId $(if ($p.actionConfiguration.accessLevel -eq $skin.sre.accessLevel) { 'pass' } else { 'fail' }) $skin.sre.accessLevel $p.actionConfiguration.accessLevel 'Requested skin access profile.'
             Add-Check 'incident-platform' $agentId $(if ($p.incidentManagementConfiguration.type -eq 'AzMonitor') { 'pass' } else { 'fail' }) 'AzMonitor' $p.incidentManagementConfiguration.type 'Azure Monitor incident source.'
-            $identityMatches = $principalId -and $p.actionConfiguration.identity -eq $identityId -and $p.knowledgeGraphConfiguration.identity -eq $identityId
+            $attachedIdentityIds = @($agent.identity.userAssignedIdentities.PSObject.Properties.Name)
+            $identityMatches = $principalId -and $p.actionConfiguration.identity -eq $identityId -and $p.knowledgeGraphConfiguration.identity -eq $identityId -and $identityId -in $attachedIdentityIds
             Add-Check 'identity' $identityId $(if ($identityMatches) { 'pass' } else { 'fail' }) $identityId $p.actionConfiguration.identity 'Action and knowledge graph must use the live user-assigned identity.'
+            Add-Check 'parent-identity-type' $agentId $(if (($agent.identity.type -replace '\s', '') -eq 'SystemAssigned,UserAssigned') { 'pass' } else { 'fail' }) 'SystemAssigned,UserAssigned' $agent.identity.type 'Validated service compatibility shape; no external workload roles are assigned to the system identity by this repo.'
             $expectedManaged = @("$base/$($groups[1])", "$base/$($groups[2])", "$base/$($groups[1])/providers/Microsoft.OperationalInsights/workspaces/law-$prefix", "$base/$($groups[1])/providers/Microsoft.Insights/actionGroups/ag-$prefix")
             $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
             if ('T09' -in $scenarios) { $expectedManaged += "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault" }
@@ -106,7 +116,7 @@ function Get-SreReadinessReport {
                     $properties = $matches[0].properties
                     $modeValid = $modeValid -and $properties.isEnabled -and $properties.agentMode -ieq 'Review'
                     $filtersValid = $filtersValid -and (Test-SreProperties $properties $plan.properties)
-                    $observedPlans += @{ name = $plan.name; mode = $properties.agentMode; enabled = $properties.isEnabled; priorities = $properties.priorities; title = $properties.titleContains; handler = $properties.handlingAgent }
+                    $observedPlans += @{ name = $plan.name; mode = $properties.agentMode; enabled = $properties.isEnabled; priorities = $properties.priorities; title = $properties.titleContains; handler = $properties.handlingAgent; mergeEnabled = $properties['mergeEnabled']; mergeWindowHours = $properties['mergeWindowHours'] }
                 }
                 $activeNames = @($snapshot.filters | Where-Object { $_.properties.isEnabled } | ForEach-Object { $_.name })
                 $legacyHandlers = @($snapshot.handlers | Where-Object {
@@ -114,7 +124,7 @@ function Get-SreReadinessReport {
                     ($_.customInstructions -or @($_.tools).Count -or @($_.incidentProcessingGuide).Count)
                 } | ForEach-Object { $_.id })
                 Add-Check 'plan-status-review' $agentId $(if ($modeValid) { 'pass' } else { 'fail' }) 'Each required existing plan enabled and Review' $observedPlans 'Reads actual plan properties, not MCP summary or parent mode.'
-                Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service and custom agent' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2.'
+                Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service/custom agent, mergeEnabled=true/window=3h' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2. Cooldown is explicitly repo-managed.'
                 Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Active routing must not depend on legacy response settings. Retired disabled plans and their history may remain untouched.'
                 $owned = @($desired.plans | ForEach-Object { $_.name })
                 $retiredActive = @($activeNames | Where-Object { $_ -in $desired.retiredPlanNames })
@@ -146,7 +156,11 @@ function Get-SreReadinessReport {
                 Add-Check "rbac-$rg" $scope 'pending' 'Known identity principal' $null 'Pass -PreviousIdentityPrincipalId to verify external grants after identity deletion.'
                 continue
             }
-            $assignments = @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited'))
+            $assignments = if ($DesiredState -eq 'Hibernated') {
+                @($lifecycle.externalAssignments | Where-Object { $_.scope -eq $scope -or $_.scope -eq "/subscriptions/$SubscriptionId" })
+            } else {
+                @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false'))
+            }
             $owned = @($assignments | Where-Object principalId -EQ $principalId)
             $observed = @($owned | ForEach-Object { ($_.roleDefinitionId -split '/')[-1] })
             if ($DesiredState -eq 'Hibernated') {

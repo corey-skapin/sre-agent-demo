@@ -38,7 +38,24 @@ Get-ChildItem -LiteralPath $root -Recurse -File -Include *.ps1, *.psm1 | ForEach
 Assert-True ($parseErrors.Count -eq 0) "All PowerShell files parse: $($parseErrors -join '; ')"
 Import-Module (Join-Path $root 'scripts\lib\DemoSkin.psm1') -Force
 Import-Module (Join-Path $root 'scripts\lib\SreRuntime.psm1') -Force
+$cliFixture = Join-Path ([IO.Path]::GetTempPath()) ("sre-cli-test-" + [guid]::NewGuid())
+try {
+    New-Item -ItemType Directory -Path (Join-Path $cliFixture 'wbin') | Out-Null
+    $pythonFixture = Join-Path $cliFixture 'python.exe'
+    [IO.File]::WriteAllText($pythonFixture, '')
+    $shim = [pscustomobject]@{ CommandType = 'Application'; Source = (Join-Path $cliFixture 'wbin\az.cmd') }
+    $invocation = Get-SreAzInvocation -Command $shim
+    Assert-True ($invocation.command -eq $pythonFixture) 'Windows MSI uses its own native Python, never cmd.exe'
+    Assert-True (($invocation.prefix -join ' ') -eq '-IBm azure.cli' -and $invocation.installer -eq 'MSI') 'Windows invocation preserves the official launcher module/isolation/install mode'
+    $invocation = Get-SreAzInvocation -Command ([pscustomobject]@{ CommandType = 'Function'; Source = '' })
+    Assert-True ($invocation.command -eq 'az' -and $invocation.prefix.Count -eq 0) 'Mocks/functions and non-Windows launchers retain ordinary invocation'
+    Remove-Item -LiteralPath $pythonFixture -Force
+    Assert-Throws { Get-SreAzInvocation -Command $shim } 'bundled python.exe'
+} finally {
+    Remove-Item -LiteralPath (Join-Path $cliFixture 'wbin'), $cliFixture -Force
+}
 $skin = Get-DemoSkin -RepoRoot $root
+& (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
 Assert-True ($skin.sre.requiredScenarios[0] -is [string]) 'JSON array strings remain strings, not PSCustomObject Length properties'
 foreach ($file in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
     $config = Get-DemoSkin -Path (Join-Path $root "config\$file") -RepoRoot $root
@@ -59,10 +76,14 @@ Assert-Throws { Assert-SreName 'machine"; throw "injection' 'machine' } 'Invalid
 $global:AzResponder = {
     if ($args[0] -eq 'account') { return '{"id":"00000000-0000-0000-0000-000000000001","tenantId":"00000000-0000-0000-0000-000000000002","state":"Enabled","user":{"type":"user"}}' }
     if ($args[0] -eq 'role') { return '[]' }
+    if ($args[0] -eq 'rest') { return '{"value":[]}' }
     'false'
 }
 Assert-SreContext $subscription $tenant | Out-Null
 Assert-True ($global:AzCalls[-1] -match "--subscription $subscription") 'Every Azure request has explicit subscription'
+$queryUrl = "https://management.azure.com/subscriptions/$subscription/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&" + '$filter=principalId%20eq%20%27' + $tenant + '%27'
+Invoke-SreAz -SubscriptionId $subscription -Arguments @('rest', '--method', 'get', '--url', $queryUrl, '-o', 'json') | Out-Null
+Assert-True ($global:AzCalls[-1].Contains($queryUrl)) 'Exact principal-filter URL reaches CLI unchanged, including ampersand and encoding'
 Assert-Throws { Assert-SreContext $subscription $subscription } 'does not match'
 $global:AzExitCode = 7
 Assert-Throws { Invoke-SreAz -Arguments @('group', 'exists') -SubscriptionId $subscription } 'failed \(7\)'
@@ -81,6 +102,42 @@ Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
 Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
 Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
 Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
+Assert-True ($desired.handler.properties.instructions -match 'No external source repository is configured') 'Default handler explicitly omits external repository context'
+$sourceSkinPath = [IO.Path]::GetTempFileName()
+$sourceGuestPath = [IO.Path]::GetTempFileName()
+try {
+    $configured = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+    $configured.codeContext.lobRepositoryUrl = 'https://example.invalid/lob-source'
+    $configured.codeContext.lobSourceCommit = 'example-revision'
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    $withSource = & $initialize -SubscriptionId $subscription -TenantId $tenant -SkinPath $sourceSkinPath | ConvertFrom-Json
+    Assert-True ($withSource.handler.properties.instructions.Contains('https://example.invalid/lob-source at example-revision')) 'Explicit private-style skin still renders configured repository/revision'
+    Assert-True ($withSource.handler.properties.instructions -notmatch 'No external source repository') 'Configured source is not silently omitted'
+    $configured.codeContext.lobSourceCommit = ''
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    Assert-Throws { Get-DemoSkin -Path $sourceSkinPath } 'schema|valid|minLength'
+    $configured.codeContext.lobRepositoryUrl = ''
+    $configured.codeContext.lobSourceCommit = 'example-revision'
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    Assert-Throws { Get-DemoSkin -Path $sourceSkinPath } 'schema|valid|const'
+    $callsBefore = $global:AzCalls.Count
+    & (Join-Path $root 'scripts\Invoke-LobArcAppOnArc.ps1') -SubscriptionId $subscription -TenantId $tenant -Action Deploy -GuestScriptOutputPath $sourceGuestPath | Out-Null
+    $guest = Get-Content -LiteralPath $sourceGuestPath -Raw
+    $encoded = [regex]::Match($guest, '(?m)^\$ConfigBase64 = ''(?<value>[A-Za-z0-9+/=]+)''').Groups['value'].Value
+    Assert-True ($encoded.Length -gt 0) 'Generated guest script carries explicit app configuration'
+    $guestConfig = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) | ConvertFrom-Json
+    Assert-True ($guestConfig.SourceRepositoryUrl -eq '' -and $guestConfig.SourceCommit -eq '') 'Default guest config has no invented external repository or revision'
+    Assert-True ($global:AzCalls.Count -eq $callsBefore) 'Local guest generation does not contact Azure'
+    Assert-Throws { & (Join-Path $root 'scripts\Invoke-LobArcAppOnArc.ps1') -SubscriptionId $subscription -TenantId $tenant -SourceRepositoryUrl 'https://example.invalid/lob-source' -GuestScriptOutputPath $sourceGuestPath } 'together'
+    $tokens = $null; $errors = $null
+    $sampleAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'samples\lob-arc-app\LobArcBridgeApp.ps1'), [ref]$tokens, [ref]$errors)
+    $contextFunction = $sampleAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-RepositoryContext' }, $true)
+    . ([scriptblock]::Create($contextFunction.Extent.Text))
+    $contextText = Get-RepositoryContext -Config $guestConfig
+    Assert-True ($contextText -match 'repo=<not configured> commit=<not configured>') 'Runtime event context explicitly labels omitted external source'
+} finally {
+    Remove-Item -LiteralPath $sourceSkinPath, $sourceGuestPath -Force
+}
 Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'BackupPath'
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'
@@ -88,9 +145,9 @@ Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | Con
 
 Import-Module (Join-Path $root 'scripts\lib\SreReadiness.psm1') -Force
 $hibernated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
-Assert-True ($hibernated.status -eq 'pending') 'Absent identity does not falsely certify orphan-grant cleanup'
+Assert-True ($hibernated.status -eq 'fail') 'Absent identity does not certify normal retained-identity Hibernated'
 $hibernatedKnown = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId '00000000-0000-0000-0000-000000000003'
-Assert-True ($hibernatedKnown.status -eq 'pass') 'Known old identity and absent groups/grants verify Hibernated'
+Assert-True ($hibernatedKnown.status -eq 'fail') 'Legacy whole-group deletion is not normal identity-retained Hibernated'
 $ready = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
 Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
@@ -179,31 +236,7 @@ Assert-True ($parameters.parameters.additionalManagedResourceIds.value.Count -eq
 Assert-True ($global:CapturedParameters[0] -eq $global:CapturedParameters[1]) 'Repeated preview produces identical deployment parameters'
 Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -AccessLevel Low -WhatIf } 'incompatible grant'
 
-$global:AzCalls.Clear()
-$global:AzResponder = {
-    $command = $args -join ' '
-    $base = '/subscriptions/00000000-0000-0000-0000-000000000001'
-    $principal = '00000000-0000-0000-0000-000000000003'
-    if ($command -like 'account show*') { return '{"id":"00000000-0000-0000-0000-000000000001","tenantId":"00000000-0000-0000-0000-000000000002","state":"Enabled","user":{"type":"user"}}' }
-    if ($command -like 'group exists*') { return 'true' }
-    if ($command -like 'resource list*') { return '[{"name":"sre-arc-demo","type":"Microsoft.App/agents"},{"name":"sre-arc-demo-uami","type":"Microsoft.ManagedIdentity/userAssignedIdentities"}]' }
-    if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
-    if ($command -like 'role assignment list*') {
-        $items = @(@{ id = "$base/providers/Microsoft.Authorization/roleAssignments/inherited-monitoring"; name = 'inherited-monitoring'; principalId = $principal; scope = $base; roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' })
-        if ($command -match '/resourceGroups/(rg-arc-demo(?:-infra)?) ') {
-            $scope = "$base/resourceGroups/$($Matches[1])"
-            $items += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/scoped-reader"; name = 'scoped-reader'; principalId = $principal; scope = $scope; roleDefinitionId = '/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' }
-        }
-        return ConvertTo-Json -InputObject $items
-    }
-    if ($command -like 'role assignment delete*' -or $command -like 'group delete*') { return '' }
-    throw "Unexpected mocked Azure call: $command"
-}
-& (Join-Path $root 'scripts\Hibernate-SreAgent.ps1') -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
-$deletes = @($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' })
-Assert-True ($deletes.Count -eq 3) 'Cleanup deduplicates inherited grant and removes only two known scoped grants'
-Assert-True (@($deletes | Where-Object { $_ -match 'inherited-monitoring' }).Count -eq 1) 'Subscription compatibility grant is cleaned up once'
-Assert-True (@($global:AzCalls | Where-Object { $_ -like 'group delete*' -and $_ -match 'rg-arc-demo-sre' }).Count -eq 1) 'Only optional SRE group deletion is submitted'
+& (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
 $generator = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ScenarioScript' }, $true)

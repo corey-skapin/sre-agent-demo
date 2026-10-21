@@ -2,7 +2,7 @@
 
 This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` repository at `C:\src\arc-demo`. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
-Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json). Keep `azure.namePrefix` aligned with the Arc repo's skin, then use `-SkinPath` on the scripts; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
+The tracked [`config\demo-skin.json`](config/demo-skin.json) and alternative example use fictional organizations. Put real customer/context values in a private skin outside the repo and pass `-SkinPath`; keep `azure.namePrefix` aligned with the Arc skin. Subscription and tenant remain required runtime inputs. External repository context is blank by default; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
 
 ## Start here
 
@@ -21,17 +21,18 @@ Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json
   - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
 
-The Bicep follows the `matthansen0/azure-sre-agent-sandbox` `infra/bicep/modules/sre-agent.bicep` pattern and uses the current Microsoft.App/agents Bicep schema.
+The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
 ## Repo layout
 
 ```text
 infra/
   main.bicep                 # subscription-scope composition and RBAC over existing arc-demo RGs
-  modules/sre-agent.bicep    # SRE Agent, identity, and App Insights resources
+  modules/sre-identity.bicep # retained SRE-only user-assigned identity
+  modules/sre-agent.bicep    # disposable parent and App Insights, referencing retained identity
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
 samples/
-  lob-arc-app/               # Local copy of the T11 app; public source context lives in arc-demo samples/lob-arc-app
+  lob-arc-app/               # Local T11 app; optional operator-supplied repository context
 scripts/
   Deploy-SreAgent.ps1        # discovers arc-demo IDs and deploys this layer
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
@@ -62,7 +63,25 @@ customer's defaults. Subscription and tenant GUIDs are required on cloud helpers
 requests pass explicit subscription context without changing the global CLI account.
 Names are validated rather than silently sanitized when explicitly supplied.
 
+## Handoff safety
+
+Keep tracked examples fictional and real skins/evidence outside the checkout.
+Optional source URL/revision must be supplied together; a local-sample demo
+requires neither a repository connection nor a fabricated source URL.
+`tests\Invoke-Tests.ps1` includes handoff checks for non-example UUIDs, contact
+emails, personal home paths and unreviewed repository-owner links. Public Azure
+role IDs and synthetic test IDs are deliberately retained.
+These checks are not a complete detector of customer context or secrets.
+Review all tracked changes and perform a bounded secret check before sharing.
+Current-tree cleanup does not rewrite Git history, author metadata, hosting
+ownership or prior PR content; those remain separate from the sanitized files.
+
 ## Validate locally
+
+On Windows, the shared CLI helper invokes the installed MSI CLI's bundled native
+Python entry point, matching `az.cmd` without shell-interpreting query URLs or
+guest arguments. A missing bundled runtime fails explicitly; it never falls back
+to unsafe command-string forwarding.
 
 ```powershell
 cd C:\src\sre-agent
@@ -157,13 +176,14 @@ User, service-principal and managed-identity deployers are supported through
 ## Off state / reactivate
 
 Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
-an always-on charge, the off-state for this optional repo removes only the SRE
-Agent resource group and known identity-owned RBAC grants at the subscription,
-Arc/observability-group and infra-group scopes. Other identities' external grants and
-the Arc estate stay intact. Unexpected resources or grants block deletion.
+an always-on charge, normal parking removes the parent and known diagnostics,
+but **retains the dedicated SRE group and its SRE-only UAMI**. Known UAMI workload
+grants and the direct parent administrator grant are removed. Other identities'
+external grants and the Arc estate stay intact. Unexpected resources or grants
+block deletion; normal parking never deletes the group or UAMI.
 
 ```powershell
-# Only after approved destructive cleanup; export configuration/evidence and
+# Only after approved parent removal; export configuration/evidence and
 # save the live identity principal first. See the complete lifecycle procedure:
 # docs\sre-response-plan-automation.md
 .\scripts\Hibernate-SreAgent.ps1 `
@@ -184,7 +204,7 @@ the Arc estate stay intact. Unexpected resources or grants block deletion.
   -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 
-# Before the next demo — recreate the optional SRE layer
+# Before the next demo — rebuild the parent using the retained identity
 # First reactivate and verify Arc through its own repo.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
@@ -198,17 +218,31 @@ Reactivation also requires modern handler/v3-plan ensure and verification above,
 with a new external backup path and approval for actual changes.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
-re-established; a URL in the skin is not authentication. Save the old identity
+re-established; a URL in the skin is not authentication. Save the retained identity
 principal and use readiness `-DesiredState Hibernated
 -PreviousIdentityPrincipalId <ID>` to verify external grant cleanup. Missing
-identity/partial state is safe to inspect; orphan checks without an old principal
-remain pending. WhatIf never selects a global account, revokes grants or writes a
+identity/partial state is safe to inspect, but an absent UAMI (including historical
+whole-group deletion) fails the new identity-retained Hibernated contract.
+WhatIf never selects a global account, revokes grants or writes a
 guest script.
 The saved Inspect export is a reference, not a replayable history/connector
-backup. Recreated SRE identity has a new principal; do not reuse old grants or
-reactivate retained legacy v2 handlers. A fresh deletion-to-Ready reconstruction
-has not been live-tested by the T09 rehearsal. Residual Arc/storage/monitoring
+backup. The retained UAMI principal and deterministic workload assignment IDs
+are reused on wake; deployment creates it only on the first deployment or after
+separate full deletion. The parent keeps its validated combined identity shape:
+its system-assigned principal still changes when the parent is recreated and is
+not granted these external workload roles. Never reactivate retired legacy v2 handlers.
+Versioned filters explicitly restore enabled three-hour cooldown and Review/Sev2.
+A fresh retained-identity park/wake round trip has not been live-tested by the
+T09 rehearsal. Residual Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
+
+The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
+Retaining an identity is not retaining Contributor access: normal parking revokes
+its grants, then incremental IaC restores the same deterministic IDs on wake.
+The separate identity module owns it in the same SRE group, so first creation and
+future reuse follow identical IaC without an extra identity group or manual identity.
+Full removal of the retained group/identity requires separate explicit approval;
+`Hibernate-SreAgent.ps1` deliberately has no group/identity deletion path.
 
 ## Scenario runbooks
 
@@ -247,4 +281,4 @@ fault authorization.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
-- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.
+- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.

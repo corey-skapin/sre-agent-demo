@@ -1,14 +1,11 @@
 # Azure SRE Agent sales and rollout guidance
 
-Internal field guidance assembled from the VIC1 pipeline-review chat, the Azure
-SRE Agent one-pager, the PoC datasheet, the SRE Agent spend workbook, Microsoft
-Learn SRE Agent docs, and the current Arc + Monitor + SRE demo validation.
-
-Use this as account-team guidance, not as a customer-facing datasheet.
-Account, spend and pipeline figures below are a historical source-workbook/chat
-snapshot, not current verified customer usage, eligibility or pricing. Refresh
-those sources and official commercial terms before using figures in a proposal.
-They do not establish the cost of this demo or a zero-cost hibernation state.
+Reusable workshop-planning guidance for the Arc + Monitor + SRE demo, grounded
+in Microsoft Learn and the validation boundaries in this repo. It contains no
+account, territory, internal-chat, pipeline or consumption dataset.
+Confirm current product prerequisites, capabilities and commercial terms before
+using this in a proposal. This is not a customer-specific eligibility assessment,
+pricing offer or a zero-cost hibernation claim.
 
 ## Positioning
 
@@ -51,7 +48,8 @@ Weak fit:
 
 ## Two-day PoC shape
 
-The internal PoC datasheet frames a two-day engagement.
+A suggested two-day engagement is below. Agree deliverables, access and timing
+with the participants; this is an illustrative workshop shape, not a commitment.
 
 ### Day 1: deploy and investigate
 
@@ -109,18 +107,9 @@ A strong PoC closeout proves:
 
 ## Account planning and rollout signals
 
-The SRE Agent spend workbook is a usage signal, not a pipeline system.
-
-Current workbook shape:
-
-- 302 customer rows.
-- 31 customers with SRE Agent usage.
-- Around 10 percent adoption in that workbook.
-- Approximately $49.8K FYTD SRE Agent ACR.
-- The top five consumers account for about 55 percent of identified FYTD SRE
-  Agent ACR; top ten account for about 76 percent.
-
-Use it to segment accounts:
+If separately authorized account evidence is available, use it privately to
+qualify the conversation. Do not copy account metrics or source workbooks into
+this reusable repo. The following qualitative segments are illustrative only:
 
 | Segment | What to do |
 |---|---|
@@ -131,16 +120,16 @@ Use it to segment accounts:
 
 Do not treat ACR alone as opportunity value, customer intent or pipeline stage.
 
-## VIC1 chat signals
+## Workshop options
 
-The VIC1 discussion reinforced three field motions:
+Possible reusable formats:
 
 - A 1:many webinar or roadshow around the power and use of SRE Agent.
 - A Modern Ops implementation roadshow with interested field participation.
-- A CSU/CSA-style workshop paper that gives a practical PoC structure and
+- A technical workshop guide that gives a practical PoC structure and
   prerequisites.
 
-For Corey’s Arc + Monitor + SRE demo, the right path is:
+For the Arc + Monitor + SRE demo, the suggested path is:
 
 1. Use the Arc + Monitor demo to earn the operations-plane conversation.
 2. Use Defender for Cloud recommendations as the security co-sell.

@@ -16,5 +16,11 @@ jobs:
       - name: Compile Bicep without Azure sign-in
         shell: pwsh
         run: |
-          az bicep build --file .\infra\main.bicep --stdout --only-show-errors > $null
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $compiled = Join-Path $env:RUNNER_TEMP 'sre-template.json'
+          try {
+            az bicep build --file .\infra\main.bicep --outfile $compiled --only-show-errors
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            .\tests\Test-SreTemplate.ps1 -TemplatePath $compiled
+          } finally {
+            if (Test-Path -LiteralPath $compiled) { Remove-Item -LiteralPath $compiled -Force }
+          }

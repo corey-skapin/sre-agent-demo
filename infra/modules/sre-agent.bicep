@@ -32,14 +32,14 @@ param assignDeployerAdminRole bool = true
 ])
 param deployerPrincipalType string
 
-var identityName = take('${agentName}-uami', 128)
+@description('Existing SRE-only identity created by the retained identity module in this resource group.')
+param managedIdentityName string
+
 var appInsightsName = take('${agentName}-appi', 255)
 var sreAgentAdministratorRoleDefinitionId = 'e79298df-d852-4c6d-84f9-5d13249d1e55'
 
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: identityName
-  location: location
-  tags: tags
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: managedIdentityName
 }
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
@@ -58,6 +58,7 @@ resource sreAgent 'Microsoft.App/agents@2026-01-01' = {
   location: location
   tags: tags
   identity: {
+    // Keep the validated service identity shape; only the UAMI survives parent deletion.
     type: 'SystemAssigned,UserAssigned'
     userAssignedIdentities: {
       '${managedIdentity.id}': {}
