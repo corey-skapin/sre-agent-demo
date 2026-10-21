@@ -2,7 +2,7 @@
 
 This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` repository at `C:\src\arc-demo`. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
-Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json). Keep `azure.namePrefix` aligned with the Arc repo's skin, then use `-SkinPath` on the scripts; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
+The tracked [`config\demo-skin.json`](config/demo-skin.json) and alternative example use fictional organizations. Put real customer/context values in a private skin outside the repo and pass `-SkinPath`; keep `azure.namePrefix` aligned with the Arc skin. Subscription and tenant remain required runtime inputs. External repository context is blank by default; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
 
 ## Start here
 
@@ -21,17 +21,18 @@ Customer-specific values live in [`config\demo-skin.json`](config/demo-skin.json
   - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
 
-The Bicep follows the `matthansen0/azure-sre-agent-sandbox` `infra/bicep/modules/sre-agent.bicep` pattern and uses the current Microsoft.App/agents Bicep schema.
+The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
 ## Repo layout
 
 ```text
 infra/
   main.bicep                 # subscription-scope composition and RBAC over existing arc-demo RGs
-  modules/sre-agent.bicep    # SRE Agent, identity, and App Insights resources
+  modules/sre-identity.bicep # retained SRE-only user-assigned identity
+  modules/sre-agent.bicep    # disposable parent and App Insights, referencing retained identity
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
 samples/
-  lob-arc-app/               # Local copy of the T11 app; public source context lives in arc-demo samples/lob-arc-app
+  lob-arc-app/               # Local T11 app; optional operator-supplied repository context
 scripts/
   Deploy-SreAgent.ps1        # discovers arc-demo IDs and deploys this layer
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
@@ -61,6 +62,19 @@ overrides them. Missing or invalid skins fail, rather than silently using anothe
 customer's defaults. Subscription and tenant GUIDs are required on cloud helpers;
 requests pass explicit subscription context without changing the global CLI account.
 Names are validated rather than silently sanitized when explicitly supplied.
+
+## Handoff safety
+
+Keep tracked examples fictional and real skins/evidence outside the checkout.
+Optional source URL/revision must be supplied together; a local-sample demo
+requires neither a repository connection nor a fabricated source URL.
+`tests\Invoke-Tests.ps1` includes handoff checks for non-example UUIDs, contact
+emails, personal home paths and unreviewed repository-owner links. Public Azure
+role IDs and synthetic test IDs are deliberately retained.
+These checks are not a complete detector of customer context or secrets.
+Review all tracked changes and perform a bounded secret check before sharing.
+Current-tree cleanup does not rewrite Git history, author metadata, hosting
+ownership or prior PR content; those remain separate from the sanitized files.
 
 ## Validate locally
 
@@ -262,4 +276,4 @@ fault authorization.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
-- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. Public code context now lives in `corey-skapin/arc-demo`.
+- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.

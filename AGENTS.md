@@ -4,7 +4,7 @@
 > Windsurf, Aider, OpenAI Codex, or another AI coding assistant.
 
 This repo is the optional Azure SRE Agent layer for the standalone
-[`arc-demo`](https://github.com/corey-skapin/arc-demo) repo. It does not deploy
+`arc-demo` companion repo supplied with this handoff. It does not deploy
 the Arc estate. It attaches SRE Agent to an existing `arc-demo` deployment and
 adds the T09/T10/T11 SRE scenarios.
 
@@ -53,6 +53,14 @@ Treat these as engineering references, not presenter source-of-truth:
 ## Happy-path setup
 
 Assumes `arc-demo` already exists and is active.
+The tracked skins use fictional organizations and no external source repository.
+Keep real customer/context values in an untracked private skin outside the repo;
+pass it explicitly. Supply your own repository URL and commit together only if
+source context is needed. Never infer another operator's target from defaults.
+Do not commit personal/customer context, contact details, live cloud IDs or
+operator-owned source URLs. Preserve reviewed public service constants and
+synthetic fixtures. Run the tracked handoff checks before publishing changes;
+they do not replace contextual review or a bounded secret scan.
 
 ```powershell
 cd C:\src\sre-agent

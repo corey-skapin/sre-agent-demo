@@ -51,7 +51,7 @@ For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
 - Permission to deploy `arc-demo`, deploy this SRE Agent layer, create role assignments, and approve SRE Agent actions.
 - SRE Agent response plan set to **Review** mode. Review mode is required for the one-click **Approve** step.
 - Optional, after separate explicit authentication/consent: connect
-  `corey-skapin/arc-demo` as a source-code repository in the SRE Agent knowledge
+  your own Arc companion repository as a source-code repository in the SRE Agent knowledge
   base so RCA can cite:
   - `bicep/modules/container-apps.bicep`
   - `docs/container-app-fault.md`
@@ -122,7 +122,7 @@ In the SRE Agent portal:
 2. Go to **Builder** > **Knowledge sources**.
 3. Select **Add repository**.
 4. Choose GitHub or Azure DevOps authentication.
-5. Only after explicit authorization, add the `corey-skapin/arc-demo` repository.
+5. Only after explicit authorization, add your own Arc companion repository URL.
 6. Confirm the repository card shows **Connected**.
 
 Expected RCA context: the agent should be able to point at the `SIMULATE_CRASH` startup script in `bicep/modules/container-apps.bicep` and the operator commands in `docs/container-app-fault.md`.
@@ -371,15 +371,15 @@ separately authorized future run; this table does not certify its fresh state.
 
 | Evidence | Captured? | Notes |
 |---|---:|---|
-| Arc-demo Container App deployed | Yes | Historical lab; active healthy revision after the recorded repair: `ca-arc-demo-fault--0000012` |
+| Arc-demo Container App deployed | Yes | Historical lab; active healthy revision after the recorded repair. Runtime revision IDs retained privately. |
 | SRE Agent deployed with Container App and alert IDs in managed resources | Yes | `sre-arc-demo` deployed in `rg-arc-demo-sre`; Container App included in managed resources |
 | Code repository connected | No | Pending live lab |
 | Review-mode response plan enabled | Yes | Created through SRE portal after creating custom subagent `sre-arc-demo`; MCP `incidents_plans_list` shows `container-app-restart-review-v2` enabled, Sev2, mode `review` |
-| `SIMULATE_CRASH=true` induced | Yes | Faulted revision `ca-arc-demo-fault--0000011` became unhealthy with `RestartCount` > 0 |
+| `SIMULATE_CRASH=true` induced | Yes | Faulted revision became unhealthy with `RestartCount` > 0 |
 | Azure Monitor alert fired | Yes | Historical thread/alert IDs retained privately; fired at `2026-10-12T01:38:34Z`. |
-| SRE Agent RCA produced | Yes | RCA identified `SIMULATE_CRASH=true`, entrypoint exits with code 1, RestartCount starts at `01:36 UTC`, and previous revision `--0000010` was last healthy |
+| SRE Agent RCA produced | Yes | RCA identified `SIMULATE_CRASH=true`, entrypoint exit code 1, restart onset and the prior healthy revision. |
 | Review-mode action approved | Yes | Historical portal card requested the exact Container App false reset in the confirmed lab subscription. |
-| Agent reset `SIMULATE_CRASH=false` | Yes | SRE Agent reported `SIMULATE_CRASH=false` applied and created revision `ca-arc-demo-fault--0000012` |
+| Agent reset `SIMULATE_CRASH=false` | Yes | SRE Agent reported the flag reset and a new revision; runtime identifiers retained privately. |
 | App recovered and alert resolved | Yes | Revision `ca-arc-demo-fault--0000012` became ready, RestartCount returned to 0, and SRE Agent closed the Sev2 alert |
 | Audit trail captured | Yes | Historical transcript includes alert payload, RCA, approved Azure CLI action, execution, recovery and closure. It is not the current retry's independent write-actor evidence. |
 

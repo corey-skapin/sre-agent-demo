@@ -39,6 +39,7 @@ Assert-True ($parseErrors.Count -eq 0) "All PowerShell files parse: $($parseErro
 Import-Module (Join-Path $root 'scripts\lib\DemoSkin.psm1') -Force
 Import-Module (Join-Path $root 'scripts\lib\SreRuntime.psm1') -Force
 $skin = Get-DemoSkin -RepoRoot $root
+& (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
 Assert-True ($skin.sre.requiredScenarios[0] -is [string]) 'JSON array strings remain strings, not PSCustomObject Length properties'
 foreach ($file in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
     $config = Get-DemoSkin -Path (Join-Path $root "config\$file") -RepoRoot $root
@@ -82,6 +83,42 @@ Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
 Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
 Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
 Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
+Assert-True ($desired.handler.properties.instructions -match 'No external source repository is configured') 'Default handler explicitly omits external repository context'
+$sourceSkinPath = [IO.Path]::GetTempFileName()
+$sourceGuestPath = [IO.Path]::GetTempFileName()
+try {
+    $configured = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+    $configured.codeContext.lobRepositoryUrl = 'https://example.invalid/lob-source'
+    $configured.codeContext.lobSourceCommit = 'example-revision'
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    $withSource = & $initialize -SubscriptionId $subscription -TenantId $tenant -SkinPath $sourceSkinPath | ConvertFrom-Json
+    Assert-True ($withSource.handler.properties.instructions.Contains('https://example.invalid/lob-source at example-revision')) 'Explicit private-style skin still renders configured repository/revision'
+    Assert-True ($withSource.handler.properties.instructions -notmatch 'No external source repository') 'Configured source is not silently omitted'
+    $configured.codeContext.lobSourceCommit = ''
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    Assert-Throws { Get-DemoSkin -Path $sourceSkinPath } 'schema|valid|minLength'
+    $configured.codeContext.lobRepositoryUrl = ''
+    $configured.codeContext.lobSourceCommit = 'example-revision'
+    $configured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourceSkinPath
+    Assert-Throws { Get-DemoSkin -Path $sourceSkinPath } 'schema|valid|const'
+    $callsBefore = $global:AzCalls.Count
+    & (Join-Path $root 'scripts\Invoke-LobArcAppOnArc.ps1') -SubscriptionId $subscription -TenantId $tenant -Action Deploy -GuestScriptOutputPath $sourceGuestPath | Out-Null
+    $guest = Get-Content -LiteralPath $sourceGuestPath -Raw
+    $encoded = [regex]::Match($guest, '(?m)^\$ConfigBase64 = ''(?<value>[A-Za-z0-9+/=]+)''').Groups['value'].Value
+    Assert-True ($encoded.Length -gt 0) 'Generated guest script carries explicit app configuration'
+    $guestConfig = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) | ConvertFrom-Json
+    Assert-True ($guestConfig.SourceRepositoryUrl -eq '' -and $guestConfig.SourceCommit -eq '') 'Default guest config has no invented external repository or revision'
+    Assert-True ($global:AzCalls.Count -eq $callsBefore) 'Local guest generation does not contact Azure'
+    Assert-Throws { & (Join-Path $root 'scripts\Invoke-LobArcAppOnArc.ps1') -SubscriptionId $subscription -TenantId $tenant -SourceRepositoryUrl 'https://example.invalid/lob-source' -GuestScriptOutputPath $sourceGuestPath } 'together'
+    $tokens = $null; $errors = $null
+    $sampleAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'samples\lob-arc-app\LobArcBridgeApp.ps1'), [ref]$tokens, [ref]$errors)
+    $contextFunction = $sampleAst.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-RepositoryContext' }, $true)
+    . ([scriptblock]::Create($contextFunction.Extent.Text))
+    $contextText = Get-RepositoryContext -Config $guestConfig
+    Assert-True ($contextText -match 'repo=<not configured> commit=<not configured>') 'Runtime event context explicitly labels omitted external source'
+} finally {
+    Remove-Item -LiteralPath $sourceSkinPath, $sourceGuestPath -Force
+}
 Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'BackupPath'
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'

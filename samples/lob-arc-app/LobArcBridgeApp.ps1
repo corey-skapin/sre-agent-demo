@@ -100,8 +100,8 @@ function Write-AppEvent {
 function Get-RepositoryContext {
     param([Parameter(Mandatory = $true)][psobject]$Config)
 
-    $repository = if ($Config.PSObject.Properties['SourceRepositoryUrl']) { $Config.SourceRepositoryUrl } else { '<not set>' }
-    $commit = if ($Config.PSObject.Properties['SourceCommit']) { $Config.SourceCommit } else { '<not set>' }
+    $repository = if ($Config.PSObject.Properties['SourceRepositoryUrl'] -and -not [string]::IsNullOrWhiteSpace($Config.SourceRepositoryUrl)) { $Config.SourceRepositoryUrl } else { '<not configured>' }
+    $commit = if ($Config.PSObject.Properties['SourceCommit'] -and -not [string]::IsNullOrWhiteSpace($Config.SourceCommit)) { $Config.SourceCommit } else { '<not configured>' }
     $path = if ($Config.PSObject.Properties['SourcePath']) { $Config.SourcePath } else { 'LobArcBridgeApp.ps1' }
 
     return "repo=$repository commit=$commit path=$path"

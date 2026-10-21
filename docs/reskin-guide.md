@@ -1,12 +1,12 @@
 # Reskin guide — SRE Agent layer
 
-This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the **spine** (agent Bicep, Review mode, Azure Monitor incident source, helper scripts) constant and swap customer values through `config\demo-skin.json`. Defaults align with the DTF baseline and contain no private subscription, tenant, or mailbox values.
+This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the **spine** (agent Bicep, Review mode, Azure Monitor incident source, helper scripts) constant and supply customer values through a private skin outside git. The tracked skins use fictional Contoso/Fabrikam examples, generic resource names and no external repository, subscription, tenant or contact values.
 
 ## Variable surface
 
 | Path | Purpose | Default |
 |---|---|---|
-| `customer.*` | Customer name, short name, and scenario label for docs/talk track. | SA DTF / DTF / Infrastructure Modernisation Program |
+| `customer.*` | Fictional organization and scenario labels; override privately for a real audience. | Contoso / Hybrid Operations Readiness |
 | `azure.namePrefix` | Prefix of the existing Arc demo to discover (`rg-<prefix>`, `law-<prefix>`, `ag-<prefix>`). | `arc-demo` |
 | `azure.location` | Azure region for the SRE Agent resource group. | `australiaeast` |
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
@@ -14,8 +14,8 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. | `T09`, `T11` |
 | `sre.retiredResponsePlanNames` | Explicitly owned old filter IDs to disable only during approved cutover; never inferred by prefix. | two v2 demo routes |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
-| `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | DTF baseline labels |
-| `codeContext.*` | LOB app repository URL, commit, and source path stamped into guest config/events. | Placeholder repo/commit |
+| `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | Generic Arc demo labels |
+| `codeContext.*` | Optional repository URL and commit stamped into guest config/events, plus local source path. | Empty URL/commit; local sample path |
 | `tags.*` | Tags on the SRE Agent resources. | demo tags |
 
 ## Swap list
@@ -23,9 +23,11 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 Change per customer:
 - Match `azure.namePrefix` and `azure.location` to the Arc repo's skin.
 - Update `labels.agentName` if the prefix changes.
-- Update `codeContext.lobRepositoryUrl`, `codeContext.lobSourceCommit`, and
-  `codeContext.lobSourcePath` if you fork or move the public LOB sample. The
-  default points to `corey-skapin/arc-demo/samples/lob-arc-app`.
+- Leave `codeContext.lobRepositoryUrl` and `codeContext.lobSourceCommit` empty
+  for a local-sample/telemetry-only demo, or supply your own HTTPS repository URL
+  and commit together. Set `codeContext.lobSourcePath` to its source path.
+  A URL is optional evidence context, not connector authentication or proof of
+  repository access. The handler explicitly reports when none is configured.
 - Pick the T10/T11 target Arc machine if the fleet mix changes.
 
 Keep constant:
@@ -35,7 +37,8 @@ Keep constant:
 ## Retarget steps
 
 1. Reskin and deploy `C:\src\arc-demo` first.
-2. Copy this repo's `config\demo-skin.json` or start from `config\dummy-customer.demo-skin.json`.
+2. Copy `config\demo-skin.json` or `config\dummy-customer.demo-skin.json` to a
+   private location outside the checkout; do not commit real customer/context values.
 3. Keep `azure.namePrefix` in sync with the Arc repo.
 4. Run SRE scripts using the skin:
    ```powershell
@@ -105,9 +108,9 @@ workspace unless explicitly supplied. Recheck existing plan filters when reskinn
 
 ## Examples
 
-DTF/default: use `config\demo-skin.json`, then provide only subscription/tenant and any live `AdditionalManagedResourceIds`.
+Default synthetic example: `config\demo-skin.json` uses fictional Contoso with the generic `arc-demo` prefix. Provide subscription/tenant at runtime and keep live values in a private skin.
 
-Dummy customer: `config\dummy-customer.demo-skin.json` changes the prefix to `contoso-arc`, agent name to `sre-contoso-arc`, LOB labels to Contoso, and code context to a placeholder Contoso repo. For the shared demo, keep the default public `corey-skapin/arc-demo` code context unless the customer has its own LOB sample repo.
+Alternative synthetic example: `config\dummy-customer.demo-skin.json` uses fictional Fabrikam, prefix `fabrikam-arc`, agent `sre-fabrikam-arc` and corresponding labels. Both examples leave external repository URL/commit empty. Configure your own source only when needed and separately authorize any connector.
 
 ## Remaining constants
 
