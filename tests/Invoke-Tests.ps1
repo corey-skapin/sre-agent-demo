@@ -38,6 +38,22 @@ Get-ChildItem -LiteralPath $root -Recurse -File -Include *.ps1, *.psm1 | ForEach
 Assert-True ($parseErrors.Count -eq 0) "All PowerShell files parse: $($parseErrors -join '; ')"
 Import-Module (Join-Path $root 'scripts\lib\DemoSkin.psm1') -Force
 Import-Module (Join-Path $root 'scripts\lib\SreRuntime.psm1') -Force
+$cliFixture = Join-Path ([IO.Path]::GetTempPath()) ("sre-cli-test-" + [guid]::NewGuid())
+try {
+    New-Item -ItemType Directory -Path (Join-Path $cliFixture 'wbin') | Out-Null
+    $pythonFixture = Join-Path $cliFixture 'python.exe'
+    [IO.File]::WriteAllText($pythonFixture, '')
+    $shim = [pscustomobject]@{ CommandType = 'Application'; Source = (Join-Path $cliFixture 'wbin\az.cmd') }
+    $invocation = Get-SreAzInvocation -Command $shim
+    Assert-True ($invocation.command -eq $pythonFixture) 'Windows MSI uses its own native Python, never cmd.exe'
+    Assert-True (($invocation.prefix -join ' ') -eq '-IBm azure.cli' -and $invocation.installer -eq 'MSI') 'Windows invocation preserves the official launcher module/isolation/install mode'
+    $invocation = Get-SreAzInvocation -Command ([pscustomobject]@{ CommandType = 'Function'; Source = '' })
+    Assert-True ($invocation.command -eq 'az' -and $invocation.prefix.Count -eq 0) 'Mocks/functions and non-Windows launchers retain ordinary invocation'
+    Remove-Item -LiteralPath $pythonFixture -Force
+    Assert-Throws { Get-SreAzInvocation -Command $shim } 'bundled python.exe'
+} finally {
+    Remove-Item -LiteralPath (Join-Path $cliFixture 'wbin'), $cliFixture -Force
+}
 $skin = Get-DemoSkin -RepoRoot $root
 & (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
 Assert-True ($skin.sre.requiredScenarios[0] -is [string]) 'JSON array strings remain strings, not PSCustomObject Length properties'
@@ -65,6 +81,9 @@ $global:AzResponder = {
 }
 Assert-SreContext $subscription $tenant | Out-Null
 Assert-True ($global:AzCalls[-1] -match "--subscription $subscription") 'Every Azure request has explicit subscription'
+$queryUrl = "https://management.azure.com/subscriptions/$subscription/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&" + '$filter=principalId%20eq%20%27' + $tenant + '%27'
+Invoke-SreAz -SubscriptionId $subscription -Arguments @('rest', '--method', 'get', '--url', $queryUrl, '-o', 'json') | Out-Null
+Assert-True ($global:AzCalls[-1].Contains($queryUrl)) 'Exact principal-filter URL reaches CLI unchanged, including ampersand and encoding'
 Assert-Throws { Assert-SreContext $subscription $subscription } 'does not match'
 $global:AzExitCode = 7
 Assert-Throws { Invoke-SreAz -Arguments @('group', 'exists') -SubscriptionId $subscription } 'failed \(7\)'

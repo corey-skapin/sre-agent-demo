@@ -78,6 +78,11 @@ ownership or prior PR content; those remain separate from the sanitized files.
 
 ## Validate locally
 
+On Windows, the shared CLI helper invokes the installed MSI CLI's bundled native
+Python entry point, matching `az.cmd` without shell-interpreting query URLs or
+guest arguments. A missing bundled runtime fails explicitly; it never falls back
+to unsafe command-string forwarding.
+
 ```powershell
 cd C:\src\sre-agent
 .\tests\Invoke-Tests.ps1
