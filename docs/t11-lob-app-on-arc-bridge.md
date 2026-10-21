@@ -1,8 +1,11 @@
 # T11 - LOB-app-on-Arc bridge package
 
-For the customer-facing demo scene, use
-[`t11-hybrid-diagnostics-wow.md`](t11-hybrid-diagnostics-wow.md). This file remains
-the detailed implementation runbook and evidence ledger.
+**Engineering reference and historical evidence ledger, not the presenter path.**
+Use [the docs map](README.md) and [canonical combined guide](delivery-runsheet.md)
+for the short read-only scene; the optional
+[hybrid talk track](t11-hybrid-diagnostics-wow.md) expands the story.
+Guest operations here, including `Status`, execute Run Command and are not
+navigation-only preparation.
 
 ## Current status
 
@@ -48,7 +51,10 @@ External repository URL and commit are empty by default. Optionally publish your
 own copy and connect that repository only after separate authentication/consent:
 
 1. Open the SRE Agent.
-2. Go to **Builder** > **Knowledge sources**.
+2. The current [source-code connection guide](https://learn.microsoft.com/azure/sre-agent/connect-source-code)
+   documents **Builder** > **Knowledge base** > **Add repository** for an existing
+   agent. Authenticated controls were not observed in this review; use the
+   visible documented layout, not a guessed menu.
 3. Add your own authorized repository URL.
 4. Deploy with `-SourceRepositoryUrl`, `-SourceCommit`, and `-SourcePath` so those
    values appear in the emitted Application events.
@@ -131,9 +137,12 @@ readiness or as an unconditional hibernation step.
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
-  -Action Deploy `
-  -SourceCommit '<commit-sha>'
+  -Action Deploy
 ```
+
+The default local-sample path needs no external source. If separately authorized
+source context is wanted, supply `-SourceRepositoryUrl` and `-SourceCommit`
+together, with the optional `-SourcePath`; a commit alone is not valid context.
 
 Useful operations:
 

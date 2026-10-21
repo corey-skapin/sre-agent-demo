@@ -7,7 +7,7 @@ The tracked [`config\demo-skin.json`](config/demo-skin.json) and alternative exa
 ## Start here
 
 - **AI coding assistants:** read [`AGENTS.md`](AGENTS.md) first.
-- **Presenter runthrough:** use [`docs\delivery-runsheet.md`](docs/delivery-runsheet.md), then branch to the scenario docs it names.
+- **First-time presenter:** start with [`docs\README.md`](docs/README.md), then use the single [`combined presenter guide`](docs/delivery-runsheet.md). The index identifies every document, the minimum reading order and which engineering/history files to skip.
 - **Setup/repair SRE response plans:** use [`docs\sre-response-plan-automation.md`](docs/sre-response-plan-automation.md).
 - **Do not use every doc as a presenter script.** Several files under `docs\` are engineering evidence or historical runbooks.
 
@@ -41,8 +41,10 @@ scripts/
 
 ## Prerequisites
 
-1. Existing `arc-demo` deployment from `C:\src\arc-demo` (T07 or later).
-2. Same tenant and subscription selected for the lab.
+1. Existing current `arc-demo` deployment; enable its optional Container App
+   workload when presenting T09. An example checkout is `C:\src\arc-demo`.
+2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
+   ambient subscription selection.
 3. Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
 
@@ -253,6 +255,11 @@ costs and why a cheaper-looking model, retention setting or cap is not a safe
 automatic demo downgrade. Keep a requested running demo running.
 
 ## Scenario runbooks
+
+The complete audience/status map is [`docs\README.md`](docs/README.md).
+Only `docs\delivery-runsheet.md` is the canonical combined presentation; the
+scenario files below are optional talk-track or operator/engineering references,
+not additional timed scripts or evidence that a replacement instance is rehearsed.
 
 - `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
 - `docs\sre-cost-and-demo-fidelity.md` - SRE cost levers, parking tradeoffs and demo-preserving boundaries.

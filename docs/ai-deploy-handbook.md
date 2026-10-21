@@ -2,11 +2,13 @@
 
 Use this only after standalone `arc-demo` is active. The Arc repo owns its estate;
 this repo adds SRE without editing the Arc checkout or redeploying its workloads.
+This is an operator/AI setup reference, not the presenter script. Start at
+[the docs map](README.md) for audience, reading order and presentation guidance.
 
 ## Handoff prompt
 
 ```text
-Read AGENTS.md, README.md, docs/delivery-runsheet.md and
+Read AGENTS.md, README.md, docs/README.md, docs/delivery-runsheet.md and
 docs/sre-response-plan-automation.md.
 
 Inputs: explicit subscription GUID, tenant GUID, skin, and desired state
@@ -30,8 +32,11 @@ For Ready:
    with a separately authorized rehearsal; never rewrite JSON/exit2 as exit0.
    Existing ARM success is not routing
    readiness. Do not induce a fault merely to answer a read-only readiness check.
-7. Present T09 as primary proven Review closed loop; T10/T11 as hybrid evidence
-   plus governed operator Arc Run Command recovery. T11 RCA is not reliable yet.
+7. T09 is the primary Review closed-loop capability; a new instance still needs
+   its own authorized functional rehearsal before a live success claim.
+   Present T10/T11 as hybrid evidence plus governed operator Arc Run Command
+   recovery. T11 RCA is not reliable yet. Use the canonical guide's evidence-only
+   fallback rather than treating old-instance proof as a new-instance pass.
 8. Leave a requested Ready demo running. Do not automatically hibernate.
 
 For Hibernated:

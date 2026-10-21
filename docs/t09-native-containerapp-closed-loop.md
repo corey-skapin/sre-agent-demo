@@ -1,6 +1,12 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
-Status: live validated for current-schema v3 Review routing on 2026-10-20. The Container App fault, automatic Azure Monitor handoff, SRE RCA, actual SRE repair, healthy endpoint and MonitorCondition recovery were exercised. Verify handler instructions, filters, Review mode, routing and workload health again before any future authorized rehearsal. Source-code repository connection remains optional and was not captured.
+**Operator reference, not the presenter script.** Start with
+[the docs map](README.md) and [canonical combined guide](delivery-runsheet.md).
+The historical 2026-10-20 instance validated v3 Review routing and the
+alert/RCA/approval/repair/recovery path. The replacement instance's reconstructed
+configuration was verified, but a new end-to-end rehearsal was not performed.
+Nothing below authorizes a new fault or certifies current readiness.
+Source-code repository connection is optional and was not captured.
 
 Latest current-schema retry (2026-10-20): a separately authorized fault generated
 a new Sev2 alert and independent v3 Review investigation. The user reported
@@ -47,7 +53,9 @@ For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
 
 - Azure CLI 2.60+ authenticated to the explicit target tenant/subscription; pass
   the subscription on every request rather than relying on ambient selection.
-- `C:\src\arc-demo` at T05 or later and `C:\src\sre-agent` at T08 or later.
+- Current companion Arc source with its optional Container App workload enabled,
+  plus this SRE source; example checkouts are `C:\src\arc-demo` and
+  `C:\src\sre-agent`, not historical task-number release prerequisites.
 - Permission to deploy `arc-demo`, deploy this SRE Agent layer, create role assignments, and approve SRE Agent actions.
 - SRE Agent response plan set to **Review** mode. Review mode is required for the one-click **Approve** step.
 - Optional, after separate explicit authentication/consent: connect
@@ -116,11 +124,14 @@ cd C:\src\sre-agent
 
 ## 3. Connect code context
 
-In the SRE Agent portal:
+Optional setup only, after separate authentication/connector authorization.
+The current [source-code connection guide](https://learn.microsoft.com/azure/sre-agent/connect-source-code)
+documents the existing-agent path below; authenticated controls were not observed
+in this documentation review. Skip this entirely for the default local-sample demo.
 
 1. Open `sre-arc-demo`.
-2. Go to **Builder** > **Knowledge sources**.
-3. Select **Add repository**.
+2. If the documented layout is visible, go to **Builder** > **Knowledge base**.
+3. Select the **Add repository** action card.
 4. Choose GitHub or Azure DevOps authentication.
 5. Only after explicit authorization, add your own Arc companion repository URL.
 6. Confirm the repository card shows **Connected**.
@@ -140,25 +151,18 @@ AzMonitor P1/P2 and response-level instructions. Existing legacy configuration
 requires approved migration to exact Sev2 and handler-owned instructions/tools,
 not just a title edit. See the automation doc for backup/preview/apply/verify.
 
-In the SRE Agent portal:
+Use the supported initializer, not a guessed create wizard, for configuration.
+The required read-back is the skin-rendered custom agent with its explicit four
+built-in tools, and `container-app-restart-review-v3`: Azure Monitor, Sev2, literal
+`containerapp-restarts`, intended handling agent, On, Review and enabled
+three-hour cooldown. No duplicate quickstart match or active legacy handler is
+allowed. Report conflicts and obtain scoped authorization before changes.
 
-1. Open `sre-arc-demo`.
-2. Go to **Builder** > **Agent Canvas**.
-3. Create or verify a custom agent named `sre-arc-demo`:
-   - Instructions: handle Azure Monitor incidents for `alert-arc-demo-containerapp-restarts`; investigate `ca-arc-demo-fault`, `RestartCount`, revision health, and the `SIMULATE_CRASH` environment variable.
-   - Handoff description: `Handles Arc demo Azure Monitor Container App restart incidents in Review mode.`
-   - Tools: use the rendered explicit built-in tool selection on this custom agent; keep the plan in Review. Do not configure legacy response-level tools or instructions.
-4. Go to **Builder** > **Incident response plans**.
-5. If quickstart also matches, report the conflict and obtain scoped authorization before narrowing/disabling/deleting another plan.
-6. Verify the existing response plan; create only if its absence is verified:
-   - Platform: **Azure Monitor**
-   - Name: `container-app-restart-review-v3` (skin-driven current route; retain old v2 disabled during approved cutover)
-   - Severity: `Sev2`
-   - Title contains: `containerapp-restarts`
-   - Response custom agent: `sre-arc-demo`
-   - Agent autonomy level: **Review**
-   - Reinvestigation cooldown: enabled, 3 hours
-7. Save and enable the plan.
+For read-only presentation, the [canonical guide](delivery-runsheet.md) describes
+the current documented **Incidents > Triggers + response plans** path, the
+published Builder variant and verified-bookmark/Inspect fallback. It does not
+claim every authenticated layout was observed. Do not create, save or toggle a
+plan merely to rehearse or replace a missing investigation.
 
 ### Historical F04 setup status - not a deployment recipe
 
@@ -244,6 +248,9 @@ See [Azure Monitor reinvestigation cooldown](https://learn.microsoft.com/azure/s
 Before the authorized fault, sign in to `https://sre.azure.com`, select the
 configured agent and be ready to open the new incident investigation. Expand
 the actual Azure infrastructure operation card, not just the RCA prose.
+The [canonical guide's approval section](delivery-runsheet.md#5-live-t09-only-where-the-real-approval-happens)
+gives documented thread navigation and the explicit unobserved-card/fallback
+boundary. There is no Azure Monitor alert-state or chat-message substitute.
 Confirm the current thread, affected app, resource group, subscription and
 complete command. Narration such as "approved" or "applying" is not an approval
 record. If there is no actual card, do not send an approval message or enable

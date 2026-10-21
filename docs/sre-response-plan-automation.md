@@ -1,5 +1,9 @@
 # Reconstructing current-schema SRE handler and Review response plans
 
+**Deployment/lifecycle operator reference.** For an already provisioned demo,
+present from [the canonical guide](delivery-runsheet.md), not the setup/migration
+commands below. [The docs map](README.md) explains the minimum reading path.
+
 ## Supported path and protocol pin
 
 Use Microsoft's [IaC deployment guidance](https://learn.microsoft.com/azure/sre-agent/deploy-iac),

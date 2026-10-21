@@ -53,7 +53,10 @@ Keep constant:
    backup. Run readiness and pair its static pending telemetry gate with separately
    recorded rehearsal evidence. Do not induce a fault to answer preflight.
 6. Use the same skin for scenario helpers; guest deployment/fault/reset actions
-   need their own approval. Status/ShowQuery are the non-disruptive examples:
+   need their own approval. Container App Status and ShowQuery are read-only.
+   Arc guest Status still executes Run Command and is not part of a read-only
+   presenter rehearsal; use existing workspace evidence for that scene.
+   The examples below are operator references, not a batch to run on stage:
    ```powershell
    .\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
    .\scripts\Invoke-T10ArcFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
@@ -63,9 +66,11 @@ Keep constant:
 
 ## Off state vs cleanup
 
-The optional SRE layer has a different off-state from `arc-demo` because Azure
-SRE Agent has no stopped/deallocated state. To avoid the always-on agent charge,
-run:
+The optional SRE layer has a different off-state from `arc-demo`: an SRE parent
+can be Stopped, but its always-on charge continues until deletion. The repo's
+Hibernated state is therefore deletion-based, retaining the costless UAMI.
+See [the billing boundary](sre-cost-and-demo-fidelity.md). Only after explicit
+authorization, preview and execute the operator parking procedure:
 
 ```powershell
 .\scripts\Hibernate-SreAgent.ps1 `
