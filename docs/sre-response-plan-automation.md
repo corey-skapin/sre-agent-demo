@@ -86,9 +86,9 @@ RBAC and human approval. No connector or new RBAC grant is created.
 Filters are enabled. The literal title is one keyword, never an `OR` expression.
 The default impacted services remain `Azure Container Apps` and `Azure Arc`;
 verify actual incident matching in the separately authorized rehearsal.
-The renderer does not manage cooldown fields. Existing merge settings are
-preserved; new filters receive service defaults. The validated live routes had
-`mergeEnabled=true` and a three-hour window, not a repo-enforced universal default.
+The renderer explicitly sets `mergeEnabled=true` and `mergeWindowHours=3` on
+both modern routes, for fresh creation and reconciliation. This matches the
+validated live settings; they are no longer left to service defaults.
 Inspect actual cooldown before a repeat: a recurring fire can merge into/reopen
 an existing thread. Any temporary disable and exact restoration need scoped
 approval; neither closing a thread nor a resolved alert guarantees a fresh one.
@@ -191,7 +191,7 @@ parent overrides require explicit reskinning or parent-only intent.
 
 Readiness now uses full supported reads for instructions/tools, On/Review,
 AzMonitor/Sev2/title/handler/service mapping, retired routing, active legacy
-response fields and unreviewed enabled extra plans. Invalid active priorities,
+response fields, enabled three-hour cooldown and unreviewed enabled extra plans. Invalid active priorities,
 active legacy settings or still-enabled retired routes are **fail**, not merely
 unknown/pending. Retained disabled history is allowed. Missing/denied reads fail explicitly.
 The Ready command does not ingest external rehearsal artifacts, so
@@ -209,12 +209,34 @@ hide required failures or change a required check's outcome.
 
 ### Approved hibernation and later reactivation
 
-Hibernation deletes the named SRE group: parent, UAMI, Application Insights and
-the allowed service-created smart-detection Action Group if present. It removes
-only known-role assignments for that UAMI at the subscription and existing
-Arc/observability and infra group scopes. Other principals' external assignments
-are not selected. Extra group resources, unexpected roles or out-of-scope grants
-block cleanup; do not bypass the guard. Arc workloads remain untouched here.
+Normal hibernation **retains the dedicated SRE group and SRE-only UAMI**. It
+deletes only the named parent, Application Insights and allowed service-created
+Smart Detection Action Group, if present. It removes the six High-profile
+external grants (or the Low-profile grants), known historical compatibility
+grants if present, and the single direct parent SRE Agent Administrator assignment.
+Other principals' external assignments are not selected. Extra resources,
+unexpected roles/scopes or additional parent grants block the entire preview;
+do not bypass the guard. Arc workloads remain untouched.
+
+The retained identity is created by `infra\modules\sre-identity.bicep` in the same
+SRE group; the parent module references it as existing. Incremental deployment
+reuses its deterministic ARM ID and principal. RBAC names include scope, seed,
+principal and role; the same retained principal restores the same six assignment
+IDs instead of accumulating principals/grants. Existing same-principal legacy
+assignment names are still adopted while present.
+The validated `SystemAssigned,UserAssigned` parent shape is preserved, per the
+[published schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
+Only the UAMI survives parent deletion; the system principal still rotates and
+receives no external workload grants from this repo. UserAssigned-only service
+operation has not been validated here and is not silently enabled.
+
+Managed identities have [no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
+Retaining that object does not retain its external Contributor access. Normal
+parking revokes grants; wake restores them through the same IaC and authorization
+boundary. Full identity/group deletion is separately authorized cleanup, not a
+switch on the normal parking script. Historical whole-group hibernation deleted
+its UAMI; that old principal cannot be restored, so the next first deployment
+must create one replacement before future cycles can retain it.
 
 Before deletion, save the live UAMI principal and full Inspect output, plus any
 needed incident/tool/Activity Log evidence outside git. The narrow Inspect
@@ -250,22 +272,32 @@ az identity show --subscription <SUBSCRIPTION_ID> `
   -OutputFormat Json -TimeoutSeconds 180
 ```
 
-Check each command's exit status before continuing. Group deletion uses
-`--no-wait`: submission is not completion. Recheck Hibernated readiness within
-a bounded observation window; stop/report failures or pending timeout rather
-than resubmitting deletion blindly. A missing old principal leaves orphan-RBAC
-verification pending. Only after SRE is verified off should the Arc owner park
-Arc/networking. SRE deletion avoids the agent's always-on cost, not all remaining
-storage, monitoring or Arc-service charges.
+Check each exit status. Resource removal is sequential with bounded observation
+(`Hibernate-SreAgent.ps1 -TimeoutSeconds 300` by default), not a hard cancellation
+deadline on each Azure CLI call. Read-before-write compares remaining resource
+and grant IDs and the retained principal; stop on drift or failed writes without
+blind retries. Recheck Hibernated readiness separately before parking Arc.
+It requires the exact retained UAMI, no parent/diagnostics, no external grants
+and no direct parent administrator assignment. Principal-filtered ARM role
+inventory includes below/above-subscription scopes; unknown scopes fail rather
+than being missed. Direct SRE-group ARM assignment reads verify parent grants
+after parent deletion; resource/ARG absence alone is insufficient.
+The documented [ARM assignment-list API](https://learn.microsoft.com/rest/api/authorization/role-assignments/list-for-scope?view=rest-authorization-2022-04-01)
+is used with bounded, validated pagination, not Microsoft Graph or guessed SRE routes.
+Absent/partial state can be inspected without mutation, but a missing UAMI fails
+normal Hibernated even with a saved old principal. Only after SRE is verified
+parked should Arc/networking be parked. Parent deletion avoids its always-on
+cost, not all remaining storage, monitoring or Arc-service charges.
 
-For the next demo, activate and verify Arc first. Deploy the SRE parent and new
-identity, then render/Inspect/approve/Apply the versioned modern custom agent and
+For the next demo, activate and verify Arc first. Deploy the SRE parent using the
+retained identity, then render/Inspect/approve/Apply the versioned modern custom agent and
 v3 filters with a new external backup, or use complete deployment above.
-Old principal grants, retired v2 objects, learned memory and deleted history are
-not restored. Do not replay an old full export as a PUT payload: it is reference
+Retired v2 objects, learned memory and deleted history are not restored. The
+modern v3 filters explicitly restore enabled three-hour cooldown and Review/Sev2.
+Do not replay an old full export as a PUT payload: it is reference
 evidence, not a supported restore input. Optional repository authentication needs
 explicit reauthorization. An in-place T09 repair proves neither a fresh bootstrap
-nor a deletion-to-Ready round trip; those live lifecycle gates remain untested.
+nor a retained-identity park/wake round trip; that live lifecycle gate remains untested.
 
 ## Evidence boundaries
 

@@ -222,11 +222,20 @@ $principalId = $null
 if ($sreExists) {
     $identities = Invoke-AzCli -Arguments @('identity', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
     $principalId = @($identities | Where-Object name -EQ "$AgentName-uami" | Select-Object -ExpandProperty principalId) | Select-Object -First 1
+    if ($principalId -and $principalId -notmatch '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') { throw 'Retained UAMI has an invalid principal ID; stop before deployment.' }
     $resources = Invoke-AzCli -Arguments @('resource', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
+    $allowed = @("Microsoft.App/agents/$AgentName", "Microsoft.ManagedIdentity/userAssignedIdentities/$AgentName-uami", "Microsoft.Insights/components/$AgentName-appi", 'Microsoft.Insights/actionGroups/Application Insights Smart Detection')
+    if (@($resources | Where-Object { "$($_.type)/$($_.name)" -notin $allowed }).Count) { throw 'Unexpected resources in the dedicated SRE group; inspect ownership before deployment.' }
     $existingParent = $resources | Where-Object { $_.type -eq 'Microsoft.App/agents' -and $_.name -eq $AgentName } | Select-Object -First 1
     if ($existingParent) {
+        if (-not $principalId) { throw 'Existing parent has no expected UAMI. Refusing implicit identity replacement; inspect and reconcile separately.' }
         $currentParent = Invoke-AzCli -Arguments @('resource', 'show', '--ids', $existingParent.id, '-o', 'json') | ConvertFrom-Json -Depth 100
         $AdditionalManagedResourceIds = @(@($AdditionalManagedResourceIds) + @($currentParent.properties.knowledgeGraphConfiguration.managedResources) | Sort-Object -Unique)
+    }
+    if ($principalId) {
+        Write-Host "Reusing retained SRE UAMI principal: $principalId. Incremental IaC preserves its deterministic resource ID."
+    } else {
+        Write-Host 'First deployment: IaC will create the dedicated retained SRE UAMI; future normal hibernation keeps it.'
     }
 }
 foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
@@ -298,6 +307,9 @@ try {
 
 $result = $resultText | ConvertFrom-Json
 $outputs = $result.properties.outputs
+if ($principalId -and $outputs.managedIdentityPrincipalId.value -ne $principalId) {
+    throw 'Deployment did not retain the preflight UAMI principal. Stop before data-plane configuration and inspect identity/RBAC drift.'
+}
 Write-Host ''
 Write-Host 'SRE parent deployment complete; data-plane configuration and routing readiness are NOT confirmed.'
 Write-Host "  Agent:       $($outputs.agentName.value)"

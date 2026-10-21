@@ -17,8 +17,17 @@ Check ($desired.schemaVersion -eq 2) 'Current configuration format is versioned 
 foreach ($plan in $desired.plans) {
     Check ($plan.properties.priorities.Count -eq 1 -and $plan.properties.priorities[0] -ceq 'Sev2') 'AzMonitor requires exact Sev2, never high/P1/P2'
     Check (-not $plan.properties.ContainsKey('customInstructions') -and -not $plan.properties.ContainsKey('tools')) 'Instructions/tools belong to custom agent'
+    Check ($plan.properties.mergeEnabled -eq $true -and $plan.properties.mergeWindowHours -eq 3) 'Fresh and reused filters explicitly enforce enabled three-hour cooldown'
 }
 Check ('RunAzCliWriteCommands' -in $desired.handler.properties.tools) 'T09 write capability is explicitly selected on custom agent, still governed by Review'
+$cooldownFixture = @{
+    subagents = @($desired.handler | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable)
+    filters = @($desired.plans | ForEach-Object { $_ | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable })
+    handlers = @()
+}
+foreach ($filter in $cooldownFixture.filters) { $filter.properties.mergeEnabled = $false; $filter.properties.mergeWindowHours = 1 }
+$cooldownPlan = Get-SreCompleteConfigurationPlan $desired $cooldownFixture
+Check ($cooldownPlan.operations.Count -eq 2 -and @($cooldownPlan.operations | Where-Object { $_.after.properties.mergeEnabled -and $_.after.properties.mergeWindowHours -eq 3 }).Count -eq 2) 'Existing cooldown drift previews exactly two enabled three-hour updates'
 $fixture = @{ subagents = @(); filters = @(); handlers = @() }
 foreach ($plan in $desired.plans) {
     $filter = $plan | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable

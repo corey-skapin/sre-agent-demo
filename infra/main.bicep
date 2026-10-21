@@ -3,7 +3,7 @@ targetScope = 'subscription'
 @description('Azure region for the SRE Agent layer.')
 param location string = 'australiaeast'
 
-@description('Resource group that will contain the SRE Agent and its diagnostics resources.')
+@description('Dedicated SRE group. Normal hibernation retains this group and its SRE-only user-assigned identity.')
 param sreResourceGroupName string = 'rg-arc-demo-sre'
 
 @description('Name of the SRE Agent. Must start with a letter and be 32 characters or fewer.')
@@ -79,6 +79,16 @@ resource arcDemoInfraRg 'Microsoft.Resources/resourceGroups@2024-11-01' existing
   name: arcDemoInfraResourceGroupName
 }
 
+module sreIdentity 'modules/sre-identity.bicep' = {
+  name: 'sre-agent-identity'
+  scope: sreRg
+  params: {
+    agentName: agentName
+    location: location
+    tags: tags
+  }
+}
+
 module sreAgent 'modules/sre-agent.bicep' = {
   name: 'sre-agent-layer'
   scope: sreRg
@@ -90,6 +100,7 @@ module sreAgent 'modules/sre-agent.bicep' = {
     appInsightsWorkspaceId: arcDemoWorkspaceId
     managedResourceIds: managedResourceIds
     deployerPrincipalType: deployerPrincipalType
+    managedIdentityName: sreIdentity.outputs.identityName
   }
 }
 
@@ -97,7 +108,7 @@ module arcDemoRoleAssignments 'modules/role-assignments.bicep' = {
   name: 'sre-agent-rbac-arc'
   scope: arcDemoRg
   params: {
-    principalId: sreAgent.outputs.managedIdentityPrincipalId
+    principalId: sreIdentity.outputs.principalId
     roleDefinitionIds: selectedRoleDefinitionIds
     roleAssignmentSeed: '${sreResourceGroupName}-${agentName}'
     existingRoleAssignmentNames: arcRoleAssignmentNames
@@ -108,7 +119,7 @@ module arcDemoInfraRoleAssignments 'modules/role-assignments.bicep' = {
   name: 'sre-agent-rbac-infra'
   scope: arcDemoInfraRg
   params: {
-    principalId: sreAgent.outputs.managedIdentityPrincipalId
+    principalId: sreIdentity.outputs.principalId
     roleDefinitionIds: selectedRoleDefinitionIds
     roleAssignmentSeed: '${sreResourceGroupName}-${agentName}'
     existingRoleAssignmentNames: infraRoleAssignmentNames
@@ -118,8 +129,8 @@ module arcDemoInfraRoleAssignments 'modules/role-assignments.bicep' = {
 output agentName string = sreAgent.outputs.agentName
 output agentId string = sreAgent.outputs.agentId
 output agentPortalUrl string = sreAgent.outputs.agentPortalUrl
-output managedIdentityId string = sreAgent.outputs.managedIdentityId
-output managedIdentityPrincipalId string = sreAgent.outputs.managedIdentityPrincipalId
+output managedIdentityId string = sreIdentity.outputs.identityId
+output managedIdentityPrincipalId string = sreIdentity.outputs.principalId
 output appInsightsId string = sreAgent.outputs.appInsightsId
 output managedResourceIds array = managedResourceIds
 output accessLevel string = accessLevel

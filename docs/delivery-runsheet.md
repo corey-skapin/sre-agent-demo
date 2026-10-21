@@ -240,7 +240,7 @@ $sreTarget = @{
 .\scripts\Test-SreReadiness.ps1 @sreTarget -DesiredState Hibernated `
   -PreviousIdentityPrincipalId '<SAVED_SRE_PRINCIPAL_ID>' -OutputFormat Json -TimeoutSeconds 180
 
-# Continue only after SRE deletion and owned-grant removal are verified.
+# Continue only after SRE parent removal, UAMI retention and owned-grant removal are verified.
 cd C:\src\arc-demo
 $arcTarget = @{
   SubscriptionId = '<SUBSCRIPTION_ID>'
@@ -255,7 +255,8 @@ $arcTarget = @{
 
 Check exit status at every step; SRE deletion is asynchronous. Recheck read-only
 within a bounded observation window rather than blindly repeat deletion.
-SRE removes its dedicated group/identity and known external UAMI grants; custom
+SRE retains its dedicated group and SRE-only UAMI, removes parent/known diagnostics,
+known external UAMI grants and the direct parent administrator assignment; custom
 configuration, history, memory and connector state are lost, not suspended.
 Versioned modern agent/v3 routes can be recreated; an Inspect export is a reference,
 not a history/credential restore.
@@ -288,11 +289,16 @@ asynchronous patch assessments. It does not reset faults or credentials. Arc
 readiness timeout bounds retries, not hard per-service wall-clock cancellation;
 it is already read-only and has no `-WhatIf`.
 
-Rebuild the SRE parent/new identity, custom handler and Review filters, read back
+Rebuild the SRE parent using the retained identity, custom handler and Review/Sev2
+filters with enabled three-hour cooldown, read back
 and perform read-only readiness; optional repository authentication needs explicit
 reauthorization. A new live fault needs separate approval. Local mocked checks,
 the earlier targeted starts and the T09 repair do **not** prove a complete
-destructive parking/reactivation round trip.
+retained-identity parking/reactivation round trip. First deployment or recovery
+from historical whole-group deletion creates one UAMI through the same IaC.
+Normal cycles retain its principal and deterministic workload assignment IDs;
+the parent system-assigned principal still rotates. Do not claim a live wake
+succeeded when Arc activation failed or only partial inventory is available.
 
 ## Remaining live-validation gaps
 

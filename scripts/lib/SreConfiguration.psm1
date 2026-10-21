@@ -32,6 +32,7 @@ function Get-SreDesiredConfiguration {
                 incidentPlatform = 'AzMonitor'; priorities = @('Sev2'); titleContains = $title
                 impactedService = $service; handlingAgent = $skin.labels.agentName
                 agentMode = 'Review'; isEnabled = $true
+                mergeEnabled = $true; mergeWindowHours = 3
             }
         }
         if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }

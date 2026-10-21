@@ -157,13 +157,14 @@ User, service-principal and managed-identity deployers are supported through
 ## Off state / reactivate
 
 Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
-an always-on charge, the off-state for this optional repo removes only the SRE
-Agent resource group and known identity-owned RBAC grants at the subscription,
-Arc/observability-group and infra-group scopes. Other identities' external grants and
-the Arc estate stay intact. Unexpected resources or grants block deletion.
+an always-on charge, normal parking removes the parent and known diagnostics,
+but **retains the dedicated SRE group and its SRE-only UAMI**. Known UAMI workload
+grants and the direct parent administrator grant are removed. Other identities'
+external grants and the Arc estate stay intact. Unexpected resources or grants
+block deletion; normal parking never deletes the group or UAMI.
 
 ```powershell
-# Only after approved destructive cleanup; export configuration/evidence and
+# Only after approved parent removal; export configuration/evidence and
 # save the live identity principal first. See the complete lifecycle procedure:
 # docs\sre-response-plan-automation.md
 .\scripts\Hibernate-SreAgent.ps1 `
@@ -184,7 +185,7 @@ the Arc estate stay intact. Unexpected resources or grants block deletion.
   -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 
-# Before the next demo — recreate the optional SRE layer
+# Before the next demo — rebuild the parent using the retained identity
 # First reactivate and verify Arc through its own repo.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
@@ -198,17 +199,31 @@ Reactivation also requires modern handler/v3-plan ensure and verification above,
 with a new external backup path and approval for actual changes.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
-re-established; a URL in the skin is not authentication. Save the old identity
+re-established; a URL in the skin is not authentication. Save the retained identity
 principal and use readiness `-DesiredState Hibernated
 -PreviousIdentityPrincipalId <ID>` to verify external grant cleanup. Missing
-identity/partial state is safe to inspect; orphan checks without an old principal
-remain pending. WhatIf never selects a global account, revokes grants or writes a
+identity/partial state is safe to inspect, but an absent UAMI (including historical
+whole-group deletion) fails the new identity-retained Hibernated contract.
+WhatIf never selects a global account, revokes grants or writes a
 guest script.
 The saved Inspect export is a reference, not a replayable history/connector
-backup. Recreated SRE identity has a new principal; do not reuse old grants or
-reactivate retained legacy v2 handlers. A fresh deletion-to-Ready reconstruction
-has not been live-tested by the T09 rehearsal. Residual Arc/storage/monitoring
+backup. The retained UAMI principal and deterministic workload assignment IDs
+are reused on wake; deployment creates it only on the first deployment or after
+separate full deletion. The parent keeps its validated combined identity shape:
+its system-assigned principal still changes when the parent is recreated and is
+not granted these external workload roles. Never reactivate retired legacy v2 handlers.
+Versioned filters explicitly restore enabled three-hour cooldown and Review/Sev2.
+A fresh retained-identity park/wake round trip has not been live-tested by the
+T09 rehearsal. Residual Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
+
+The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
+Retaining an identity is not retaining Contributor access: normal parking revokes
+its grants, then incremental IaC restores the same deterministic IDs on wake.
+The separate identity module owns it in the same SRE group, so first creation and
+future reuse follow identical IaC without an extra identity group or manual identity.
+Full removal of the retained group/identity requires separate explicit approval;
+`Hibernate-SreAgent.ps1` deliberately has no group/identity deletion path.
 
 ## Scenario runbooks
 

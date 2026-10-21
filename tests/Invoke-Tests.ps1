@@ -59,6 +59,7 @@ Assert-Throws { Assert-SreName 'machine"; throw "injection' 'machine' } 'Invalid
 $global:AzResponder = {
     if ($args[0] -eq 'account') { return '{"id":"00000000-0000-0000-0000-000000000001","tenantId":"00000000-0000-0000-0000-000000000002","state":"Enabled","user":{"type":"user"}}' }
     if ($args[0] -eq 'role') { return '[]' }
+    if ($args[0] -eq 'rest') { return '{"value":[]}' }
     'false'
 }
 Assert-SreContext $subscription $tenant | Out-Null
@@ -88,9 +89,9 @@ Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | Con
 
 Import-Module (Join-Path $root 'scripts\lib\SreReadiness.psm1') -Force
 $hibernated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
-Assert-True ($hibernated.status -eq 'pending') 'Absent identity does not falsely certify orphan-grant cleanup'
+Assert-True ($hibernated.status -eq 'fail') 'Absent identity does not certify normal retained-identity Hibernated'
 $hibernatedKnown = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId '00000000-0000-0000-0000-000000000003'
-Assert-True ($hibernatedKnown.status -eq 'pass') 'Known old identity and absent groups/grants verify Hibernated'
+Assert-True ($hibernatedKnown.status -eq 'fail') 'Legacy whole-group deletion is not normal identity-retained Hibernated'
 $ready = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
 Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
@@ -179,31 +180,7 @@ Assert-True ($parameters.parameters.additionalManagedResourceIds.value.Count -eq
 Assert-True ($global:CapturedParameters[0] -eq $global:CapturedParameters[1]) 'Repeated preview produces identical deployment parameters'
 Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -AccessLevel Low -WhatIf } 'incompatible grant'
 
-$global:AzCalls.Clear()
-$global:AzResponder = {
-    $command = $args -join ' '
-    $base = '/subscriptions/00000000-0000-0000-0000-000000000001'
-    $principal = '00000000-0000-0000-0000-000000000003'
-    if ($command -like 'account show*') { return '{"id":"00000000-0000-0000-0000-000000000001","tenantId":"00000000-0000-0000-0000-000000000002","state":"Enabled","user":{"type":"user"}}' }
-    if ($command -like 'group exists*') { return 'true' }
-    if ($command -like 'resource list*') { return '[{"name":"sre-arc-demo","type":"Microsoft.App/agents"},{"name":"sre-arc-demo-uami","type":"Microsoft.ManagedIdentity/userAssignedIdentities"}]' }
-    if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
-    if ($command -like 'role assignment list*') {
-        $items = @(@{ id = "$base/providers/Microsoft.Authorization/roleAssignments/inherited-monitoring"; name = 'inherited-monitoring'; principalId = $principal; scope = $base; roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' })
-        if ($command -match '/resourceGroups/(rg-arc-demo(?:-infra)?) ') {
-            $scope = "$base/resourceGroups/$($Matches[1])"
-            $items += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/scoped-reader"; name = 'scoped-reader'; principalId = $principal; scope = $scope; roleDefinitionId = '/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' }
-        }
-        return ConvertTo-Json -InputObject $items
-    }
-    if ($command -like 'role assignment delete*' -or $command -like 'group delete*') { return '' }
-    throw "Unexpected mocked Azure call: $command"
-}
-& (Join-Path $root 'scripts\Hibernate-SreAgent.ps1') -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
-$deletes = @($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' })
-Assert-True ($deletes.Count -eq 3) 'Cleanup deduplicates inherited grant and removes only two known scoped grants'
-Assert-True (@($deletes | Where-Object { $_ -match 'inherited-monitoring' }).Count -eq 1) 'Subscription compatibility grant is cleaned up once'
-Assert-True (@($global:AzCalls | Where-Object { $_ -like 'group delete*' -and $_ -match 'rg-arc-demo-sre' }).Count -eq 1) 'Only optional SRE group deletion is submitted'
+& (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
 $generator = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ScenarioScript' }, $true)

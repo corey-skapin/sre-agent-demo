@@ -71,13 +71,14 @@ run:
   -SkinPath .\config\demo-skin.json
 ```
 
-Preview with `-WhatIf` first. This removes only `rg-<prefix>-sre` and known-role
-assignments for the SRE identity at the subscription and two existing Arc demo
-group scopes. Unexpected resources/grants stop deletion. It does not delete
+Preview with `-WhatIf` first. This retains `rg-<prefix>-sre` and `<AGENT_NAME>-uami`,
+removes only the parent/known diagnostics, known UAMI workload assignments and
+the single direct parent administrator grant. Unexpected resources/grants stop
+deletion. Full group/identity deletion is separate cleanup. It does not delete
 or redeploy the Arc estate. Save its identity principal ID, Inspect export and
 incident/audit evidence first, then verify asynchronous deletion with Hibernated
 readiness and that saved principal. Finish SRE before Arc hibernation.
-Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly`, then render
+Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly` using the retained UAMI, then render
 `Initialize-SreConfiguration.ps1`, inspect and apply the pinned current-schema
 configuration with a new external backup path, then run readiness. Existing
 legacy plans require separately approved migration, not MCP `high`/P1/P2 creates.
@@ -86,7 +87,12 @@ repository authorization. Keep the requested Ready demo running unless cleanup
 is explicitly requested.
 Wake Arc before SRE. Rebuilding recreates the modern custom agent and v3 filters,
 not retired v2 history or learned memory. The saved export is a reference, not
-an automatic restore input. Deletion-to-Ready has not been live-tested here.
+an automatic restore input. Filters explicitly enforce enabled three-hour cooldown,
+Sev2 and Review. First deployment creates the UAMI through the same IaC; normal
+park/wake retains its principal and deterministic grant IDs. The system-assigned
+parent principal still changes on parent recreation. A missing UAMI fails normal
+Hibernated readiness; do not mistake historical whole-group deletion for retention.
+The retained-identity park/wake round trip has not been live-tested here.
 Residual Arc/storage/monitoring services can still incur charges.
 
 Skins are validated against `config\demo-skin.schema.json`; missing files, unknown

@@ -132,10 +132,12 @@ a reference, not an automatic history/memory restore or a payload to replay.
   -SkinPath .\config\demo-skin.json -WhatIf
 ```
 
-Remove `-WhatIf` only for the approved scope. This deletes the SRE group and known
-identity-owned grants at the subscription/Arc-group/infra-group scopes, not
-external grants belonging to other identities. Unexpected resources or grants stop cleanup.
-Deletion submission is asynchronous, not verified hibernation.
+Remove `-WhatIf` only for the approved scope. Normal parking retains the dedicated
+SRE group and `<AGENT_NAME>-uami`, deletes only the parent, its Application Insights
+and known Smart Detection Action Group, and removes known UAMI workload grants
+plus the direct parent administrator grant. Unexpected resources/grants stop
+before mutation. Never delete the group/UAMI as a normal hibernation shortcut.
+Deletion observation is bounded; failed or pending cleanup is not Hibernated.
 Finish and verify SRE hibernation **before** the Arc owner parks the estate.
 
 Save the SRE identity principal ID and evidence before deletion. Verify
@@ -143,5 +145,12 @@ Save the SRE identity principal ID and evidence before deletion. Verify
 Reactivation rebuilds parent, handler and plans; deleted thread/history/memory and
 repository connector authorization are not restored from this repo. No destructive
 full-lifecycle test is implied by local mocked tests or the successful T09 retry.
-Resume Arc first; recreate the SRE parent/identity, then modern custom agent/v3
-filters from versioned assets. Do not recreate retired legacy routing/history.
+Resume Arc first and require fresh Arc Ready; redeploy the SRE parent using the
+retained UAMI, then modern custom agent/v3 filters from versioned assets with
+enabled three-hour cooldown. Do not recreate retired legacy routing/history.
+First deployment (or recovery from historical whole-group deletion) creates one
+new UAMI through the same IaC; later normal cycles preserve its principal and
+deterministic workload assignment IDs. The validated combined system/user identity
+shape is unchanged: the system-assigned principal still rotates with the parent.
+No new external permission is granted to that system principal. Full identity/group
+removal is separate destructive cleanup, not normal parking.
