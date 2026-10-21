@@ -124,6 +124,10 @@ Report enabled extra/quickstart conflicts; do not remove them automatically.
 - Do not claim T11 autonomous Arc repair or reliable SRE RCA.
 - Keep desired Ready versus Hibernated explicit; never hibernate a requested
   running demo automatically. Hibernation is destructive and needs authorization.
+- Do not treat High/Low permissions as a pricing tier, or a Stopped parent as
+  cost-free. SRE always-on billing continues until parent deletion. Follow
+  `docs\sre-cost-and-demo-fidelity.md`; do not silently cut telemetry, change
+  model or reduce an active-flow allocation to manufacture savings.
 - Do not modify `C:\src\arc-demo` from this repo; layer on top only.
 
 ## Hibernation
