@@ -162,6 +162,11 @@ the independent new thread was verified. The original enabled three-hour value
 and Review mode were read-back restored.
 Actual MonitorCondition resolved at 01:45:58 UTC, independently read back;
 alert workflow state remained Acknowledged. This is separate from closing an incident.
+Subsequent clean reconstruction through this repo also verified the new retained
+UAMI, exact workload/admin grants, High/Review/AzMonitor parent, one custom agent
+and two modern filters through full read-back. Repeated bootstrap converged with
+zero operations. This validates clean configuration reconstruction, not a new
+fault/recovery rehearsal or a complete retained-identity park/wake round trip.
 Supported MCP thread reads expose narration, not an actionable approval
 contract. Never use unrestricted approval/yolo to bridge that capability gap,
 and never treat the agent saying "approved" as proof of approval or execution.
