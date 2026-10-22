@@ -12,7 +12,7 @@ Read AGENTS.md, README.md, docs/README.md, docs/delivery-runsheet.md and
 docs/sre-response-plan-automation.md.
 
 Inputs: explicit subscription GUID, tenant GUID, skin, and desired state
-Ready or Hibernated. Never infer target context from an ambient Azure login.
+Active (Ready compatibility alias), Hibernated or Removed. Never infer target context from an ambient Azure login.
 Keep runtime identifiers and credentials out of git.
 
 For Ready:
@@ -44,11 +44,23 @@ For Hibernated:
    plus required incident/audit evidence outside git. This is not a history restore.
 2. Save the SRE user-assigned identity principal ID.
 3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
-4. Normal parking retains the SRE group/UAMI and deletes only parent/diagnostics.
-   Verify retained principal, resource removal, external RBAC and parent-admin absence with Test-SreReadiness.ps1
+4. Normal parking deletes only the paid parent; retains SRE group/UAMI, existing
+   workload grants, workspace AppInsights and owned Action Group.
+   Verify retained principal and parent absence with Test-SreReadiness.ps1
    -DesiredState Hibernated -PreviousIdentityPrincipalId <saved ID>.
+   Missing legacy diagnostics or stale free grants are optional wake diagnostics,
+   not a reason to leave the paid parent running. Denied inspection still fails.
 5. Finish SRE verification before Arc hibernation. Arc lifecycle is separately
    owned; do not stop its workloads from this repo. Wake/verify Arc before SRE.
+
+For Removed:
+1. Obtain separate full-removal authorization; preserve exports and principal.
+2. Preview Remove-SreAgent.ps1 -WhatIf with the same explicit target/skin.
+3. Unknown resources/roles/scopes require ownership reconciliation, not bypass.
+4. Execute approved preview; known grants/resources are removed before deleting
+   the empty dedicated group. Shared Arc/Monitor and private exports are untouched.
+5. Verify -DesiredState Removed with the saved principal. Without that principal,
+   external-grant absence is pending even when the group is gone.
 
 Never change plans to Autonomous, remove quickstart plans, revoke extra grants,
 connect a repository, or induce faults without the appropriate scoped approval.
@@ -119,13 +131,17 @@ the live principal and adopt existing same-principal role assignments. Increment
 Bicep does not remove obsolete grants; Low downgrade with existing write grants
 fails explicitly pending a separately approved reconciliation.
 
-High preserves the existing Reader/Log Analytics Contributor/Contributor profile.
-Existing Monitoring Contributor grants are explicitly tolerated, not copied into
-the standard profile. Low uses true Log Analytics Reader, not the formerly
-mislabeled Log Analytics Contributor ID. Hibernation discovers known identity-owned
-inherited grants too, shows their IDs in the deletion confirmation and deduplicates
-them at the known subscription/Arc-group/infra-group scopes. Unexpected grants or
-SRE-group resources block cleanup; no grants are removed while desired state is Ready.
+High uses Reader/Log Analytics Contributor/Contributor at the two workload groups.
+Low uses true Log Analytics Reader, not the formerly mislabeled Contributor ID.
+Hibernate retains existing grants (free, but still standing access); before Active,
+deployment/readiness reject incompatible/inherited/extra grants, including legacy
+Monitoring Contributor, for separately approved reconciliation. Deployment adopts
+existing direct assignment names and does not query Graph display names.
+Retained AppInsights must match the requested workspace/location; wake does not
+silently relocate it. Older UAMI-only parking rebuilds missing diagnostics through
+the same IaC. No grants are removed during Active or normal Hibernate.
+Removed inventories principal-filtered ARM assignments with bounded validated
+pagination; unexpected SRE resources or scoped grants block its destructive path.
 
 Local checks cover parser/schema/rendering/mocked failures and safety behavior.
 They do not prove Azure data-plane create reliability, destructive lifecycle

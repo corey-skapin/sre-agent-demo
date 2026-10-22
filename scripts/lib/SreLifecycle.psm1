@@ -37,7 +37,8 @@ function Get-SreLifecycleInventory {
     param(
         [string]$SubscriptionId, [string]$SreResourceGroupName, [string]$AgentName,
         [string]$ArcResourceGroupName, [string]$InfraResourceGroupName,
-        [string]$PreviousIdentityPrincipalId
+        [string]$PreviousIdentityPrincipalId,
+        [ValidateSet('Hibernated', 'Removed')][string]$DesiredState = 'Hibernated'
     )
     function Read-AzJson([string[]]$Arguments) {
         Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments ($Arguments + @('-o', 'json')) | ConvertFrom-Json -Depth 100
@@ -56,10 +57,11 @@ function Get-SreLifecycleInventory {
     $principalId = $PreviousIdentityPrincipalId
     $identity = $null
     $parentAssignments = @()
+    $drift = [Collections.Generic.List[string]]::new()
     if ($exists) {
         $resources = @(Read-AzJson @('resource', 'list', '-g', $SreResourceGroupName))
         $unexpected = @($resources | Where-Object { $_.id -notin ($removableIds + $identityId) })
-        if ($unexpected.Count) { throw "Unexpected resources in SRE group; refusing lifecycle changes: $($unexpected.id -join ', ')" }
+        if ($unexpected.Count) { $drift.Add("Unexpected resources in SRE group: $($unexpected.id -join ', ')") }
         if (@($resources | Where-Object id -EQ $identityId).Count) {
             $identity = Read-AzJson @('identity', 'show', '--ids', $identityId)
             if ($identity.id -ine $identityId -or $identity.principalId -notmatch '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') { throw 'Live SRE identity could not be verified.' }
@@ -68,25 +70,32 @@ function Get-SreLifecycleInventory {
         }
         $groupAssignments = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId $groupId)
         $parentAssignments = @($groupAssignments | Where-Object { $_.scope -ieq $agentId -or $_.scope.StartsWith("$agentId/", [StringComparison]::OrdinalIgnoreCase) })
+        $parentAssignmentIds = @($parentAssignments | ForEach-Object { $_.id })
+        if (@($groupAssignments | Where-Object {
+            ($_.scope -ieq $groupId -or $_.scope.StartsWith("$groupId/", [StringComparison]::OrdinalIgnoreCase)) -and $_.id -notin $parentAssignmentIds
+        }).Count) { $drift.Add('Unexpected SRE-group scoped grants. Full group removal requires separate ownership reconciliation.') }
         if (@($parentAssignments | Where-Object { $_.scope -ine $agentId -or ($_.roleDefinitionId -split '/')[-1] -ne 'e79298df-d852-4c6d-84f9-5d13249d1e55' }).Count -or $parentAssignments.Count -gt 1) {
-            throw 'Unexpected parent-scoped grants. Approve separate reconciliation before lifecycle changes.'
+            $drift.Add('Unexpected parent-scoped grants. Reconcile before Active or Removed.')
         }
     }
     $externalAssignments = @()
     if ($principalId) {
         $owned = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId $subscriptionScope -PrincipalId $principalId)
+        if (@($owned | Where-Object principalId -NE $principalId).Count) { throw 'ARM principal-filter response contains another principal; inspection is incomplete.' }
         $scopes = @($subscriptionScope, "$subscriptionScope/resourceGroups/$ArcResourceGroupName", "$subscriptionScope/resourceGroups/$InfraResourceGroupName")
         $roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
-        if (@($owned | Where-Object { $_.principalId -ne $principalId -or $_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles }).Count) {
-            throw 'Unexpected identity-owned scope or role; stop lifecycle changes and approve a separate cleanup.'
+        if (@($owned | Where-Object { $_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles }).Count) {
+            $drift.Add('Unexpected identity-owned scope or role. Reconcile before Active or Removed.')
         }
         $externalAssignments = @($owned | Sort-Object id -Unique)
     }
+    if ($DesiredState -eq 'Removed' -and $drift.Count) { throw ($drift -join ' ') }
     [pscustomobject]@{
         groupExists = $exists; groupId = $groupId; agentId = $agentId; identityId = $identityId
         identity = $identity; principalId = $principalId; resources = $resources
         removableResources = @($removableIds | Where-Object { $_ -in @($resources | ForEach-Object { $_.id }) })
         externalAssignments = $externalAssignments; parentAssignments = $parentAssignments
+        drift = @($drift.ToArray())
     }
 }
 

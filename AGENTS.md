@@ -131,7 +131,7 @@ Report enabled extra/quickstart conflicts; do not remove them automatically.
 
 - Do not change response plans to Autonomous for customer demos.
 - Do not claim T11 autonomous Arc repair or reliable SRE RCA.
-- Keep desired Ready versus Hibernated explicit; never hibernate a requested
+- Keep desired Active (Ready compatibility alias), Hibernated or Removed explicit; never hibernate a requested
   running demo automatically. Hibernation is destructive and needs authorization.
 - Do not treat High/Low permissions as a pricing tier, or a Stopped parent as
   cost-free. SRE always-on billing continues until parent deletion. Follow
@@ -154,10 +154,13 @@ a reference, not an automatic history/memory restore or a payload to replay.
 ```
 
 Remove `-WhatIf` only for the approved scope. Normal parking retains the dedicated
-SRE group and `<AGENT_NAME>-uami`, deletes only the parent, its Application Insights
-and known Smart Detection Action Group, and removes known UAMI workload grants
-plus the direct parent administrator grant. Unexpected resources/grants stop
-before mutation. Never delete the group/UAMI as a normal hibernation shortcut.
+SRE group and `<AGENT_NAME>-uami`, existing UAMI workload grants, workspace
+Application Insights and owned Smart Detection Action Group; deletes only the
+paid parent. Parent-scope deployer admin is not a UAMI workload grant.
+Report unexpected free resources/grants without deleting them or blocking
+known-parent parking; inspection denial, wrong target or identity mismatch stops.
+Reconcile excessive IAM before Active. Never delete the group/UAMI as a normal
+hibernation shortcut. Standing permissions persist while parked.
 Deletion observation is bounded; failed or pending cleanup is not Hibernated.
 Finish and verify SRE hibernation **before** the Arc owner parks the estate.
 
@@ -174,4 +177,11 @@ new UAMI through the same IaC; later normal cycles preserve its principal and
 deterministic workload assignment IDs. The validated combined system/user identity
 shape is unchanged: the system-assigned principal still rotates with the parent.
 No new external permission is granted to that system principal. Full identity/group
-removal is separate destructive cleanup, not normal parking.
+removal uses explicitly authorized `Remove-SreAgent.ps1 -WhatIf`, followed by
+approved execution and `Test-SreReadiness.ps1 -DesiredState Removed` with the saved
+principal. Removed refuses unknown resources/grants, deletes only known owned
+resources/assignments, then removes the empty dedicated group. It never deletes
+shared Arc/Monitor resources or private exports. Missing principal after identity
+deletion means external-grant verification is pending, not successful.
+Old UAMI-only parked state remains supported; wake creates missing diagnostics
+and adopts retained grants, with no unnecessary Graph display-name lookup.

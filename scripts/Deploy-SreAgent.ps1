@@ -121,6 +121,7 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreLifecycle.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 if (Test-Path -LiteralPath $skinModule) {
     Import-Module $skinModule -Force
@@ -226,6 +227,13 @@ if ($sreExists) {
     $resources = Invoke-AzCli -Arguments @('resource', 'list', '-g', $SreResourceGroupName, '-o', 'json') | ConvertFrom-Json
     $allowed = @("Microsoft.App/agents/$AgentName", "Microsoft.ManagedIdentity/userAssignedIdentities/$AgentName-uami", "Microsoft.Insights/components/$AgentName-appi", 'Microsoft.Insights/actionGroups/Application Insights Smart Detection')
     if (@($resources | Where-Object { "$($_.type)/$($_.name)" -notin $allowed }).Count) { throw 'Unexpected resources in the dedicated SRE group; inspect ownership before deployment.' }
+    $existingDiagnostics = @($resources | Where-Object { $_.type -eq 'Microsoft.Insights/components' -and $_.name -eq "$AgentName-appi" })
+    if ($existingDiagnostics.Count) {
+        $component = Invoke-AzCli -Arguments @('resource', 'show', '--ids', $existingDiagnostics[0].id, '-o', 'json') | ConvertFrom-Json -Depth 100
+        if ($component.properties.WorkspaceResourceId -ine $LogAnalyticsWorkspaceId -or $component.location -ine $Location) {
+            throw 'Retained Application Insights workspace/location differs from requested inputs. Stop before deployment; do not silently relocate retained diagnostics.'
+        }
+    }
     $existingParent = $resources | Where-Object { $_.type -eq 'Microsoft.App/agents' -and $_.name -eq $AgentName } | Select-Object -First 1
     if ($existingParent) {
         if (-not $principalId) { throw 'Existing parent has no expected UAMI. Refusing implicit identity replacement; inspect and reconcile separately.' }
@@ -238,16 +246,23 @@ if ($sreExists) {
         Write-Host 'First deployment: IaC will create the dedicated retained SRE UAMI; future normal hibernation keeps it.'
     }
 }
+$retainedAssignments = @()
+if ($principalId) {
+    $retainedAssignments = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId "/subscriptions/$SubscriptionId" -PrincipalId $principalId)
+    $allowedRoles = if ($AccessLevel -eq 'Low') { @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7') } else { @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c') }
+    if (@($retainedAssignments | Where-Object {
+        $_.principalId -ne $principalId -or $_.scope -notin @($arcResourceGroupId, $infraResourceGroupId) -or ($_.roleDefinitionId -split '/')[-1] -notin $allowedRoles
+    }).Count) { throw "$AccessLevel profile has incompatible grant scope/role. Reconcile explicitly before Active; no grants changed." }
+}
 foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
     $names = @{}
     if ($principalId) {
-        $assignments = Invoke-AzCli -Arguments @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '-o', 'json') | ConvertFrom-Json
+        $assignments = Invoke-AzCli -Arguments @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false', '-o', 'json') | ConvertFrom-Json
         foreach ($assignment in @($assignments | Where-Object { $_.principalId -eq $principalId })) {
             $roleId = ($assignment.roleDefinitionId -split '/')[-1]
-            if ($AccessLevel -eq 'Low' -and $roleId -notin @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')) {
-                throw "Low profile requested but existing incompatible grant $roleId remains at $($assignment.scope). Obtain scoped approval to remove it; incremental deployment does not revoke grants."
+            if ($roleId -notin $allowedRoles -or $assignment.scope -ine $scope) {
+                throw "$AccessLevel profile requested but existing incompatible or inherited grant $roleId remains at $($assignment.scope). Obtain scoped approval to reconcile it before Active; incremental deployment does not revoke grants."
             }
-            if ($assignment.scope -ne $scope) { continue }
             if ($names.ContainsKey($roleId)) { throw "Duplicate role grants for $principalId at $scope; reconcile explicitly before deployment." }
             $names[$roleId] = $assignment.name
         }

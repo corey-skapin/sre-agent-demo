@@ -3,9 +3,10 @@
 .SYNOPSIS
 Read-only, bounded readiness inspection. Exit 0 pass, 1 fail/error, 2 pending.
 .DESCRIPTION
-Ready inspects ARM and supported full service configuration; fresh incident
+Active (Ready compatibility alias) inspects ARM and supported full service configuration; fresh incident
 telemetry/rehearsal remains a separate pending gate. Hibernated verifies the
-retained UAMI/group, absent parent/diagnostics and revoked owned grants.
+retained UAMI/group and absent paid parent, reporting retained-state wake diagnostics.
+Removed verifies dedicated group and saved-principal external grants absent.
 No Azure account selection, faults, guest commands or cloud mutations are performed.
 #>
 [CmdletBinding()]
@@ -13,7 +14,7 @@ param(
     [Parameter(Mandatory)][string]$SubscriptionId,
     [Parameter(Mandatory)][string]$TenantId,
     [string]$SkinPath = '',
-    [ValidateSet('Ready', 'Hibernated')][string]$DesiredState = 'Ready',
+    [ValidateSet('Active', 'Ready', 'Hibernated', 'Removed')][string]$DesiredState = 'Ready',
     [ValidateSet('Json', 'Table')][string]$OutputFormat = 'Table',
     [ValidateRange(1, 1800)][int]$TimeoutSeconds = 180,
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]

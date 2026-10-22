@@ -10,6 +10,7 @@ $group = "$base/resourceGroups/rg-arc-demo-sre"
 $agent = "$group/providers/Microsoft.App/agents/sre-arc-demo"
 $identityId = "$group/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami"
 $hibernate = Join-Path $root 'scripts\Hibernate-SreAgent.ps1'
+$remove = Join-Path $root 'scripts\Remove-SreAgent.ps1'
 $count = 0
 function Check([bool]$Value, [string]$Message) {
     if (-not $Value) { throw "Lifecycle assertion failed: $Message" }
@@ -22,7 +23,8 @@ function Throws([scriptblock]$Action, [string]$Pattern) {
 function Reset-Fixture {
     $global:AzCalls.Clear()
     $global:LifecycleState = @{
-        groupExists = $true; denyDelete = $false; drift = $false; pages = $false; restReads = 0; badNextLink = $false
+        groupExists = $true; denyDelete = $false; denyRead = $false; drift = $false; pages = $false; restReads = 0; badNextLink = $false
+        staleParentGrant = $false; pendingDelete = $false; pendingGroupDelete = $false; deleteCount = 0; failSecondDelete = $false
         identity = @{ id = $identityId; name = 'sre-arc-demo-uami'; principalId = $principal }
         resources = @(
             @{ id = $agent; name = 'sre-arc-demo'; type = 'Microsoft.App/agents' },
@@ -52,11 +54,13 @@ try {
             return ConvertTo-Json -InputObject @($state.resources) -Depth 30
         }
         if ($command -like 'identity show*') { return $state.identity | ConvertTo-Json }
+        if ($command -like 'resource show*') { return @{ id = $agent } | ConvertTo-Json }
         if ($command -like 'rest --method get*') {
+            if ($state.denyRead) { $global:LASTEXITCODE = 13; return '' }
             $state.restReads++
             $uri = $args[[Array]::IndexOf($args, '--url') + 1]
             if ($uri -match '/resourceGroups/rg-arc-demo-sre/providers/Microsoft.Authorization/roleAssignments') {
-                $items = @($state.assignments | Where-Object { $_.properties.scope -like '*/providers/Microsoft.App/agents/*' })
+                $items = @($state.assignments | Where-Object { $_.properties.scope -eq $group -or $_.properties.scope.StartsWith("$group/") })
             } else {
                 $items = @($state.assignments | Where-Object { $_.properties.principalId -eq $state.identity.principalId })
             }
@@ -67,10 +71,21 @@ try {
             return @{ value = $items } | ConvertTo-Json -Depth 30
         }
         if ($command -like 'role assignment delete*' -or $command -like 'resource delete*') {
+            $state.deleteCount++
+            if ($state.failSecondDelete -and $state.deleteCount -eq 2) { $global:LASTEXITCODE = 13; return '' }
             if ($state.denyDelete) { $global:LASTEXITCODE = 13; return '' }
             $id = $args[[Array]::IndexOf($args, '--ids') + 1]
+            if ($state.pendingDelete) { return '' }
             $state.assignments = @($state.assignments | Where-Object id -NE $id)
+            if ($id -eq $agent -and -not $state.staleParentGrant) {
+                $state.assignments = @($state.assignments | Where-Object { $_.properties.scope -ne $agent })
+            }
             $state.resources = @($state.resources | Where-Object id -NE $id)
+            return ''
+        }
+        if ($command -like 'group delete*') {
+            if ($state.resources.Count) { throw 'Mock refused group deletion with resources still present.' }
+            if (-not $state.pendingGroupDelete) { $state.groupExists = $false }
             return ''
         }
         throw "Unexpected mocked lifecycle call: $command"
@@ -78,15 +93,15 @@ try {
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -WhatIf
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete|account set|get-access-token' }).Count -eq 0) 'WhatIf makes no mutations or service/token calls'
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
-    Check ($global:LifecycleState.resources.Count -eq 1 -and $global:LifecycleState.resources[0].id -eq $identityId) 'Parking retains only the exact UAMI'
+    Check ($global:LifecycleState.resources.Count -eq 3 -and $agent -notin $global:LifecycleState.resources.id) 'Parking retains UAMI and both diagnostics'
     Check ($global:LifecycleState.identity.principalId -eq $principal -and $global:LifecycleState.groupExists) 'Group and principal remain unchanged'
-    Check ($global:LifecycleState.assignments.Count -eq 0) 'All six external grants and parent administrator grant removed'
-    Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 7) 'Exact seven assignment IDs deleted once'
-    Check (@($global:AzCalls | Where-Object { $_ -like 'resource delete*' }).Count -eq 3) 'Only parent and two known diagnostics deleted'
+    Check ($global:LifecycleState.assignments.Count -eq 6) 'All six free workload grants retained; parent deployer grant follows parent lifetime'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 0) 'Hibernate never explicitly revokes IAM'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'resource delete*' }).Count -eq 1) 'Only paid parent deleted'
     Check (@($global:AzCalls | Where-Object { $_ -like 'group delete*' -or $_ -like 'identity delete*' }).Count -eq 0) 'Normal parking never deletes group or identity'
     $report = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
-    Check ($report.status -eq 'pass') "Retained-only Hibernated passes: $($report.checks | ConvertTo-Json -Compress -Depth 20)"
-    Check (@($report.checks | Where-Object { $_.id -eq 'parent-admin-absent' -and $_.status -eq 'pass' }).Count -eq 1) 'Readiness independently verifies parent administrator absence'
+    Check ($report.status -eq 'pass') "Retained-state Hibernated passes: $($report.checks | ConvertTo-Json -Compress -Depth 20)"
+    Check (@($report.checks | Where-Object { $_.id -eq 'retained-diagnostics' -and $_.status -eq 'pass' }).Count -eq 1) 'Readiness reports retained diagnostics'
     $global:AzCalls.Clear()
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Repeated parked invocation makes zero writes'
@@ -95,31 +110,50 @@ try {
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Mismatched saved principal fails before mutation'
     Reset-Fixture
     $global:LifecycleState.resources += @{ id = "$group/providers/Microsoft.Storage/storageAccounts/unowned"; name = 'unowned'; type = 'Microsoft.Storage/storageAccounts' }
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected resources'
-    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Unknown resource blocks the whole mutation'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check ($agent -notin $global:LifecycleState.resources.id -and @($global:LifecycleState.resources | Where-Object name -EQ unowned).Count -eq 1) 'Unknown resource is not deleted and does not block parking the known parent'
+    $drifted = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
+    Check ($drifted.status -eq 'pass' -and @($drifted.checks | Where-Object { $_.id -eq 'retained-state-drift' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Parking reports unrelated drift without falsely certifying wake configuration'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected resources'
     Reset-Fixture
     $global:LifecycleState.assignments[0].properties.roleDefinitionId = '/roles/unknown'
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected identity-owned'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check ($global:LifecycleState.assignments[0].properties.roleDefinitionId -eq '/roles/unknown') 'Unexpected IAM is retained during parking'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected identity-owned'
     Reset-Fixture
     $global:LifecycleState.assignments[0].properties.scope += '/providers/Microsoft.Compute/virtualMachines/unexpected'
     $global:LifecycleState.assignments[0].id = "$($global:LifecycleState.assignments[0].properties.scope)/providers/Microsoft.Authorization/roleAssignments/unknown"
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected identity-owned'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected identity-owned'
     Reset-Fixture
     $global:LifecycleState.assignments[-1].properties.roleDefinitionId = '/roles/unowned-parent-role'
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected parent-scoped'
+    $global:LifecycleState.staleParentGrant = $true
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected parent-scoped'
     Reset-Fixture
     $global:LifecycleState.denyDelete = $true
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'failed \(13\)'
-    Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 1 -and
-        @($global:AzCalls | Where-Object { $_ -like 'resource delete*' }).Count -eq 0) 'Denied mutation stops without retry or resource deletion'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 0 -and
+        @($global:AzCalls | Where-Object { $_ -like 'resource delete*' }).Count -eq 1) 'Denied mutation stops without retry or IAM change'
     Reset-Fixture
     $global:LifecycleState.drift = $true
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected resources'
-    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Concurrent resource drift stops before first write'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected resources'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Concurrent unknown resource blocks Removed before first write'
     Reset-Fixture
     $global:LifecycleState.pages = $true
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
-    Check ($global:LifecycleState.assignments.Count -eq 0) 'Paginated principal lookup removes every known grant, not just first page'
+    Check ($global:LifecycleState.assignments.Count -eq 6) 'Paginated principal lookup retains every free grant'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
+    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Explicit Removed deletes known assignments, diagnostics, identity and empty group'
+    $removed = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Removed -PreviousIdentityPrincipalId $principal
+    Check ($removed.status -eq 'pass') 'Removed independently verifies absent group and saved-principal external grants'
+    $global:AzCalls.Clear()
+    & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Repeated Removed makes no mutations'
+    $noSavedPrincipal = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Removed
+    Check ($noSavedPrincipal.status -eq 'pending') 'Removed never guesses external principal after identity deletion'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'live or saved identity principal'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Absent group without saved principal cannot trigger unverified cleanup'
     Reset-Fixture
     $global:LifecycleState.pages = $true; $global:LifecycleState.badNextLink = $true
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'pagination'
@@ -129,19 +163,76 @@ try {
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'ID does not match'
     Reset-Fixture
     $global:LifecycleState.resources = @($global:LifecycleState.resources | Where-Object id -NE $identityId)
-    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'live or saved identity principal'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check ($agent -notin @($global:LifecycleState.resources | ForEach-Object { $_.id })) 'Missing identity does not strand the known paid parent'
     Reset-Fixture
     $global:LifecycleState.resources = @($global:LifecycleState.resources | Where-Object id -EQ $identityId)
     $global:LifecycleState.assignments = @($global:LifecycleState.assignments | Where-Object { $_.properties.scope -eq $agent })
     $partial = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
-    Check ($partial.status -eq 'fail' -and @($partial.checks | Where-Object { $_.id -eq 'parent-admin-absent' -and $_.status -eq 'fail' }).Count -eq 1) 'Deleted parent alone does not prove its administrator grant is absent'
+    Check ($partial.status -eq 'pass' -and @($partial.checks | Where-Object { $_.id -eq 'parent-scope-grants' -and $_.status -eq 'pending' -and -not $_.required }).Count -eq 1) 'Stale free parent grant is a wake diagnostic, not a cost-state blocker'
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
-    Check ($global:LifecycleState.assignments.Count -eq 0 -and $global:LifecycleState.resources.Count -eq 1) 'Partial prior deletion safely cleans the exact parent grant without deleting identity'
+    Check ($global:LifecycleState.assignments.Count -eq 1 -and $global:LifecycleState.resources.Count -eq 1) 'Old UAMI-only state is idempotent; parking does not recreate diagnostics or revoke free entries'
     Reset-Fixture
     $global:LifecycleState.resources = @($global:LifecycleState.resources | Where-Object id -NE $identityId)
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
     $missingIdentity = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
-    Check ($global:LifecycleState.resources.Count -eq 0 -and $missingIdentity.status -eq 'fail') 'Partial saved-principal cleanup never creates identity or falsely certifies normal Hibernated'
+    Check ($global:LifecycleState.resources.Count -eq 2 -and $missingIdentity.status -eq 'fail') 'Parking never creates missing identity or destroys retained diagnostics'
+    Reset-Fixture
+    $global:LifecycleState.denyRead = $true
+    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'failed \(13\)'
+    $denied = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Removed -PreviousIdentityPrincipalId $principal
+    Check ($denied.status -eq 'fail') 'Read denial is never interpreted as absent or non-required drift'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Denied inspection blocks all writes'
+    Reset-Fixture
+    $preview = (& $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf -Verbose 4>&1 | Out-String)
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Removed WhatIf is read-only including empty-group deletion'
+    Check ($preview.Contains($identityId)) 'Removed preview includes the retained UAMI target even under inherited WhatIf'
+    $global:LifecycleState.failSecondDelete = $true
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'failed \(13\)'
+    Check ($global:LifecycleState.resources.Count -eq 4 -and $global:LifecycleState.assignments.Count -eq 6) 'Partial removal stops immediately at denial before resource deletion'
+    $global:LifecycleState.failSecondDelete = $false
+    & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
+    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Explicit retry converges from partial accepted removals without resurrecting state'
+    Reset-Fixture
+    $global:LifecycleState.pendingDelete = $true
+    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -TimeoutSeconds 1 -Confirm:$false } 'pending'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'resource delete*' }).Count -eq 1) 'Pending deletion is observed, never blindly resubmitted'
+    Reset-Fixture
+    $global:LifecycleState.pendingDelete = $true
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -TimeoutSeconds 1 -Confirm:$false } 'Assignment deletion remains pending'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 1) 'Pending assignment removal is read back rather than retried'
+    Reset-Fixture
+    $global:LifecycleState.resources = @()
+    $global:LifecycleState.assignments = @()
+    $global:LifecycleState.pendingGroupDelete = $true
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -TimeoutSeconds 1 -Confirm:$false } 'Group deletion remains pending'
+    Check (@($global:AzCalls | Where-Object { $_ -like 'group delete*' }).Count -eq 1) 'Pending empty-group deletion is not resubmitted'
+    Reset-Fixture
+    $global:LifecycleState.resources = @($global:LifecycleState.resources | Where-Object id -EQ $identityId)
+    $global:LifecycleState.assignments = @()
+    $legacyParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
+    Check ($legacyParked.status -eq 'pass' -and @($legacyParked.checks | Where-Object { $_.id -eq 'retained-workload-grants' -and $_.status -eq 'pending' -and -not $_.required }).Count -eq 1) 'Legacy UAMI-only parking passes cost checks and honestly reports missing wake grants'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
+    Check (-not $global:LifecycleState.groupExists) 'Removed directly converges old parked state without recreating diagnostics/grants'
+    Reset-Fixture
+    $global:LifecycleState.groupExists = $false
+    $global:LifecycleState.resources = @()
+    $global:LifecycleState.assignments = @($global:LifecycleState.assignments | Where-Object { $_.properties.principalId -eq $principal })
+    & $remove -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId $principal -Confirm:$false
+    Check ($global:LifecycleState.assignments.Count -eq 0 -and @($global:AzCalls | Where-Object { $_ -like 'resource delete*' -or $_ -like 'group delete*' }).Count -eq 0) 'Already absent group still cleans exact orphaned workload grants using saved principal'
+    Reset-Fixture
+    $global:LifecycleState.assignments += @{ id = "$group/providers/Microsoft.Authorization/roleAssignments/unowned"; name = 'unowned'; properties = @{ principalId = '00000000-0000-0000-0000-000000000099'; scope = $group; roleDefinitionId = '/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' } }
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected SRE-group scoped grants'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Removed never erases unowned group-scoped IAM through broad group deletion'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check (@($global:LifecycleState.assignments | Where-Object name -EQ unowned).Count -eq 1) 'Unrelated group IAM is retained and does not block known-parent parking'
+    Reset-Fixture
+    $global:LifecycleState.assignments[0].properties.scope = $base
+    $global:LifecycleState.assignments[0].properties.roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa'
+    $global:LifecycleState.assignments[0].id = "$base/providers/Microsoft.Authorization/roleAssignments/legacy-monitoring"
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    $excessParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
+    Check ($excessParked.status -eq 'pass' -and @($excessParked.checks | Where-Object { $_.id -eq 'retained-workload-grants' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Legacy broad standing grant is reported as wake failure but not a cost-parking failure'
     Write-Host "$count lifecycle assertions passed. All cloud calls mocked."
 } finally {
     Remove-Variable -Scope Global -Name LifecycleState -ErrorAction SilentlyContinue

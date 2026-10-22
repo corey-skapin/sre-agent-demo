@@ -151,6 +151,8 @@ Assert-True ($hibernatedKnown.status -eq 'fail') 'Legacy whole-group deletion is
 $ready = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
 Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
+$active = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
+Assert-True ($active.desiredState -eq 'Active' -and $active.status -eq $ready.status -and $active.checks[0].id -eq 'parent') 'Active and compatible Ready alias use the same readiness path'
 $fixture = Join-Path ([IO.Path]::GetTempPath()) "sre-readiness-cli-$([guid]::NewGuid())"
 $fixtureModule = Join-Path $fixture 'lib'
 $fixtureScript = Join-Path $fixture 'Test-SreReadiness.ps1'
@@ -194,6 +196,9 @@ Assert-True ($global:AzCalls.Count -eq 0) 'Unavailable complete bootstrap fails 
 
 # A live-shaped mock verifies legacy role adoption and repeatable WhatIf parameters.
 $global:CapturedParameters = @()
+$global:RetainedDiagnosticsFixture = $false
+$global:DriftedDiagnosticsFixture = $false
+$global:ExtraGrantFixture = $false
 $global:AzResponder = {
     $command = $args -join ' '
     $base = '/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups'
@@ -204,7 +209,34 @@ $global:AzResponder = {
         return "$base/rg-arc-demo"
     }
     if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
-    if ($command -like 'resource list*') { return '[]' }
+    if ($command -like 'resource list*') {
+        if ($global:RetainedDiagnosticsFixture) {
+            return @(
+                @{ id = "$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami"; type = 'Microsoft.ManagedIdentity/userAssignedIdentities'; name = 'sre-arc-demo-uami' }
+                @{ id = "$base/rg-arc-demo-sre/providers/Microsoft.Insights/components/sre-arc-demo-appi"; type = 'Microsoft.Insights/components'; name = 'sre-arc-demo-appi' }
+                @{ id = "$base/rg-arc-demo-sre/providers/Microsoft.Insights/actionGroups/Application Insights Smart Detection"; type = 'Microsoft.Insights/actionGroups'; name = 'Application Insights Smart Detection' }
+            ) | ConvertTo-Json
+        }
+        return '[]'
+    }
+    if ($command -like 'resource show*') {
+        $workspace = if ($global:DriftedDiagnosticsFixture) { "$base/elsewhere/providers/Microsoft.OperationalInsights/workspaces/other" } else { "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo" }
+        return @{ location = 'australiaeast'; properties = @{ WorkspaceResourceId = $workspace } } | ConvertTo-Json
+    }
+    if ($command -like 'rest --method get*') {
+        $value = @()
+        foreach ($rg in @('rg-arc-demo', 'rg-arc-demo-infra')) {
+            foreach ($role in @('acdd72a7-3385-48ef-bd42-f606fba81ae7', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'b24988ac-6180-42a0-ab88-20f7382dd24c')) {
+                $scope = "$base/$rg"
+                $value += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/$role"; name = $role; properties = @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = "/roles/$role" } }
+            }
+        }
+        if ($global:ExtraGrantFixture) {
+            $scope = '/subscriptions/00000000-0000-0000-0000-000000000001'
+            $value += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/extra"; name = 'extra'; properties = @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' } }
+        }
+        return @{ value = $value } | ConvertTo-Json -Depth 20
+    }
     if ($command -like 'role assignment list*') {
         $scope = if ($command -match 'rg-arc-demo-infra') { "$base/rg-arc-demo-infra" } else { "$base/rg-arc-demo" }
         return (@(
@@ -235,6 +267,16 @@ Assert-True ($parameters.parameters.arcRoleAssignmentNames.value.'acdd72a7-3385-
 Assert-True ($parameters.parameters.additionalManagedResourceIds.value.Count -eq 2) 'Both required scenario resources are reconstructed'
 Assert-True ($global:CapturedParameters[0] -eq $global:CapturedParameters[1]) 'Repeated preview produces identical deployment parameters'
 Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -AccessLevel Low -WhatIf } 'incompatible grant'
+$global:RetainedDiagnosticsFixture = $true
+& $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf
+Assert-True ($global:CapturedParameters[0] -eq $global:CapturedParameters[2]) 'Wake safely reuses retained diagnostics/grants with identical IaC parameters; old UAMI-only state also reconstructs'
+Assert-True (@($global:AzCalls | Where-Object { $_ -like 'role assignment list*' -and $_ -notmatch '--fill-principal-name false' }).Count -eq 0) 'Deployment never requests unnecessary Graph principal display names'
+$global:DriftedDiagnosticsFixture = $true
+Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'Retained Application Insights'
+$global:DriftedDiagnosticsFixture = $false
+$global:ExtraGrantFixture = $true
+Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'incompatible grant scope/role'
+$global:ExtraGrantFixture = $false
 
 & (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
@@ -254,5 +296,5 @@ Write-Host "$count assertions passed. All Azure calls were mocked; no cloud muta
 } finally {
     if ($previousAz) { Set-Item Function:\global:az -Value $previousAz.ScriptBlock }
     else { Remove-Item Function:\az -ErrorAction SilentlyContinue }
-    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters -ErrorAction SilentlyContinue
+    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters, RetainedDiagnosticsFixture, DriftedDiagnosticsFixture, ExtraGrantFixture -ErrorAction SilentlyContinue
 }
