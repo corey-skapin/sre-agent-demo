@@ -224,6 +224,11 @@ cost state, not that the whole group or combined lab is cost-free.
 Verify SRE hibernation before parking Arc; wake Arc before reconstructing SRE.
 Reactivation also requires modern handler/v3-plan ensure and verification above,
 with a new external backup path and approval for actual changes.
+After successful AI-led combined activation/SRE reactivation, the SRE assistant
+must [ask once whether you want a T09 incident](docs/ai-deploy-handbook.md#post-activation-incident-offer).
+If you agree, it runs the existing procedure and guides your human Review
+approval; you do not need to remember or run scripts. Declining leaves Active
+unchanged. This offer does not run after parent-only or Arc-only deployment.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
 re-established; a URL in the skin is not authentication. Save the retained identity

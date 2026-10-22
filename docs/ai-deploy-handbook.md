@@ -38,6 +38,10 @@ For Ready:
    recovery. T11 RCA is not reliable yet. Use the canonical guide's evidence-only
    fallback rather than treating old-instance proof as a new-instance pass.
 8. Leave a requested Ready demo running. Do not automatically hibernate.
+9. After successful combined activation/SRE reactivation, follow the
+   Post-activation incident offer below: the SRE assistant must ask once in
+   conversation whether to trigger one T09 incident. Do not leave the user to
+   remember or run scripts. No fault without an affirmative scoped answer.
 
 For Hibernated:
 1. Obtain explicit authorization for deletion and export current Inspect output
@@ -65,6 +69,60 @@ For Removed:
 Never change plans to Autonomous, remove quickstart plans, revoke extra grants,
 connect a repository, or induce faults without the appropriate scoped approval.
 ```
+
+## Post-activation incident offer
+
+This is an **AI conversation step**, not a script prompt or a new orchestrator.
+After a user-requested combined activation, or SRE reactivation on an already
+healthy Arc estate, the SRE-owning assistant must offer one representative T09
+Container App incident. It owns the offer **once**, after the Arc assistant's
+successful readiness handoff and completion of SRE configuration. Do not also
+ask from the Arc-only path, after `-ParentOnly`, during read-only rehearsal or
+while activation is incomplete.
+
+First verify fresh Arc readiness, all required SRE infrastructure/configuration/
+workload checks and the healthy T09 endpoint. The named `telemetry-and-alerts`
+gate alone may remain pending: it is the external rehearsal this offer can help
+perform. Keep the original readiness report/exit status unchanged; any other
+required failed/pending check blocks the offer.
+
+Use the confirmed private target and an agreed observation deadline in the
+conversation. For example: **"Activation is complete. Would you like me to
+trigger one T09 Container App incident now? It temporarily faults the demo app,
+can send configured alert notifications and incurs SRE usage costs. I'll run
+the existing demo procedure, monitor until our agreed deadline, use the narrow
+operator reset if needed, and guide you to the real human Review approval."**
+
+- **No:** skip incident preparation, report activation separately and leave the
+  requested Active demo running. Do not ask again in the same activation.
+- **Yes:** confirm the exact app and recovery window, including the narrow
+  `SIMULATE_CRASH=false` fallback, then have the AI execute
+  [the existing T09 runbook](t09-native-containerapp-closed-loop.md#5-induce-the-fault)
+  through observation, human Review and recovery verification. The user does
+  not need to choose or run scripts. This authorizes one fault, not a retry,
+  permission change, autonomy/cooldown change or approval of the SRE repair.
+- **No answer or unattended execution:** do not block on a shell prompt or fault
+  silently. Report preparation skipped; tell the user they can ask Copilot to
+  run the optional T09 incident when they are present.
+
+Keep Review and enabled three-hour cooldown. Inspect the actual alert and
+investigation in the supported UI; cooldown may reuse an existing thread.
+Guide the signed-in human to approve only the current run's exact reset card.
+Never auto-approve or treat chat consent/narration as that approval. Before
+faulting, check the healthy baseline and previous run's recovery; after an
+ambiguous write inspect state rather than blindly repeating the fault.
+
+Follow the runbook's existing recovery-owner/deadline and operator fallback
+procedure if approval or SRE repair is unavailable. The helper has no automatic
+watchdog or hard cancellation guarantee; do not promise otherwise. Surface
+reset/health failures immediately and never approve a stale card after fallback.
+Record actual alert, investigation and finding evidence where observed; report
+missing or uncertain evidence as pending, not as a successful loop. Verify the
+false flag, serving revision and HTTP 200, and report actual Monitor condition
+resolution or explicitly pending resolution separately from alert workflow state.
+Distinguish SRE repair with executor evidence from AI/operator reset fallback.
+Preparation failure does not undo or relabel successful infrastructure activation.
+This produces new evidence, not restoration of history lost on parent deletion.
 
 ## Runtime commands
 

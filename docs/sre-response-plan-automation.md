@@ -321,6 +321,16 @@ evidence, not a supported restore input. Optional repository authentication need
 explicit reauthorization. An in-place T09 repair proves neither a fresh bootstrap
 nor a retained-identity park/wake round trip; that live lifecycle gate remains untested.
 
+After AI-led combined activation/SRE reactivation completes, the SRE-owning
+assistant must [offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer),
+once after the Arc readiness handoff and SRE health/configuration checks.
+Only the named external rehearsal gate may remain pending; do not rewrite the
+readiness report or bypass other failures. A yes lets the AI run the existing
+T09 procedure with its agreed recovery fallback and genuine human Review
+approval; a no leaves the activated lab running. Parent-only and Arc-only
+activation do not trigger this offer. This is not automatic fault injection or
+restoration of deleted incident history.
+
 ### Explicit Removed convergence
 
 Removed is separate destructive intent, not an automatic step after Hibernate.

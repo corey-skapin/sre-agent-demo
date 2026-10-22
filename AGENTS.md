@@ -101,6 +101,25 @@ gates before delivery. The Ready command always leaves its external
 Pair that report with a separately authorized recorded run; do not rewrite it to
 exit 0. Failed service authentication/read-back is an explicit blocker.
 
+## Post-activation incident offer
+
+After successfully completing a user-requested AI-led combined activation or
+SRE reactivation on an already healthy Arc estate, the SRE-owning assistant
+**MUST ask the user once in conversation whether to trigger one representative
+T09 Container App incident**. Do not make the user remember or select/run scripts.
+Follow [the canonical offer and consent procedure](docs/ai-deploy-handbook.md#post-activation-incident-offer).
+Offer only after fresh Arc readiness and all required SRE infrastructure,
+configuration and workload checks pass; only the named `telemetry-and-alerts`
+rehearsal gate may remain pending, unchanged in the original report.
+
+The SRE assistant owns this offer after the Arc readiness handoff; do not ask
+twice across the two repos. No offer during Arc-only activation, parent-only
+deployment, failed/incomplete activation or a read-only navigation rehearsal.
+Decline or no affirmative answer means skip and leave the activated demo running.
+Consent covers one existing T09 run plus its agreed narrow operator reset
+fallback, not approval of the SRE Agent's actual Review operation. The AI runs
+the existing runbook and guides the human to that real approval card.
+
 ## SRE data-plane setup reality
 
 The parent `Microsoft.App/agents` resource deploys repeatably through Bicep.
