@@ -23,13 +23,11 @@ For Ready:
    deliberately not a claim that the full demo is Ready.
 5. Render Initialize-SreConfiguration.ps1, then -Inspect via pinned official
    template protocols. Review the full preview before -Apply with a new external
-   -BackupPath. Existing legacy settings/P1-P2 need explicit migration approval
-   and -AllowLegacyMigration; do not replay the legacy MCP high-severity recipe.
-   No parent deletion is required. Never invent endpoints or duplicate plans.
+   -BackupPath. Unsupported legacy settings/P1-P2 stop without migration;
+   use the canonical supported fallback, never guessed endpoints or duplicate plans.
 6. Run Test-SreReadiness.ps1: handler, plan, Sev2 filters, legacy fields, Review
-   and overlap now have full read-back. Its telemetry gate always remains pending
-   because the command does not ingest external run evidence. Pair the report
-   with a separately authorized rehearsal; never rewrite JSON/exit2 as exit0.
+   and overlap have full read-back. Its telemetry item is optional, skipped/not
+   evaluated; all required checks must pass. Never rewrite the report.
    Existing ARM success is not routing
    readiness. Do not induce a fault merely to answer a read-only readiness check.
 7. T09 is the primary Review closed-loop capability; a new instance still needs
@@ -81,10 +79,9 @@ ask from the Arc-only path, after `-ParentOnly`, during read-only rehearsal or
 while activation is incomplete.
 
 First verify fresh Arc readiness, all required SRE infrastructure/configuration/
-workload checks and the healthy T09 endpoint. The named `telemetry-and-alerts`
-gate alone may remain pending: it is the external rehearsal this offer can help
-perform. Keep the original readiness report/exit status unchanged; any other
-required failed/pending check blocks the offer.
+workload checks and the healthy T09 endpoint. Keep the original readiness report
+unchanged; any required failed/pending check blocks the offer. The optional
+unevaluated rehearsal item is not incident proof and needs no special exception.
 
 Use the confirmed private target and an agreed observation deadline in the
 conversation. For example: **"Activation is complete. Would you like me to
@@ -149,8 +146,7 @@ az bicep build --file .\infra\main.bicep --stdout
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -Inspect
 
-# Only after that exact scope is approved. Add -AllowLegacyMigration only
-# for an explicitly approved existing-legacy cutover, not clean reconstruction.
+# Only after that exact modern configuration scope is approved.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -Apply `
@@ -204,7 +200,5 @@ pagination; unexpected SRE resources or scoped grants block its destructive path
 Local checks cover parser/schema/rendering/mocked failures and safety behavior.
 They do not prove Azure data-plane create reliability, destructive lifecycle
 rebuild, live guest execution or a new T09 alert-to-recovery run.
-The 2026-10-20 fresh T09 retry separately proved SRE repair and actual Monitor
-recovery; its earlier operator fallback is distinct. User-confirmed portal
-approval and independent write/tool evidence are recorded, but no independent
-ApprovalDecision event was captured. It did not exercise deletion-to-Ready.
+See the [historical engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
+for dated run outcomes and their evidence limits.

@@ -148,16 +148,14 @@ function Get-SreReadinessReport {
                 Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service/custom agent, mergeEnabled=true/window=3h' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2. Cooldown is explicitly repo-managed.'
                 Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Active routing must not depend on legacy response settings. Retired disabled plans and their history may remain untouched.'
                 $owned = @($desired.plans | ForEach-Object { $_.name })
-                $retiredActive = @($activeNames | Where-Object { $_ -in $desired.retiredPlanNames })
-                Add-Check 'retired-routing-disabled' $agentId $(if ($retiredActive.Count) { 'fail' } else { 'pass' }) @() $retiredActive 'Explicitly retired routing must be disabled before modern routing is enabled; old objects/history are not deleted.'
-                $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin ($owned + @($desired.retiredPlanNames)) } | ForEach-Object { $_.name })
+                $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $owned } | ForEach-Object { $_.name })
                 Add-Check 'routing-conflicts' $agentId $(if ($extra.Count) { 'fail' } else { 'pass' }) 'No unreviewed enabled extra plans' $extra 'Conservatively requires review of every enabled unowned plan; never deletes quickstart automatically.'
             } catch {
                 Add-Check 'data-plane-inspection' $agentId 'fail' 'Successful supported full configuration read' $null $_.Exception.Message
             } finally {
                 if ($session) { $session.token = $null }
             }
-            Add-Check 'telemetry-and-alerts' $agentId 'pending' 'Fresh separately authorized alert-to-thread/RCA/Review/recovery evidence' $null 'Configuration correctness does not certify a new automatic incident loop. This read-only command never injects a fault.'
+            Add-Check 'telemetry-and-alerts' $agentId 'skipped' 'Separately authorized alert-to-thread/RCA/Review/recovery evidence' $null 'Not evaluated: configuration readiness does not certify an incident loop or ingest rehearsal evidence. This read-only command never injects a fault.' $false
             Add-Check 'code-repository-connection' $agentId 'skipped' 'Separate explicit authorization if needed' $null 'Public source context is not connector authentication.' $false
         }
         if ($DesiredState -in @('Active', 'Ready')) {

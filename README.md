@@ -1,6 +1,6 @@
 # Azure SRE Agent layer for arc-demo
 
-This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` repository at `C:\src\arc-demo`. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
+This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` companion repository. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
 The tracked [`config\demo-skin.json`](config/demo-skin.json) and alternative example use fictional organizations. Put real customer/context values in a private skin outside the repo and pass `-SkinPath`; keep `azure.namePrefix` aligned with the Arc skin. Subscription and tenant remain required runtime inputs. External repository context is blank by default; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
 
@@ -42,7 +42,7 @@ scripts/
 ## Prerequisites
 
 1. Existing current `arc-demo` deployment; enable its optional Container App
-   workload when presenting T09. An example checkout is `C:\src\arc-demo`.
+   workload when presenting T09.
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
    ambient subscription selection.
 3. Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
@@ -71,8 +71,12 @@ Keep tracked examples fictional and real skins/evidence outside the checkout.
 Optional source URL/revision must be supplied together; a local-sample demo
 requires neither a repository connection nor a fabricated source URL.
 `tests\Invoke-Tests.ps1` includes handoff checks for non-example UUIDs, contact
-emails, personal home paths and unreviewed repository-owner links. Public Azure
+emails, workstation checkout/home paths and unreviewed repository-owner links. Public Azure
 role IDs and synthetic test IDs are deliberately retained.
+
+CI also runs PowerShell static analysis, offline Bicep compilation and Markdown
+linting. The Markdown config preserves existing long lines and table styles;
+other rules stay enabled. These checks do not perform a live smoke test.
 These checks are not a complete detector of customer context or secrets.
 Review all tracked changes and perform a bounded secret check before sharing.
 Current-tree cleanup does not rewrite Git history, author metadata, hosting
@@ -86,7 +90,7 @@ guest arguments. A missing bundled runtime fails explicitly; it never falls back
 to unsafe command-string forwarding.
 
 ```powershell
-cd C:\src\sre-agent
+# Run from the SRE checkout.
 .\tests\Invoke-Tests.ps1
 az bicep build --file .\infra\main.bicep
 $tokens = $null; $errors = $null
@@ -134,7 +138,7 @@ If your arc-demo names differ, pass explicit IDs/names instead of relying on dis
 
 This layer reads the existing arc-demo resource group IDs, Log Analytics workspace ID, and Action Group ID. Those IDs become SRE Agent knowledge graph managed resources. The agent identity receives RBAC on the existing Arc/observability RG (`rg-arc-demo`) and backing workload RG (`rg-arc-demo-infra`) so later scenarios can investigate Azure Monitor alerts and, in Review mode, propose controlled fixes.
 
-No files or resources in `C:\src\arc-demo` are changed by this repo.
+No companion Arc files or workloads are changed by this repo.
 
 ### Complete Ready state
 
@@ -142,15 +146,15 @@ No files or resources in `C:\src\arc-demo` are changed by this repo.
 For complete parent-plus-configuration deployment supply a new
 `-ConfigurationBackupPath` outside git. For an already running parent, use
 `Initialize-SreConfiguration.ps1 -Inspect`, then separately authorized `-Apply
--BackupPath <NEW_PATH>`; existing legacy plans also require `-AllowLegacyMigration`.
+-BackupPath <NEW_PATH>`.
 The [current-schema procedure](docs/sre-response-plan-automation.md) uses pinned
 Microsoft IaC template protocols for full reads, named upserts and verification.
 Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
 P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review,
-and instructions/tools on the handling custom agent. No parent deletion is needed.
-Default v3 routes are staged disabled before explicitly retired v2 routes are
-disabled; only then are v3 routes enabled. Old objects/history remain. The
-unsupported existing legacy-handler update path is blocked before any write.
+and instructions/tools on the handling custom agent. Fresh bootstrap creates one
+handler and two filters; modern updates preserve the same objects/history.
+Legacy migration/cutover is not supported; legacy settings or enabled unowned
+routes stop before writes. See the canonical protocol/fallback reference above.
 
 Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
 -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.
@@ -159,9 +163,10 @@ contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pen
 It checks parent/Review/identity/RBAC/managed resources/scenario resource health
 and reads full handler/plan/legacy-settings/routing configuration. Invalid
 priorities or legacy settings fail explicitly. The command does not ingest
-external rehearsal evidence: `telemetry-and-alerts` always remains pending in
-Ready mode, even after a separately proven run. Pair the JSON/exit 2 with that
-run's evidence; do not modify the report to manufacture exit 0.
+external rehearsal evidence: `telemetry-and-alerts` is optional
+(`required=false`), skipped/not evaluated, with no observed proof.
+Active/Ready exits 0 when required checks pass; required fail/pending checks
+still produce exits 1/2. Record authorized incident evidence separately.
 Parent success is never a routing-readiness certificate.
 
 Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
@@ -189,6 +194,12 @@ block parking the known parent. Wrong target/identity and failed reads still sto
 execution. The Arc estate is never deleted here.
 Unknown retained resources may still bill; Hibernated proves the SRE parent's
 cost state, not that the whole group or combined lab is cost-free.
+
+| Desired state | Required result |
+| --- | --- |
+| Active (`Ready` alias) | Parent, configuration, identity/grants and required workloads verified; rehearsal is advisory and unevaluated. |
+| Hibernated | Paid parent absent, original UAMI/group retained; diagnostics/grants are reported without blocking parking on unrelated free drift. |
+| Removed | Verified owned grants/resources and empty dedicated group removed; shared Arc/Monitor resources and private exports preserved. |
 
 ```powershell
 # Only after approved parent removal; export configuration/evidence and
@@ -308,25 +319,10 @@ not additional timed scripts or evidence that a replacement instance is rehearse
 
 ## Current validation stance
 
-The approved current-schema cutover was read-back verified: modern v3 routes
-enabled with Review/Sev2, old v2 routes disabled, handlers/history retained, and
-repeat inspection reporting zero changes. Title-only edits were insufficient.
-The separately authorized fresh T09 retry on 2026-10-20 verified the restart
-metric, new Azure Monitor alert, independent v3 Review investigation, concrete
-RCA and **SRE-executed repair**. The user reported approving the exact new reset
-card; the matching tool completion and Activity Log independently attribute the
-write to the SRE managed identity. The app recovered to a healthy ready revision,
-100% traffic and HTTP 200 with **zero operator fallback writes**. The original
-cooldown was restored. The earlier rehearsal's operator fallback is a distinct
-outcome, not the repair evidence for this retry.
-Actual MonitorCondition resolved at 01:45:58 UTC; the separate alert workflow
-state remained Acknowledged.
-
-The bounded audit did not return an independent `ApprovalDecision` event; retain
-that evidence limit rather than inventing one. Read actual MonitorCondition
-recovery separately from the agent closing an alert. Do not infer approval or
-execution from narration, approve an old card, or repeat a consumed one-shot
-fault authorization.
+See the [dated non-presenter engineering ledger](docs/t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
+for earlier cutover/T09 evidence and approval/audit limits. Those results do not
+certify a newly reconstructed instance; current readiness and incident evidence
+must be recorded separately.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.

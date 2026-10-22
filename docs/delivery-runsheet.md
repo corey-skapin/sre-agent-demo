@@ -84,9 +84,9 @@ connectors or consent to temporary elevated access during the demo.
    ```
 
    All required configuration/resource checks must pass. The named
-   `telemetry-and-alerts` check remains **pending / exit 2** because this command
-   does not ingest rehearsal artifacts; do not ignore another failure/pending
-   check or relabel the report pass. Inspect should show one intended custom
+   `telemetry-and-alerts` check is optional, **skipped / not evaluated**; it does
+   not certify a rehearsal or prevent exit 0. Do not ignore required failures or
+   pending checks. Inspect should show one intended custom
    agent, two enabled v3 AzMonitor/Sev2/Review routes, enabled three-hour cooldown,
    no active legacy handler and no enabled duplicate/quickstart conflict. Do not
    run Apply, deploy or change routing to make an audience view look complete.

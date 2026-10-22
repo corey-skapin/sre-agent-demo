@@ -60,8 +60,7 @@ For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
 - Azure CLI 2.60+ authenticated to the explicit target tenant/subscription; pass
   the subscription on every request rather than relying on ambient selection.
 - Current companion Arc source with its optional Container App workload enabled,
-  plus this SRE source; example checkouts are `C:\src\arc-demo` and
-  `C:\src\sre-agent`, not historical task-number release prerequisites.
+  plus this SRE source, not historical task-number release prerequisites.
 - Permission to deploy `arc-demo`, deploy this SRE Agent layer, create role assignments, and approve SRE Agent actions.
 - SRE Agent response plan set to **Review** mode. Review mode is required for the one-click **Approve** step.
 - Optional, after separate explicit authentication/consent: connect
@@ -75,7 +74,7 @@ References used for this runbook: Azure SRE Agent overview, run modes, incident 
 ## 1. Deploy arc-demo with the Container App workload
 
 ```powershell
-cd C:\src\arc-demo
+# Run from the companion Arc checkout.
 
 az login --tenant <TENANT_ID>
 
@@ -115,7 +114,7 @@ $containerAlertId = az monitor metrics alert show `
 ## 2. Deploy the SRE Agent layer
 
 ```powershell
-cd C:\src\sre-agent
+# Run from the SRE checkout.
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId $subscriptionId `
@@ -154,8 +153,8 @@ absence is verified. After an ambiguous timeout read back before retrying.
 The initializer uses pinned Microsoft IaC template protocols for full handler and
 plan reads/upserts. Do not use legacy MCP `severity: high`: it creates invalid
 AzMonitor P1/P2 and response-level instructions. Existing legacy configuration
-requires approved migration to exact Sev2 and handler-owned instructions/tools,
-not just a title edit. See the automation doc for backup/preview/apply/verify.
+is refused rather than migrated; use the automation doc's supported fallback.
+Use backup/preview/apply/verify for fresh or existing modern configuration.
 
 Use the supported initializer, not a guessed create wizard, for configuration.
 The required read-back is the skin-rendered custom agent with its explicit four
@@ -191,7 +190,7 @@ readiness command and separately verify pending service gates before inducing.
 
 Current reproducible setup path: render/inspect `Initialize-SreConfiguration.ps1`,
 approve its exact changes, then apply with a new external backup path. For legacy
-state use separately authorized `-AllowLegacyMigration`. Verify full read-back,
+state stop and use the canonical supported fallback. Verify full read-back,
 then separately authorize a bounded incident/recovery rehearsal. Portal operation
 is optional, not the only automation path.
 
@@ -200,7 +199,7 @@ is optional, not the only automation path.
 Use the helper script to create a new crashing revision:
 
 ```powershell
-cd C:\src\sre-agent
+# Run from the SRE checkout.
 
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `

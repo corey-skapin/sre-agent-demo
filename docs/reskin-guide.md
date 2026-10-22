@@ -12,7 +12,6 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
 | `sre.targetArcMachine` | Default Arc machine for T10/T11 helpers. | `win-app-01` |
 | `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. | `T09`, `T11` |
-| `sre.retiredResponsePlanNames` | Explicitly owned old filter IDs to disable only during approved cutover; never inferred by prefix. | two v2 demo routes |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
 | `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | Generic Arc demo labels |
 | `codeContext.*` | Optional repository URL and commit stamped into guest config/events, plus local source path. | Empty URL/commit; local sample path |
@@ -21,6 +20,7 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 ## Swap list
 
 Change per customer:
+
 - Match `azure.namePrefix` and `azure.location` to the Arc repo's skin.
 - Update `labels.agentName` if the prefix changes.
 - Leave `codeContext.lobRepositoryUrl` and `codeContext.lobSourceCommit` empty
@@ -31,16 +31,18 @@ Change per customer:
 - Pick the T10/T11 target Arc machine if the fleet mix changes.
 
 Keep constant:
+
 - Review-mode stance, AzMonitor incident source, knowledge-graph resource discovery, and the separation from `arc-demo`.
 - The helper scripts' fault mechanics unless a later task adds new scenarios.
 
 ## Retarget steps
 
-1. Reskin and deploy `C:\src\arc-demo` first.
+1. Reskin and deploy the companion Arc checkout first.
 2. Copy `config\demo-skin.json` or `config\dummy-customer.demo-skin.json` to a
    private location outside the checkout; do not commit real customer/context values.
 3. Keep `azure.namePrefix` in sync with the Arc repo.
 4. Run SRE scripts using the skin:
+
    ```powershell
    .\scripts\Deploy-SreAgent.ps1 `
      -SubscriptionId <SUBSCRIPTION_ID> `
@@ -48,15 +50,17 @@ Keep constant:
      -ParentOnly `
      -SkinPath .\config\demo-skin.json
    ```
+
 5. Parent-only is not Ready. Render, inspect and approve/apply the current-schema
    configuration using `sre-response-plan-automation.md`, with a new external
-   backup. Run readiness and pair its static pending telemetry gate with separately
-   recorded rehearsal evidence. Do not induce a fault to answer preflight.
+   backup. Run readiness; the optional telemetry item is skipped/not evaluated.
+   Record rehearsal evidence separately. Do not induce a fault to answer preflight.
 6. Use the same skin for scenario helpers; guest deployment/fault/reset actions
    need their own approval. Container App Status and ShowQuery are read-only.
    Arc guest Status still executes Run Command and is not part of a read-only
    presenter rehearsal; use existing workspace evidence for that scene.
    The examples below are operator references, not a batch to run on stage:
+
    ```powershell
    .\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
    .\scripts\Invoke-T10ArcFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json

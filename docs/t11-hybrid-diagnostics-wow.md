@@ -60,7 +60,7 @@ Even `-Action Status` executes an Arc guest Run Command. For a read-only
 navigation rehearsal use existing workspace events and recorded results instead.
 
 ```powershell
-cd C:\src\sre-agent
+# Run from the SRE checkout.
 $subscriptionId = '<SUBSCRIPTION_ID>'
 $tenantId = '<TENANT_ID>'
 
