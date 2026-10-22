@@ -7,7 +7,7 @@
     This helper targets one Arc-enabled server from arc-demo and either manipulates
     the backing lab Azure VM for a missed-heartbeat scenario or uses Azure Arc Run
     command for bounded guest-level scenarios. It is intentionally scoped to T10
-    evidence gathering and does not modify C:\src\arc-demo.
+    evidence gathering and does not modify the companion Arc checkout.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(

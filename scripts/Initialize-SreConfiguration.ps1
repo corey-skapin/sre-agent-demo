@@ -15,7 +15,6 @@ param(
     [switch]$Inspect,
     [switch]$Apply,
     [string]$BackupPath,
-    [switch]$AllowLegacyMigration,
     [ValidateRange(1, 600)][int]$TimeoutSeconds = 180
 )
 Set-StrictMode -Version Latest
@@ -31,10 +30,10 @@ try {
         $snapshot = Get-SreConfigurationSnapshot $session
         @{
             desired = $desired; observed = $snapshot
-            reconciliation = Get-SreCompleteConfigurationPlan $desired $snapshot
+            reconciliation = Get-SreConfigurationPlan $desired $snapshot
         } | ConvertTo-Json -Depth 100
     } else {
-        Invoke-SreConfigurationReconcile -Desired $desired -Session $session -BackupPath $BackupPath -AllowLegacyMigration:$AllowLegacyMigration -WhatIf:$WhatIfPreference |
+        Invoke-SreConfigurationReconcile -Desired $desired -Session $session -BackupPath $BackupPath -WhatIf:$WhatIfPreference |
             ConvertTo-Json -Depth 100
     }
 } finally { $session.token = $null }

@@ -46,7 +46,7 @@ The answer must separate:
 
 ## Prerequisites
 
-- `arc-demo` deployed from `C:\src\arc-demo` with default or equivalent Arc fleet.
+- Companion `arc-demo` deployed with default or equivalent Arc fleet.
 - `sre-agent` deployed from this repo with:
   - `accessLevel=High` for the first experiment run.
   - `incidentManagementConfiguration.type = AzMonitor`.
@@ -434,3 +434,32 @@ Remaining live work:
    replay. Track SRE-executed Arc repair as future investigation only.
 3. Capture Log Analytics `Event`/`Heartbeat` evidence if ingestion and tool access are
    required for the final customer-facing run.
+
+## Historical SRE configuration and T09 evidence
+
+**Non-presenter engineering ledger; not current-instance certification.**
+These notes were moved out of assistant instructions and setup guidance.
+
+- On 2026-10-19, the old instance's invalid AzMonitor P1/P2 priorities and
+  response-level instructions were confirmed by full read-back. An attempted
+  existing-handler PUT was rejected; no supported POST contract was established.
+  An approved six-write cutover staged two v3 filters disabled, disabled the two
+  v2 routes, then enabled v3 in Review/Sev2, preserving old handlers/history.
+  That one-instance migration is no longer part of fresh-deploy tooling.
+- The first 2026-10-20 T09 rehearsal reached alert/incident/RCA but used operator
+  fallback. A separately authorized retry produced an independent v3 Review
+  investigation, concrete RCA, matching reset-tool completion and an actual
+  SRE-managed-identity write. Recovery had a healthy ready revision, 100% traffic
+  and HTTP 200, without an operator reset. Only T09 cooldown was temporarily
+  disabled; its original enabled three-hour value and Review were restored.
+- The user reported clicking that retry's exact current Review card. No
+  independent `ApprovalDecision` event appeared in the bounded audit query.
+  Actual MonitorCondition resolved at 01:45:58 UTC, while workflow state remained
+  Acknowledged. Neither narration nor workflow closure proves approval/execution.
+- Subsequent clean configuration reconstruction read back the retained UAMI,
+  expected workload/admin grants, High/Review/AzMonitor parent, one custom agent
+  and two modern filters; repeated bootstrap had zero operations. That proved
+  configuration reconstruction, not another incident or destructive lifecycle.
+
+Keep these dated outcomes separate. Do not reuse a consumed fault authorization,
+approve a stale card after fallback, or infer that a new instance inherited proof.

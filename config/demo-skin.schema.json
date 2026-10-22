@@ -31,8 +31,7 @@
         "nativeContainerFaultState": { "const": "Status" },
         "t10Scenario": { "enum": ["HeartbeatByBackingVm", "StopService", "DiskPressure", "CpuPressure", "WriteEvent"] },
         "lobFaultMode": { "enum": ["CrashOnProcessing", "Degraded"] },
-        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11"] } },
-        "retiredResponsePlanNames": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,79}$" } }
+        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11"] } }
       }
     },
     "labels": {

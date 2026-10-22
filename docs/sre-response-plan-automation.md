@@ -1,7 +1,7 @@
 # Reconstructing current-schema SRE handler and Review response plans
 
 **Deployment/lifecycle operator reference.** For an already provisioned demo,
-present from [the canonical guide](delivery-runsheet.md), not the setup/migration
+present from [the canonical guide](delivery-runsheet.md), not the setup
 commands below. [The docs map](README.md) explains the minimum reading path.
 
 ## Supported path and protocol pin
@@ -24,8 +24,8 @@ The pinned sources establish these contracts:
 |---|---|
 | `bicep/Apply-Extras.ps1`, incidentFilters and subagents sections | Named PUT envelopes `{name,type,tags,properties}` to `/api/v2/extendedAgent/incidentFilters/{name}` and `/api/v2/extendedAgent/agents/{name}` |
 | `bin/ps/Export-Agent.ps1`, filters/subagents/handlers sections | Full GET lists on those v2 collections and `/api/v1/incidentPlayground/handlers` |
-| `bicep/Apply-Extras.ps1`, legacy handler section | Optional legacy handler creation only when `customInstructions` is nonempty; not needed by modern filters |
 | `recipes/azmon-lawappinsights` | `incidentPlatform: AzMonitor`, `Sev*` priorities, handling custom agent and built-in tool identifiers |
+| Parent readiness lookup in `SreConfiguration.psm1` | ARM `Microsoft.App/agents`, `api-version=2025-05-01-preview`; endpoint from the exact parent, never a guessed host |
 
 The current official templates route children through the data plane because ARM
 child-resource availability is tenant/region dependent. This differs from the
@@ -36,6 +36,40 @@ Authentication is the explicitly validated subscription's token for
 `https://azuresre.dev`; the HTTPS endpoint is read from the named parent ARM
 resource. Tokens remain in memory and are never exported. Authentication or
 permission failures stop; setup does not switch accounts or grant access.
+
+### Maintaining the coupling and handling service changes
+
+This is the canonical coupling reference, not a stable public data-plane SDK
+promise. Keep the revision above, the parent preview API version, exact list/PUT
+envelopes and `https://azuresre.dev` token audience under review together.
+The v1 handler collection is **GET-only**: it detects active legacy overrides
+that could undermine modern routing; no handler creation/update is supported.
+
+To re-pin, compare the selected upstream revision's `Apply-Extras.ps1`,
+`Export-Agent.ps1` and AzMonitor recipe with the adapter and fixtures. Review
+routes, envelopes, casing, token audience and the parent schema before changing
+`TemplateRevision`; update this reference and mocked success/failure tests in the
+same PR. Run local tests and Bicep compilation. Propose any live validation
+separately; a pin update or mocked pass does not authorize a service call.
+Do not download/execute upstream scripts or silently follow a movable branch.
+
+On authentication/denial, malformed/empty/paginated reads, unsupported legacy
+state or schema drift, **stop explicitly**. Do not infer absence, guess POST,
+fall back to another endpoint/account, grant permissions, delete the parent or
+claim partial setup is ready. Apply backs up before writes; a later failure can
+leave partial changes, so retain the backup and inspect before resuming. An
+ambiguous PUT is read back before retry; denied/invalid writes are not retried.
+
+If the contract changes, use the supported SRE portal following current
+[subagent guidance](https://learn.microsoft.com/azure/sre-agent/create-subagent)
+and [response-plan guidance](https://learn.microsoft.com/azure/sre-agent/response-plan).
+Configure only the approved rendered handler and Review plans; require a signed-in
+browser capability and inspect actual visible controls rather than inventing
+clicks. If that capability is unavailable, report the requirement and stop.
+Manual setup is not a verified automated bootstrap: report the remaining
+read-back blocker until supported inspection works. Rebuilding a legacy parent
+requires separate deletion authorization and evidence export; it is never a
+failure fallback.
 
 ## Render, inspect, approve, apply
 
@@ -50,12 +84,11 @@ permission failures stop; setup does not switch accounts or grant access.
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -Inspect
 
-# Only after approving that exact migration/change scope:
+# Only after approving that exact change scope:
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -Apply `
-  -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json> `
-  -AllowLegacyMigration -WhatIf
+  -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json> -WhatIf
 
 # Remove -WhatIf only when the full proposed scope is authorized.
 ```
@@ -69,9 +102,7 @@ backup. An already-correct repeat run performs no PUT.
 For clean reconstruction after an authorized parent deployment, `-Apply` creates
 only the verified-absent named custom agent and current filters. It does not
 create legacy response handlers. For existing modern state it updates the same
-objects; configured old routing is retired through the staged cutover below.
-`-AllowLegacyMigration` is not needed for clean current-schema state and is not
-itself user authorization.
+objects, preserving unrelated fields. It does not migrate old instances.
 
 ## Exact desired demo configuration
 
@@ -100,80 +131,25 @@ The custom agent investigates T09 and proposes only the expected app repair.
 T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
 Do not claim reliable T11 RCA or autonomous Arc repair.
 
-## Legacy routing replacement: no parent deletion or legacy-handler update
+## Fresh bootstrap and existing-state boundary
 
-User-observed portal errors on 2026-10-19 established two independent faults:
-`P1/P2` are invalid priorities for `AzMonitor`, and legacy response-level
-instructions/tools must move onto the handling custom agent. Title-only edits
-cannot fix these errors. Full supported read-back confirmed the same faults.
+Default v3 filters route directly to the handling custom agent. A fresh bootstrap
+creates one agent and two filters; a repeated bootstrap is no-op. Modern drift
+uses named in-place PUT with backup, concurrent-edit detection and read-back.
+Keep these fresh/reused-instance safeguards; they are not migration machinery.
 
-An approved in-place attempt verified the custom-agent update, then stopped when
-the service rejected PUT on an existing legacy handler: "same ID already exists;
-use POST to update." Both pinned Microsoft templates and public Azure MCP source
-show PUT, not a verified existing-handler POST contract. Do not infer or invent
-POST from the error. The adapter now blocks such an entire plan before any write
-with `SRE_EXISTING_HANDLER_UPDATE_UNVERIFIED`; it never retries that collision.
+The pre-current-schema instance's staged v2-to-v3 cutover, priority normalization,
+legacy-handler cleanup, retired-name skin option and migration switch have been
+removed. Remove the obsolete retired-name property from private skins as well.
+Old names have no special ownership exemption: enabled unowned plans block apply;
+disabled historical objects may remain. Invalid legacy priorities and active
+response-level instructions/tools/steps are refused before any write, rather
+than partially rewritten. The v1 read guard remains because service-created or
+reused handlers cannot safely be assumed absent. Existing same-principal RBAC
+adoption also remains necessary for retained-identity wake, not just old routing.
 
-Modern filters route directly to `handlingAgent` without those legacy handlers:
-the official AzMonitor recipe has no `customInstructions`, and the official
-apply script creates a legacy handler only when that optional field is nonempty.
-Default skins therefore use deterministic `container-app-restart-review-v3`
-and `lob-arc-app-review-v3`. `sre.retiredResponsePlanNames` explicitly owns the
-two v2 filters for retirement; never infer ownership from a name prefix.
-
-The exact supported replacement preview preserves parent, identity, verified
-custom agent, old filters/handlers and incident history:
-
-1. Back up full objects before any PUT. Refuse unreviewed enabled extra plans,
-   duplicate handlers, instruction overrides or an already-overlapping cutover.
-2. Create/verify both new v3 filters **disabled**, with AzMonitor, Sev2, exact
-   keywords, same custom handling agent and Review. No v1 handler is created.
-3. Disable the explicitly retired v2 filters via the supported v2 filter PUT.
-   Normalize invalid P1/P2 to Sev2 so the filter validates even while disabling.
-   Preserve old titles, merge settings and all other unrelated fields. Never
-   modify their legacy response handlers or delete their history.
-4. Only after both old routes are verified off, enable the verified modern
-   filters. There is a short routing gap, not duplicate routing or workload
-   downtime; do not induce a fault during cutover.
-5. Read back every operation and the complete final state. Each write compares
-   the latest object against the expected backup/prior read-back, preserving
-   server defaults for a newly staged object. Recheck for unowned enabled routes
-   before every write and confirm retired routes remain off before each modern
-   enable. Stop on concurrent target or routing changes.
-   Read back an ambiguous timeout before retrying. At most three transient
-   attempts; never bypass/retry 400/401/403.
-
-This is not an atomic multi-object transaction. On failure stop with the backup
-and staged/retired objects retained; rerun inspection before a separately approved
-resume. Supported rollback can disable the modern filters, but does not certify
-reactivation of legacy instructions. Never automatically restore invalid P1/P2
-payloads, delete plans, or claim legacy rollback is functional. Replacement IDs
-and retirement changes need approval distinct from the earlier same-ID/title
-approval. No agent replacement, identity/role change or history deletion is needed.
-
-The approved six-write cutover was verified live on 2026-10-19 through these
-published v2 contracts: both modern filters enabled in Review/Sev2, both retired
-filters disabled, and old handlers/history retained. This validates configuration
-reconciliation, not a fresh incident/recovery rehearsal or destructive rebuild.
-The first 2026-10-20 rehearsal verified alert/incident/RCA and operator fallback.
-A separately authorized fresh retry then verified an independent v3 Review
-investigation and actual SRE-managed-identity repair, matching tool completion,
-healthy ready revision, full traffic and HTTP 200 with no operator reset.
-The user reported approving the exact new portal card. No independent
-`ApprovalDecision` event was returned in the bounded official audit query.
-Only T09 cooldown was temporarily disabled to avoid configured thread merging;
-the independent new thread was verified. The original enabled three-hour value
-and Review mode were read-back restored.
-Actual MonitorCondition resolved at 01:45:58 UTC, independently read back;
-alert workflow state remained Acknowledged. This is separate from closing an incident.
-Subsequent clean reconstruction through this repo also verified the new retained
-UAMI, exact workload/admin grants, High/Review/AzMonitor parent, one custom agent
-and two modern filters through full read-back. Repeated bootstrap converged with
-zero operations. This validates clean configuration reconstruction, not a new
-fault/recovery rehearsal or a complete retained-identity park/wake round trip.
-Supported MCP thread reads expose narration, not an actionable approval
-contract. Never use unrestricted approval/yolo to bridge that capability gap,
-and never treat the agent saying "approved" as proof of approval or execution.
+Use the fallback above for unsupported existing state. Historical cutover and
+T09 evidence is in the [non-presenter engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence).
 
 ## Deployment, readiness and lifecycle
 
@@ -187,7 +163,7 @@ For a new/rebuilt layer, complete deployment can chain parent plus configuration
 ```
 
 Use `-ParentOnly` explicitly if only the parent is intended. It is not Ready.
-Do not redeploy the running parent merely to repair legacy plans: inspect/apply
+Do not redeploy the running parent merely to repair modern plans: inspect/apply
 configuration directly. Full deployment follows skin resource names; custom
 parent overrides require explicit reskinning or parent-only intent.
 
@@ -199,21 +175,22 @@ parent overrides require explicit reskinning or parent-only intent.
 ```
 
 Readiness now uses full supported reads for instructions/tools, On/Review,
-AzMonitor/Sev2/title/handler/service mapping, retired routing, active legacy
-response fields, enabled three-hour cooldown and unreviewed enabled extra plans. Invalid active priorities,
-active legacy settings or still-enabled retired routes are **fail**, not merely
+AzMonitor/Sev2/title/handler/service mapping, active legacy response fields,
+enabled three-hour cooldown and unreviewed enabled extra plans. Invalid active priorities,
+active legacy settings or enabled unowned routes are **fail**, not merely
 unknown/pending. Retained disabled history is allowed. Missing/denied reads fail explicitly.
 The Ready command does not ingest external rehearsal artifacts, so
-`telemetry-and-alerts` always remains **pending** in that report, including after
-the successful recorded retry. Pair its JSON/exit 2 with the separately authorized
-run's actual evidence; do not fabricate exit 0 or rerun a fault to clear this
-static gate. No read-only preflight certifies a new closed loop.
+`telemetry-and-alerts` is optional (`required=false`), **skipped / not evaluated**
+with no observed proof. Active/Ready passes when all required checks pass;
+a separately authorized run supplies incident evidence, not a prerequisite to
+clear this advisory item. No read-only preflight certifies a new closed loop.
 
 The Arc/SRE readiness JSON contract remains schemaVersion 1; status is
 `pass|fail|pending|skipped`, exits 0 pass, 1 fail/error, 2 pending. The desired
 configuration format is separately versioned. Desired states are `Active`,
 `Hibernated` and `Removed`; `Ready` remains the compatible Active alias/default,
-not a fourth lifecycle state. Active retains the separately pending rehearsal gate.
+not a fourth lifecycle state. Preserve required failures/pending outcomes;
+the optional rehearsal item does not affect the overall status.
 Worker warnings are captured before job remoting and included as optional
 `inspection-warnings` data, never printed ahead of the JSON document. They do not
 hide required failures or change a required check's outcome.
@@ -324,8 +301,8 @@ nor a retained-identity park/wake round trip; that live lifecycle gate remains u
 After AI-led combined activation/SRE reactivation completes, the SRE-owning
 assistant must [offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer),
 once after the Arc readiness handoff and SRE health/configuration checks.
-Only the named external rehearsal gate may remain pending; do not rewrite the
-readiness report or bypass other failures. A yes lets the AI run the existing
+Require all required checks to pass; do not rewrite the readiness report or
+bypass failures. A yes lets the AI run the existing
 T09 procedure with its agreed recovery fallback and genuine human Review
 approval; a no leaves the activated lab running. Parent-only and Arc-only
 activation do not trigger this offer. This is not automatic fault injection or
@@ -369,12 +346,8 @@ this revised three-state lifecycle has not been exercised against the live estat
 
 ## Evidence boundaries
 
-Previously approved parent managed-resource append and T11 display-name-only
-correction were read-back verified without changing parent Review, identity,
-permissions, alert ID/location/query/actions or workload state.
-Full read-back subsequently revealed the legacy-plan faults described above;
-the earlier ARM-only pending report must not be presented as current routing
-success. No current-schema migration or fresh closed-loop test is implied by
-code, mocked tests or a preview. Do not delete the existing agent merely because
-the user is willing to replace it: first establish and verify the repeatable
-configuration path.
+Local tests cover fresh/reused bootstrap and refusal/failure shapes, not live
+service reliability, a destructive lifecycle or a new incident. Preserve actual
+approval/executor evidence separately; never treat narration as approval, use
+unrestricted approval to bridge a missing capability, or delete the parent as a
+configuration-repair shortcut. Historical results do not certify today's instance.

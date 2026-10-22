@@ -13,6 +13,21 @@ jobs:
       - name: Parser, skin and mocked behavior checks
         shell: pwsh
         run: .\tests\Invoke-Tests.ps1
+      - name: PowerShell static analysis
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          }
+          $issues = @(Invoke-ScriptAnalyzer -Path .\scripts -Recurse -Severity Error,Warning)
+          $issues | Format-Table ScriptName, Line, RuleName, Severity
+          if (@($issues | Where-Object Severity -eq Error).Count) { exit 1 }
+      - name: Markdown conventions
+        shell: pwsh
+        run: |
+          $documents = @('AGENTS.md', 'README.md') + @(Get-ChildItem .\docs\*.md | ForEach-Object FullName)
+          npx --yes markdownlint-cli2@0.23.3 @documents
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile Bicep without Azure sign-in
         shell: pwsh
         run: |

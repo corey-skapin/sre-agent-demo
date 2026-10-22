@@ -139,6 +139,8 @@ try {
     Remove-Item -LiteralPath $sourceSkinPath, $sourceGuestPath -Force
 }
 Assert-Throws { & $initialize -SubscriptionId $subscription -TenantId $tenant -Apply } 'BackupPath'
+Assert-True (-not (Get-Command $initialize).Parameters.ContainsKey('AllowLegacyMigration')) 'Initializer has no legacy-instance migration switch'
+Assert-True (-not (Get-Command (Join-Path $root 'scripts\Deploy-SreAgent.ps1')).Parameters.ContainsKey('AllowLegacyMigration')) 'Deployment has no legacy-instance migration switch'
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'
 & (Join-Path $PSScriptRoot 'Test-SreConfiguration.ps1')
@@ -153,32 +155,116 @@ Assert-True ($ready.status -eq 'fail') 'Absent parent never becomes Ready'
 Assert-True ($ready.checks[0].id -eq 'parent') 'Machine-readable readiness identifies missing parent'
 $active = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
 Assert-True ($active.desiredState -eq 'Active' -and $active.status -eq $ready.status -and $active.checks[0].id -eq 'parent') 'Active and compatible Ready alias use the same readiness path'
+$readinessModule = Get-Module SreReadiness
+try {
+    & $readinessModule {
+        param($Desired, $Skin)
+        $script:ReadinessDesired = $Desired
+        $script:ReadinessSkin = $Skin
+        $script:ReadinessFailure = ''
+        $script:ReadinessBase = "/subscriptions/$($Desired.subscriptionId)/resourceGroups"
+        $script:ReadinessAgentId = "$script:ReadinessBase/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo"
+        $script:ReadinessIdentityId = "$script:ReadinessBase/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami"
+        function script:Assert-SreContext {}
+        function script:New-SreConfigurationSession { @{ token = 'unit-test' } }
+        function script:Get-SreConfigurationSnapshot {
+            if ($script:ReadinessFailure -eq 'denied') { throw 'Synthetic Forbidden data-plane read' }
+            @{
+                subagents = @($script:ReadinessDesired.handler)
+                filters = @($script:ReadinessDesired.plans)
+                handlers = @()
+            }
+        }
+        function script:Get-SreArmRoleAssignments {
+            foreach ($rg in @('rg-arc-demo', 'rg-arc-demo-infra')) {
+                foreach ($role in @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')) {
+                    @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = "$script:ReadinessBase/$rg"; roleDefinitionId = "/roles/$role" }
+                }
+            }
+        }
+        function script:Invoke-SreAz {
+            param($SubscriptionId, $Arguments)
+            $command = $Arguments -join ' '
+            $base = $script:ReadinessBase
+            $appId = "$base/rg-arc-demo-infra/providers/Microsoft.App/containerApps/ca-arc-demo-fault"
+            $value = switch -Wildcard ($command) {
+                'group exists*' { $true; break }
+                'resource list*' { @(@{ id = $script:ReadinessIdentityId }, @{ id = $script:ReadinessAgentId }); break }
+                'identity show*' { @{ principalId = '00000000-0000-0000-0000-000000000003' }; break }
+                'resource show*Microsoft.App/agents/*' {
+                    @{
+                        id = $script:ReadinessAgentId
+                        identity = @{ type = 'SystemAssigned,UserAssigned'; userAssignedIdentities = @{ $script:ReadinessIdentityId = @{} } }
+                        properties = @{
+                            provisioningState = $(if ($script:ReadinessFailure -eq 'parent') { 'Failed' } else { 'Succeeded' })
+                            runningState = 'Running'
+                            actionConfiguration = @{ mode = 'Review'; accessLevel = 'High'; identity = $script:ReadinessIdentityId }
+                            incidentManagementConfiguration = @{ type = 'AzMonitor' }
+                            knowledgeGraphConfiguration = @{
+                                identity = $script:ReadinessIdentityId
+                                managedResources = @("$base/rg-arc-demo", "$base/rg-arc-demo-infra", "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo", "$base/rg-arc-demo/providers/Microsoft.Insights/actionGroups/ag-arc-demo", $appId, "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-app-01")
+                            }
+                        }
+                    }; break
+                }
+                'containerapp show*' { @{ id = $appId; properties = @{ provisioningState = 'Succeeded'; runningStatus = 'Running'; template = @{ containers = @(@{ env = @(@{ name = 'SIMULATE_CRASH'; value = 'false' }) }) } } }; break }
+                'containerapp revision list*' { ,@(@{ properties = @{ active = $true; healthState = 'Healthy'; replicas = 1; trafficWeight = 100 } }); break }
+                'monitor metrics alert show*' { @{ id = '/unit-test/alert'; enabled = $true; severity = 2; scopes = @($appId) }; break }
+                'connectedmachine show*' { @{ id = '/unit-test/machine'; status = $(if ($script:ReadinessFailure -eq 'arc') { 'Disconnected' } else { 'Connected' }) }; break }
+                'resource show*scheduledQueryRules/*' { @{ properties = @{ enabled = $true; severity = 2; displayName = $script:ReadinessSkin.labels.lobAlertTitleContains } }; break }
+                'role assignment list*' { ,@(Get-SreArmRoleAssignments | Where-Object scope -EQ $(if ($command -match 'rg-arc-demo-infra') { "$base/rg-arc-demo-infra" } else { "$base/rg-arc-demo" })); break }
+                default { throw "Unexpected readiness request (all real Azure calls forbidden): $command" }
+            }
+            ConvertTo-Json -InputObject $value -Depth 30
+        }
+    } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
+    foreach ($state in @('Active', 'Ready')) {
+        $healthyReadiness = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState $state
+        Assert-True ($healthyReadiness.status -eq 'pass' -and $healthyReadiness.schemaVersion -eq 1) "$state passes when all verifiable required checks pass"
+        $telemetry = @($healthyReadiness.checks | Where-Object id -eq 'telemetry-and-alerts')
+        Assert-True ($telemetry.Count -eq 1 -and -not $telemetry[0].required -and $telemetry[0].status -eq 'skipped' -and $null -eq $telemetry[0].observed -and $telemetry[0].message -match 'Not evaluated') 'Rehearsal is advisory, explicitly unevaluated and never success-shaped'
+    }
+    foreach ($failure in @('parent', 'denied', 'arc')) {
+        & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
+        $failed = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
+        $expected = if ($failure -eq 'arc') { 'pending' } else { 'fail' }
+        Assert-True ($failed.status -eq $expected) "Advisory rehearsal does not hide required $failure $expected"
+    }
+} finally {
+    & $readinessModule {
+        Remove-Item Function:\Assert-SreContext,Function:\New-SreConfigurationSession,Function:\Get-SreConfigurationSnapshot,Function:\Get-SreArmRoleAssignments,Function:\Invoke-SreAz
+        Remove-Variable ReadinessDesired,ReadinessSkin,ReadinessFailure,ReadinessBase,ReadinessAgentId,ReadinessIdentityId -Scope Script
+    }
+}
 $fixture = Join-Path ([IO.Path]::GetTempPath()) "sre-readiness-cli-$([guid]::NewGuid())"
 $fixtureModule = Join-Path $fixture 'lib'
 $fixtureScript = Join-Path $fixture 'Test-SreReadiness.ps1'
 $fixtureModuleFile = Join-Path $fixtureModule 'SreReadiness.psm1'
+$fixtureReport = Join-Path $fixtureModule 'healthy.json'
 try {
     New-Item -ItemType Directory -Path $fixtureModule -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $root 'scripts\Test-SreReadiness.ps1') -Destination $fixtureScript
+    $healthyReadiness | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $fixtureReport
     @'
 function Get-SreReadinessReport {
     param($SubscriptionId, $TenantId, $SkinPath, $DesiredState, $PreviousIdentityPrincipalId)
     Write-Warning 'Synthetic CLI diagnostic'
-    @{
-        schemaVersion = 1; workload = 'sre-agent'; checkedAtUtc = [DateTime]::UtcNow.ToString('o')
-        subscriptionId = $SubscriptionId; tenantId = $TenantId; resourceGroups = @()
-        desiredState = $DesiredState; status = 'pass'; checks = @()
-    }
+    $report = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'healthy.json') -Raw | ConvertFrom-Json -AsHashtable
+    $report.desiredState = $DesiredState
+    $report
 }
 Export-ModuleMember -Function Get-SreReadinessReport
 '@ | Set-Content -LiteralPath $fixtureModuleFile
-    $raw = & (Get-Command pwsh).Source -NoProfile -File $fixtureScript -SubscriptionId $subscription -TenantId $tenant -OutputFormat Json
-    $readinessExit = $LASTEXITCODE
-    $jsonReport = ($raw -join "`n") | ConvertFrom-Json
-    Assert-True ($readinessExit -eq 0 -and $jsonReport.status -eq 'pass') 'Worker warnings never corrupt CLI JSON or change required-check status'
-    Assert-True ($jsonReport.checks[-1].id -eq 'inspection-warnings' -and $jsonReport.checks[-1].observed[0] -match 'Synthetic CLI diagnostic') 'Worker warning diagnostics are retained in machine-readable checks'
+    foreach ($state in @('Active', 'Ready')) {
+        $raw = & (Get-Command pwsh).Source -NoProfile -File $fixtureScript -SubscriptionId $subscription -TenantId $tenant -DesiredState $state -OutputFormat Json
+        $readinessExit = $LASTEXITCODE
+        $jsonReport = ($raw -join "`n") | ConvertFrom-Json
+        Assert-True ($readinessExit -eq 0 -and $jsonReport.status -eq 'pass') "$state original CLI JSON/exit0 agrees with healthy report despite warning"
+        Assert-True (@($jsonReport.checks | Where-Object { $_.id -eq 'telemetry-and-alerts' -and -not $_.required -and $_.status -eq 'skipped' }).Count -eq 1) 'CLI retains explicitly unevaluated advisory item'
+        Assert-True ($jsonReport.checks[-1].id -eq 'inspection-warnings' -and $jsonReport.checks[-1].observed[0] -match 'Synthetic CLI diagnostic') 'Worker warning diagnostics are retained in machine-readable checks'
+    }
 } finally {
-    foreach ($file in @($fixtureScript, $fixtureModuleFile)) {
+    foreach ($file in @($fixtureScript, $fixtureModuleFile, $fixtureReport)) {
         if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
     }
     if (Test-Path -LiteralPath $fixtureModule) { Remove-Item -LiteralPath $fixtureModule -Force }

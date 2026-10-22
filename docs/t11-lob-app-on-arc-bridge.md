@@ -299,7 +299,7 @@ Desired future RCA evidence (not all currently reliable):
   SRE-executed Arc app repair is future investigation only.
 - Connect your own authorized repository in the SRE Agent knowledge base
   only with separate explicit authentication/consent when hardening code-context RCA.
-- Keep `arc-demo` standalone: no files in `C:\src\arc-demo` are changed for T11.
+- Keep `arc-demo` standalone: no files in its checkout are changed for T11.
 
 ## Local validation completed for this package
 

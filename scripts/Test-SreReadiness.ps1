@@ -3,8 +3,8 @@
 .SYNOPSIS
 Read-only, bounded readiness inspection. Exit 0 pass, 1 fail/error, 2 pending.
 .DESCRIPTION
-Active (Ready compatibility alias) inspects ARM and supported full service configuration; fresh incident
-telemetry/rehearsal remains a separate pending gate. Hibernated verifies the
+Active (Ready compatibility alias) inspects ARM and supported full service configuration;
+incident rehearsal is optional, skipped/not evaluated. Hibernated verifies the
 retained UAMI/group and absent paid parent, reporting retained-state wake diagnostics.
 Removed verifies dedicated group and saved-principal external grants absent.
 No Azure account selection, faults, guest commands or cloud mutations are performed.

@@ -43,13 +43,13 @@ records an earlier run; it never certifies today's resources or UI.
 | [delivery-runsheet.md](delivery-runsheet.md) | First-time presenter: private inputs, one rehearsal, timed combined story, exact navigation, expected results, talk track, approval boundary and fallback. | **Canonical combined presentation. Required for the combined demo.** |
 | [t09-native-containerapp-closed-loop.md](t09-native-containerapp-closed-loop.md) | Recovery operator: Container App fault/reset commands, verification, audit queries and prior-run evidence. | **Operator reference**, only for a separately authorized bounded T09 rehearsal/live window. Historical proof is from a previous instance. Not a second presenter script. |
 | [t11-hybrid-diagnostics-wow.md](t11-hybrid-diagnostics-wow.md) | Presenter/architect: optional hybrid business story and operator-recovery explanation. Includes separately authorized guest/fault commands for operators. | **Optional reference.** The canonical guide already includes the short read-only scene; skip its live commands during an ordinary presentation. |
-| [sre-response-plan-automation.md](sre-response-plan-automation.md) | Deployment operator: supported pinned handler/filter bootstrap, inspect/apply, migration, readiness, export and retained-identity park/wake. | **Current operations reference.** Required when setting up or repairing configuration, not when presenting an already ready lab. |
+| [sre-response-plan-automation.md](sre-response-plan-automation.md) | Deployment operator: canonical protocol coupling/re-pin/fallback, fresh/reused bootstrap, readiness, export and retained-identity park/wake. | **Current operations reference.** Legacy-instance migration is unsupported; not a presenter script. |
 | [ai-deploy-handbook.md](ai-deploy-handbook.md) | Operator using an AI assistant: bounded setup/handoff prompts, commands and permission/lifecycle rules. | **Setup reference.** Not a presenter checklist or authorization to execute writes. |
 | [reskin-guide.md](reskin-guide.md) | Demo owner: fictional defaults, private runtime skins, labels, source-context options and retargeting. | **Preparation reference.** Read before creating a different estate or audience skin, not during the talk. |
 | [sre-cost-and-demo-fidelity.md](sre-cost-and-demo-fidelity.md) | Owner/architect: AAU billing, Stopped versus deletion-based parking, retained identity, telemetry and quality tradeoffs. | **Optional cost/closeout reference.** Not an actual bill, unit-price quote or permission to park a running demo. |
 | [sre-sales-rollout-guidance.md](sre-sales-rollout-guidance.md) | Seller/workshop lead: positioning, qualification, illustrative PoC scope and safe claims. | **Optional planning reference.** Not the portal presentation or deployment recipe. |
 | [t11-lob-app-on-arc-bridge.md](t11-lob-app-on-arc-bridge.md) | Engineer: LOB sample architecture, guest deployment, event/alert plumbing and historical T11 evidence. | **Engineering reference / historical ledger.** Do not execute its guest operations to fill an empty presentation view. |
-| [t10-sre-on-arc-experiment.md](t10-sre-on-arc-experiment.md) | Engineer: service/disk/CPU/heartbeat experiments and their limitations. | **Experimental appendix / historical evidence.** Not required for the customer walkthrough; not autonomous Arc repair. |
+| [t10-sre-on-arc-experiment.md](t10-sre-on-arc-experiment.md) | Engineer: Arc experiments and historical SRE configuration/T09 evidence moved out of assistant instructions. | **Experimental appendix / historical evidence.** Not presenter source-of-truth or current-instance proof. |
 | [clean-room-shareability-test-2026-10-12.md](clean-room-shareability-test-2026-10-12.md) | Maintainer: dated no-cost clone/parser/WhatIf findings and remaining validation gaps. | **Historical only.** Predates current routing and identity retention; never use its old MCP/browser experiments as a rebuild recipe. |
 
 ## Operator path, only when preparation is required
@@ -61,8 +61,8 @@ Use explicit private target inputs and the repo's supported read-only inspection
 Approve actual changes separately. Wake and verify Arc before SRE; park and
 verify SRE before Arc. Parent deployment alone is not a complete configured demo.
 
-Keep Review and enabled three-hour cooldown. The static SRE readiness telemetry
-gate remains pending even when external rehearsal evidence exists. Deleted
+Keep Review and enabled three-hour cooldown. SRE readiness passes when required
+checks pass; its optional telemetry item is skipped/not evaluated, not run proof. Deleted
 history, memory and repository authorization are not restored from exports.
 See the canonical guide for what can honestly be shown without a fresh live run.
 

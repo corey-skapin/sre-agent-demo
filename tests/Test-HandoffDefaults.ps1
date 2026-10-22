@@ -24,7 +24,7 @@ foreach ($file in $files) {
         $_.Groups['domain'].Value -notmatch '(?i)(^|\.)(example\.(com|net|org)|[^.]+\.invalid|[^.]+\.test)$'
     })
     Check ($contacts.Count -eq 0) "$file contains no real contact email"
-    Check ($text -notmatch '(?i)[a-z]:[\\/]Users[\\/][^\\/\s"'']+') "$file contains no personal home path"
+    Check ($text -notmatch '(?i)[a-z]:[\\/](Users|src)[\\/][^\\/\s"'']+') "$file contains no workstation home or checkout path"
     $owners = @([regex]::Matches($text, '(?i)https://github\.com/(?<owner>[^/\s<>()"''`]+)') | Where-Object {
         $_.Groups['owner'].Value -notin @('microsoft', 'Azure')
     })
@@ -38,6 +38,10 @@ foreach ($name in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
 $manifest = Get-Content (Join-Path $root 'samples\lob-arc-app\source-context.example.json') -Raw | ConvertFrom-Json
 Check ($manifest.repositoryUrl -eq '' -and $manifest.commit -eq '') 'Sample manifest requires operator-supplied external source context'
 $docsRoot = Join-Path $root 'docs'
+$instructions = Get-Content -LiteralPath (Join-Path $root 'AGENTS.md')
+Check ($instructions.Count -le 130) 'Assistant instructions stay within 130 lines'
+Check (($instructions -join "`n") -notmatch '\b20\d\d-\d\d-\d\d\b') 'Dated run diaries stay out of loaded assistant instructions'
+Check (($instructions -join "`n").Contains('docs/ai-deploy-handbook.md#post-activation-incident-offer')) 'Instructions preserve the canonical conversational offer'
 $docsIndex = Get-Content -LiteralPath (Join-Path $docsRoot 'README.md') -Raw
 foreach ($document in $files | Where-Object { $_.StartsWith('docs/') -and $_.EndsWith('.md') }) {
     $link = $document.Substring('docs/'.Length)
