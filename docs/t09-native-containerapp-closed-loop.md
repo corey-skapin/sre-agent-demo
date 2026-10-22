@@ -8,6 +8,12 @@ configuration was verified, but a new end-to-end rehearsal was not performed.
 Nothing below authorizes a new fault or certifies current readiness.
 Source-code repository connection is optional and was not captured.
 
+For AI-led preparation after activation, the SRE-owning assistant follows
+[the once-only conversational incident offer](ai-deploy-handbook.md#post-activation-incident-offer).
+After your scoped yes, it runs this existing procedure and recovery fallback
+for you; only the actual SRE Review operation requires your separate human
+approval in its supported UI. A no skips the incident without changing activation.
+
 Latest current-schema retry (2026-10-20): a separately authorized fault generated
 a new Sev2 alert and independent v3 Review investigation. The user reported
 approving the exact new `SIMULATE_CRASH=false` card. Matching tool completion and

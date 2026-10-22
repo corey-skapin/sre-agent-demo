@@ -16,6 +16,14 @@ but a new end-to-end fault/approval/repair rehearsal was not performed. A retain
 identity park/wake round trip is also unverified. Old thread IDs, screenshots and
 successes are not current-instance proof.
 
+**Activating with Copilot first?** After the requested combined activation and
+fresh Arc/SRE health checks, the SRE-owning assistant must
+[offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer).
+It runs the existing procedure only if you agree and guides you to the real
+human Review approval; you do not have to select/run scripts. Declining leaves
+the activated lab running. This is a once-only setup handoff, not a fault
+trigger during the read-only navigation rehearsal below.
+
 ## 1. Prepare your private input card
 
 Allow preparation time before the 30-minute talk. Ask the deployment owner for an
