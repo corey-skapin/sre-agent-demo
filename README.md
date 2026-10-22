@@ -169,20 +169,26 @@ adds their explicit Container App/Arc IDs to managed resources. Bicep role names
 include the identity principal; existing same-principal names are adopted.
 Incremental deployments cannot revoke permissions: a Low downgrade with an
 existing incompatible write grant fails until a separately approved cleanup.
-An existing Monitoring Contributor grant is tolerated in High for demo compatibility,
-not created by the standard profile. Low uses the actual Log Analytics Reader ID;
+Legacy Monitoring Contributor or other excessive/inherited grants are retained
+while parked but require explicit reconciliation before Active.
+Low uses the actual Log Analytics Reader ID;
 the previous template mislabeled Log Analytics Contributor as Reader.
 User, service-principal and managed-identity deployers are supported through
 `-DeployerPrincipalType` inference/override.
 
 ## Off state / reactivate
 
-Azure SRE Agent currently has no stopped/deallocated state. Because the agent has
-an always-on charge, normal parking removes the parent and known diagnostics,
-but **retains the dedicated SRE group and its SRE-only UAMI**. Known UAMI workload
-grants and the direct parent administrator grant are removed. Other identities'
-external grants and the Arc estate stay intact. Unexpected resources or grants
-block deletion; normal parking never deletes the group or UAMI.
+The demo has three desired states: **Active** (`Ready` remains a compatible
+readiness name/default), **Hibernated**, and **Removed**. Hibernation deletes the
+paid SRE parent but **retains the dedicated group/UAMI, existing workload grants,
+workspace Application Insights and owned Smart Detection Action Group**.
+The deployer's parent-scoped administrator entry follows the deleted parent,
+not the stable UAMI. Stale entries and unrelated IAM/resource drift are
+reported for reconciliation before Active, not silently deleted or used to
+block parking the known parent. Wrong target/identity and failed reads still stop
+execution. The Arc estate is never deleted here.
+Unknown retained resources may still bill; Hibernated proves the SRE parent's
+cost state, not that the whole group or combined lab is cost-free.
 
 ```powershell
 # Only after approved parent removal; export configuration/evidence and
@@ -222,7 +228,7 @@ Deletion loses custom agents, response plans, thread/incident history, memory an
 connector state. Code-repository authorization is optional and must be explicitly
 re-established; a URL in the skin is not authentication. Save the retained identity
 principal and use readiness `-DesiredState Hibernated
--PreviousIdentityPrincipalId <ID>` to verify external grant cleanup. Missing
+-PreviousIdentityPrincipalId <ID>` to verify retained identity and parent absence. Missing
 identity/partial state is safe to inspect, but an absent UAMI (including historical
 whole-group deletion) fails the new identity-retained Hibernated contract.
 WhatIf never selects a global account, revokes grants or writes a
@@ -239,12 +245,34 @@ T09 rehearsal. Residual Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
-Retaining an identity is not retaining Contributor access: normal parking revokes
-its grants, then incremental IaC restores the same deterministic IDs on wake.
+Normal parking also retains its free workload grants, including standing
+Contributor access. Restrict who can attach/use that identity. Before Active,
+deployment/readiness require the requested profile at the two workload groups;
+excessive/inherited grants need explicit reconciliation, never automatic revocation.
+Incremental IaC adopts existing assignment names and creates only missing grants.
 The separate identity module owns it in the same SRE group, so first creation and
 future reuse follow identical IaC without an extra identity group or manual identity.
-Full removal of the retained group/identity requires separate explicit approval;
-`Hibernate-SreAgent.ps1` deliberately has no group/identity deletion path.
+Full removal requires separate explicit approval and `Remove-SreAgent.ps1`:
+
+```powershell
+.\scripts\Remove-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
+# Execute without -WhatIf only after approving the exact resources/grants.
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Removed `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
+```
+
+Removed deletes only known SRE resources, known identity-owned grants, verified
+parent grants and the dedicated group **after it is empty**. Unknown resources
+or scoped assignments block removal for ownership review. Save the principal
+before removal: without it, external-grant verification is pending, not passed.
+Already absent/partial state converges without deploying anything. Private
+exports and shared Arc/Monitor resources remain untouched. Old UAMI-only parked
+states remain Hibernated; authorized wake recreates their missing diagnostics.
 
 SRE Agent's [always-on charge](https://learn.microsoft.com/azure/sre-agent/pricing-billing)
 is **4 Azure Agent Units per agent-hour while the parent exists**, including when

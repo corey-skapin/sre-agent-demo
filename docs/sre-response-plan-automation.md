@@ -211,21 +211,25 @@ static gate. No read-only preflight certifies a new closed loop.
 
 The Arc/SRE readiness JSON contract remains schemaVersion 1; status is
 `pass|fail|pending|skipped`, exits 0 pass, 1 fail/error, 2 pending. The desired
-configuration format is separately versioned.
+configuration format is separately versioned. Desired states are `Active`,
+`Hibernated` and `Removed`; `Ready` remains the compatible Active alias/default,
+not a fourth lifecycle state. Active retains the separately pending rehearsal gate.
 Worker warnings are captured before job remoting and included as optional
 `inspection-warnings` data, never printed ahead of the JSON document. They do not
 hide required failures or change a required check's outcome.
 
 ### Approved hibernation and later reactivation
 
-Normal hibernation **retains the dedicated SRE group and SRE-only UAMI**. It
-deletes only the named parent, Application Insights and allowed service-created
-Smart Detection Action Group, if present. It removes the six High-profile
-external grants (or the Low-profile grants), known historical compatibility
-grants if present, and the single direct parent SRE Agent Administrator assignment.
-Other principals' external assignments are not selected. Extra resources,
-unexpected roles/scopes or additional parent grants block the entire preview;
-do not bypass the guard. Arc workloads remain untouched.
+Normal hibernation **retains the dedicated SRE group, SRE-only UAMI, existing
+workload grants, workspace Application Insights and owned Smart Detection Action
+Group**. It deletes only the named paid parent. The deployer's parent-scoped SRE
+Administrator assignment belongs to the deleted parent, not the stable identity;
+any stale free entry is reported for reconciliation before Active or Removed.
+Unrelated IAM/resource drift is reported, never silently deleted and never
+a reason to strand the known paid parent. Failed inspection, wrong target or
+identity mismatch still stops execution. Arc workloads remain untouched.
+Unknown retained resources may still incur charges; the Hibernated result proves
+the known SRE parent is absent, not that every resource in the group is free.
 
 The retained identity is created by `infra\modules\sre-identity.bicep` in the same
 SRE group; the parent module references it as existing. Incremental deployment
@@ -240,10 +244,16 @@ receives no external workload grants from this repo. UserAssigned-only service
 operation has not been validated here and is not silently enabled.
 
 Managed identities have [no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
-Retaining that object does not retain its external Contributor access. Normal
-parking revokes grants; wake restores them through the same IaC and authorization
-boundary. Full identity/group deletion is separately authorized cleanup, not a
-switch on the normal parking script. Historical whole-group hibernation deleted
+Normal parking now also retains its external Contributor access. Restrict who
+can attach/use the identity; free permissions still carry a security tradeoff.
+Before Active, deployment/readiness reject excessive or inherited assignments
+outside the requested profile at the two workload groups, including old
+subscription Monitoring Contributor. Reconciliation requires separate scope
+approval, not implicit revocation. Wake adopts existing direct grant names,
+creates missing grants and avoids unnecessary Graph principal-name lookups.
+Retained Application Insights must match the requested workspace/location; it
+is not silently relocated. Full identity/group deletion uses the explicit
+Removed path below. Historical whole-group hibernation deleted
 its UAMI; that old principal cannot be restored, so the next first deployment
 must create one replacement before future cycles can retain it.
 
@@ -283,14 +293,17 @@ az identity show --subscription <SUBSCRIPTION_ID> `
 
 Check each exit status. Resource removal is sequential with bounded observation
 (`Hibernate-SreAgent.ps1 -TimeoutSeconds 300` by default), not a hard cancellation
-deadline on each Azure CLI call. Read-before-write compares remaining resource
-and grant IDs and the retained principal; stop on drift or failed writes without
-blind retries. Recheck Hibernated readiness separately before parking Arc.
-It requires the exact retained UAMI, no parent/diagnostics, no external grants
-and no direct parent administrator assignment. Principal-filtered ARM role
-inventory includes below/above-subscription scopes; unknown scopes fail rather
-than being missed. Direct SRE-group ARM assignment reads verify parent grants
-after parent deletion; resource/ARG absence alone is insufficient.
+deadline on each Azure CLI call. Read-before-write verifies target and retained
+principal; stop on failed reads/writes without blind retries. Recheck Hibernated
+readiness separately before parking Arc. Its required checks are the exact retained
+UAMI/group and absent paid parent. Diagnostics, workload grants, stale parent
+grants and drift are explicit optional wake diagnostics; failures there do not
+change the cost-state result. Actual inspection denial still fails the report.
+An old UAMI-only parked state is accepted: Hibernate does not create diagnostics
+or permissions, and authorized wake rebuilds missing state through the same IaC.
+Principal-filtered ARM inventory includes below/above-subscription scopes and
+reports unknown scopes instead of missing them. Direct SRE-group ARM reads
+distinguish deployer parent grants from UAMI workload permissions.
 The documented [ARM assignment-list API](https://learn.microsoft.com/rest/api/authorization/role-assignments/list-for-scope?view=rest-authorization-2022-04-01)
 is used with bounded, validated pagination, not Microsoft Graph or guessed SRE routes.
 Absent/partial state can be inspected without mutation, but a missing UAMI fails
@@ -307,6 +320,42 @@ Do not replay an old full export as a PUT payload: it is reference
 evidence, not a supported restore input. Optional repository authentication needs
 explicit reauthorization. An in-place T09 repair proves neither a fresh bootstrap
 nor a retained-identity park/wake round trip; that live lifecycle gate remains untested.
+
+### Explicit Removed convergence
+
+Removed is separate destructive intent, not an automatic step after Hibernate.
+Save the live UAMI principal and necessary Inspect/audit evidence privately first.
+Use the same explicit subscription/tenant/skin as deployment:
+
+```powershell
+.\scripts\Remove-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
+# Only after approving that exact preview, rerun without -WhatIf.
+
+.\scripts\Test-SreReadiness.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -DesiredState Removed `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
+```
+
+The shared lifecycle implementation deletes only inventoried known identity-owned
+grants at the known subscription/workload scopes, verified parent administrator
+grants, named parent/diagnostics and UAMI. It deletes the dedicated group only
+after resources/grants are absent. Unknown resources, IAM roles/scopes or other
+SRE-group assignments block the full-removal preview; obtain ownership reconciliation,
+not broad group deletion. Other principals' workload grants, shared Arc/Monitor
+resources and private exports are outside the removal boundary.
+
+Already absent or partially removed state converges directly; no intermediate
+Hibernated requirement or identity recreation. Save the principal before deleting
+it: if both live identity and saved principal are unavailable, removal stops and
+Removed readiness reports external-grant verification pending. Failed reads are
+failures, never interpreted as absence. Pending deletion is observed within the
+deadline, not blindly resubmitted. Parent-lifetime cascade may remove its grants;
+already absent exact targets are skipped. Local mocks cover these contracts;
+this revised three-state lifecycle has not been exercised against the live estate.
 
 ## Evidence boundaries
 

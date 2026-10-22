@@ -64,7 +64,7 @@ Keep constant:
    .\scripts\New-LobArcAppMonitorAlert.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action ShowQuery
    ```
 
-## Off state vs cleanup
+## Active, Hibernated and Removed
 
 The optional SRE layer has a different off-state from `arc-demo`: an SRE parent
 can be Stopped, but its always-on charge continues until deletion. The repo's
@@ -80,10 +80,15 @@ authorization, preview and execute the operator parking procedure:
 ```
 
 Preview with `-WhatIf` first. This retains `rg-<prefix>-sre` and `<AGENT_NAME>-uami`,
-removes only the parent/known diagnostics, known UAMI workload assignments and
-the single direct parent administrator grant. Unexpected resources/grants stop
-deletion. Full group/identity deletion is separate cleanup. It does not delete
-or redeploy the Arc estate. Save its identity principal ID, Inspect export and
+deletes only the paid parent, retaining existing UAMI workload assignments,
+workspace Application Insights and the owned Action Group. Parent-scope deployer
+admin is separate from UAMI grants; stale free entries are reported for wake.
+Unexpected free resources/grants do not prevent known-parent parking, but are
+never deleted by Hibernate. Wrong context/identity and failed reads still stop.
+Full group/identity deletion uses explicitly authorized `Remove-SreAgent.ps1`
+and `-DesiredState Removed` readiness with the saved principal. Unknown
+resources/grants block that full-removal path. Neither lifecycle action deletes
+or redeploys the Arc estate. Save its identity principal ID, Inspect export and
 incident/audit evidence first, then verify asynchronous deletion with Hibernated
 readiness and that saved principal. Finish SRE before Arc hibernation.
 Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly` using the retained UAMI, then render
@@ -101,6 +106,11 @@ park/wake retains its principal and deterministic grant IDs. The system-assigned
 parent principal still changes on parent recreation. A missing UAMI fails normal
 Hibernated readiness; do not mistake historical whole-group deletion for retention.
 The retained-identity park/wake round trip has not been live-tested here.
+`Active` is the public desired state; `Ready` remains the compatible readiness
+alias/default. Old UAMI-only Hibernated states remain accepted; authorized wake
+recreates missing diagnostics and adopts retained grants. Requested profile,
+workspace and location must match before Active; excessive IAM needs explicit
+reconciliation rather than automatic revocation.
 Residual Arc/storage/monitoring services can still incur charges.
 
 Skins are validated against `config\demo-skin.schema.json`; missing files, unknown

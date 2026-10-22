@@ -33,7 +33,9 @@ deletion, plus variable active-flow AAUs for model processing.
 
 Use the approved export, `Hibernate-SreAgent.ps1 -WhatIf`, actual parking and
 verification sequence in `docs\sre-response-plan-automation.md`. Retain the
-dedicated group/UAMI, not its workload grants. The
+dedicated group/UAMI, existing free workload grants, workspace Application Insights
+and owned Action Group. Standing access persists until explicitly reconciled or
+Removed; retained telemetry/notifications can still incur usage charges. The
 [managed identity has no extra charge](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
 There is no reason to delete that identity merely to reduce the SRE baseline.
 Wake Arc first, then reconstruct SRE and verify its configuration and readiness.

@@ -8,7 +8,7 @@ function Get-SreReadinessReport {
     [CmdletBinding()]
     param(
         [string]$SubscriptionId, [string]$TenantId, [string]$SkinPath = '',
-        [ValidateSet('Ready', 'Hibernated')][string]$DesiredState = 'Ready',
+        [ValidateSet('Active', 'Ready', 'Hibernated', 'Removed')][string]$DesiredState = 'Ready',
         [string]$PreviousIdentityPrincipalId
     )
     $checks = [Collections.Generic.List[object]]::new()
@@ -28,6 +28,11 @@ function Get-SreReadinessReport {
         $sreGroupId = "$base/$($groups[0])"
         $agentId = "$sreGroupId/providers/Microsoft.App/agents/$($skin.labels.agentName)"
         $identityId = "$sreGroupId/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$($skin.labels.agentName)-uami"
+        $expectedRoles = if ($skin.sre.accessLevel -eq 'High') {
+            @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+        } else {
+            @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
+        }
         $exists = Read-AzJson @('group', 'exists', '-n', $groups[0])
         $principalId = $PreviousIdentityPrincipalId
         $agent = $null
@@ -42,14 +47,30 @@ function Get-SreReadinessReport {
                 $agent = Read-AzJson @('resource', 'show', '--ids', $agentId)
             }
         }
-        if ($DesiredState -eq 'Hibernated') {
+        if ($DesiredState -in @('Hibernated', 'Removed')) {
             $lifecycle = Get-SreLifecycleInventory -SubscriptionId $SubscriptionId -SreResourceGroupName $groups[0] `
                 -AgentName $skin.labels.agentName -ArcResourceGroupName $groups[1] -InfraResourceGroupName $groups[2] `
                 -PreviousIdentityPrincipalId $PreviousIdentityPrincipalId
             $principalId = $lifecycle.principalId
-            Add-Check 'retained-identity' $identityId $(if ($lifecycle.identity) { 'pass' } else { 'fail' }) 'Dedicated UAMI retained with saved principal, if supplied' $principalId 'Normal Hibernated retains the group/UAMI. Legacy whole-group deletion is not this retained-identity state.'
-            Add-Check 'sre-resources-parked' $sreGroupId $(if ($lifecycle.removableResources.Count) { 'pending' } else { 'pass' }) @($identityId) @($lifecycle.resources | ForEach-Object { $_.id }) 'Only the expected UAMI may remain; unexpected resources fail inspection. Parent/diagnostics deletion may still be pending.'
-            Add-Check 'parent-admin-absent' $agentId $(if (-not $exists) { 'pending' } elseif ($lifecycle.parentAssignments.Count) { 'fail' } else { 'pass' }) @() @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'Direct ARM SRE-group assignment read checks the deleted parent scope, not resource-list or ARG absence.'
+            if ($DesiredState -eq 'Removed') {
+                Add-Check 'sre-group-absent' $sreGroupId $(if ($exists) { 'pending' } else { 'pass' }) 'Dedicated SRE group absent' $exists 'Shared Arc groups and private exports are outside Removed scope.'
+                Add-Check 'external-grants-absent' $identityId $(if (-not $principalId) { 'pending' } elseif ($lifecycle.externalAssignments.Count) { 'fail' } else { 'pass' }) @() @($lifecycle.externalAssignments | ForEach-Object { $_.id }) 'A saved principal is needed after identity deletion to prove no external assignments remain; absence is not denial.'
+                Add-Check 'parent-admin-absent' $agentId $(if ($lifecycle.parentAssignments.Count) { 'fail' } else { 'pass' }) @() @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'Checks surviving direct parent grants while the group exists.'
+            } else {
+                Add-Check 'parent-absent' $agentId $(if ($agent) { 'pending' } else { 'pass' }) 'Paid parent absent' $(if ($agent) { $agent.id } else { $null }) 'Stopped still bills; only parent absence establishes the normal cost-saving state.'
+                Add-Check 'retained-identity' $identityId $(if ($lifecycle.identity) { 'pass' } else { 'fail' }) 'Dedicated UAMI/group retained with saved principal, if supplied' $principalId 'Normal Hibernate preserves the identity. Old UAMI-only parking is supported; missing state is rebuilt only by authorized deployment.'
+                $diagnosticIds = @("$sreGroupId/providers/Microsoft.Insights/components/$($skin.labels.agentName)-appi", "$sreGroupId/providers/Microsoft.Insights/actionGroups/Application Insights Smart Detection")
+                $presentIds = @($lifecycle.resources | ForEach-Object { $_.id })
+                Add-Check 'retained-diagnostics' $sreGroupId $(if (@($diagnosticIds | Where-Object { $_ -notin $presentIds }).Count) { 'pending' } else { 'pass' }) $diagnosticIds $presentIds 'Existing diagnostics are retained, not created by Hibernate. Missing legacy diagnostics are wake information, not a cost-state failure.' $false
+                $expectedGrantKeys = @(foreach ($rg in $groups[1..2]) { foreach ($role in $expectedRoles) { "$base/$rg|$role" } })
+                $observedGrantKeys = @($lifecycle.externalAssignments | ForEach-Object { "$($_.scope)|$(($_.roleDefinitionId -split '/')[-1])" })
+                $extra = @($observedGrantKeys | Where-Object { $_ -notin $expectedGrantKeys })
+                $missing = @($expectedGrantKeys | Where-Object { $_ -notin $observedGrantKeys })
+                $duplicate = @($observedGrantKeys | Group-Object | Where-Object Count -GT 1)
+                Add-Check 'retained-workload-grants' $identityId $(if ($extra.Count -or $duplicate.Count) { 'fail' } elseif ($missing.Count) { 'pending' } else { 'pass' }) $expectedGrantKeys $observedGrantKeys 'Existing grants are retained, not revoked. Missing grants are recreated on authorized wake; excess/duplicate standing access needs explicit reconciliation before Active.' $false
+                Add-Check 'parent-scope-grants' $agentId $(if ($lifecycle.parentAssignments.Count) { 'pending' } else { 'pass' }) 'Parent-lifetime grants absent or reconciled before Active' @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'These belong to the deployer, not the stable UAMI. A stale free entry does not keep the paid parent running.' $false
+            }
+            Add-Check 'retained-state-drift' $sreGroupId $(if ($lifecycle.drift.Count) { 'fail' } else { 'pass' }) 'No unexpected resources/permissions before Active or Removed' $lifecycle.drift 'Drift is reported without broad deletion; inspection denials still fail the whole report.' ($DesiredState -eq 'Removed')
         } elseif (-not $agent) {
             Add-Check 'parent' $agentId 'fail' 'Succeeded/Running' $null 'Required parent agent is absent; deploy parent then configure data plane.'
         } else {
@@ -139,37 +160,26 @@ function Get-SreReadinessReport {
             Add-Check 'telemetry-and-alerts' $agentId 'pending' 'Fresh separately authorized alert-to-thread/RCA/Review/recovery evidence' $null 'Configuration correctness does not certify a new automatic incident loop. This read-only command never injects a fault.'
             Add-Check 'code-repository-connection' $agentId 'skipped' 'Separate explicit authorization if needed' $null 'Public source context is not connector authentication.' $false
         }
-        $expectedRoles = @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
-        if ($skin.sre.accessLevel -eq 'High') {
-            $expectedRoles = @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-        }
-        $scopes = [ordered]@{}
-        if ($DesiredState -eq 'Hibernated') { $scopes['subscription'] = "/subscriptions/$SubscriptionId" }
-        foreach ($rg in $groups[1..2]) { $scopes[$rg] = "$base/$rg" }
-        foreach ($rg in $scopes.Keys) {
-            $scope = $scopes[$rg]
-            if ($rg -ne 'subscription' -and -not (Read-AzJson @('group', 'exists', '-n', $rg))) {
-                Add-Check "rbac-$rg" $scope $(if ($DesiredState -eq 'Hibernated') { 'pass' } else { 'fail' }) 'Scope available for Ready; absent allowed for Hibernated' 'absent' 'Scope is absent.'
-                continue
+        if ($DesiredState -in @('Active', 'Ready')) {
+            if ($principalId) {
+                $allAssignments = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId "/subscriptions/$SubscriptionId" -PrincipalId $principalId)
+                $expectedScopes = @("$base/$($groups[1])", "$base/$($groups[2])")
+                $excess = @($allAssignments | Where-Object { $_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles })
+                Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count) { 'fail' } else { 'pass' }) 'Only the requested profile at the two workload groups' @($excess | ForEach-Object { $_.id }) 'Retained excessive IAM is not a parking blocker, but must be reconciled explicitly before Active.'
             }
-            if (-not $principalId) {
-                Add-Check "rbac-$rg" $scope 'pending' 'Known identity principal' $null 'Pass -PreviousIdentityPrincipalId to verify external grants after identity deletion.'
-                continue
-            }
-            $assignments = if ($DesiredState -eq 'Hibernated') {
-                @($lifecycle.externalAssignments | Where-Object { $_.scope -eq $scope -or $_.scope -eq "/subscriptions/$SubscriptionId" })
-            } else {
-                @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false'))
-            }
-            $owned = @($assignments | Where-Object principalId -EQ $principalId)
-            $observed = @($owned | ForEach-Object { ($_.roleDefinitionId -split '/')[-1] })
-            if ($DesiredState -eq 'Hibernated') {
-                Add-Check "rbac-$rg" $scope $(if ($owned.Count) { 'fail' } else { 'pass' }) @() $observed 'External SRE identity grants must be absent.'
-            } else {
-                if ($skin.sre.accessLevel -eq 'High' -and '749f88d5-cbae-40b8-bcfc-e573ddc772fa' -in $observed) {
-                    Add-Check "legacy-monitoring-contributor-$rg" $scope 'pass' 'Preserve existing demo compatibility grant, do not create' 'Monitoring Contributor present' 'Existing inherited/direct grant tolerated for High; hibernation includes identity-owned cleanup.' $false
-                    $observed = @($observed | Where-Object { $_ -ne '749f88d5-cbae-40b8-bcfc-e573ddc772fa' })
+            foreach ($rg in $groups[1..2]) {
+                $scope = "$base/$rg"
+                if (-not (Read-AzJson @('group', 'exists', '-n', $rg))) {
+                    Add-Check "rbac-$rg" $scope 'fail' 'Scope available for Active' 'absent' 'Scope is absent.'
+                    continue
                 }
+                if (-not $principalId) {
+                    Add-Check "rbac-$rg" $scope 'pending' 'Known identity principal' $null 'Required UAMI principal could not be resolved.'
+                    continue
+                }
+                $assignments = @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false'))
+                $owned = @($assignments | Where-Object principalId -EQ $principalId)
+                $observed = @($owned | ForEach-Object { ($_.roleDefinitionId -split '/')[-1] })
                 $missingRoles = @($expectedRoles | Where-Object { $_ -notin $observed })
                 $extraRoles = @($observed | Where-Object { $_ -notin $expectedRoles })
                 $valid = -not $missingRoles.Count -and -not $extraRoles.Count -and $observed.Count -eq $expectedRoles.Count
