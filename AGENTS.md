@@ -3,8 +3,8 @@
 ## Scope and reading order
 
 - Attach SRE to the companion `arc-demo`; never deploy or edit its estate here.
-- Read [the document map](docs/README.md), then
-  [the combined presenter guide](docs/delivery-runsheet.md).
+- Present from `.local/presenter-runsheet.md`; use [the docs map](docs/README.md)
+  for operator references and keep the Arc presentation in its own repo.
 - Use companion Arc `docs/runsheet.md#present-the-arcmonitor-demo` for Arc UI detail.
 - Use [the AI handbook](docs/ai-deploy-handbook.md) for activation and handoff.
 - Use [response-plan automation](docs/sre-response-plan-automation.md) as the
@@ -58,6 +58,10 @@
 - Require all required checks to pass; do not rewrite JSON or ignore failures.
 - Treat optional `telemetry-and-alerts` as skipped/not evaluated, not loop proof.
 - Record a separately authorized incident before claiming new closed-loop success.
+- After successful setup, refresh the ignored local context and run
+  `New-PresenterRunsheet.ps1` per the handbook; use saved nonsecret inputs only.
+- Keep presenter IDs/URLs in `.local`, never tokens or tracked files; do not make
+  cloud calls merely to render the guide or present saved health as current.
 
 ## Post-activation incident offer
 

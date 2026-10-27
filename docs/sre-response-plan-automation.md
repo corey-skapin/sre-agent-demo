@@ -1,7 +1,8 @@
 # Reconstructing current-schema SRE handler and Review response plans
 
 **Deployment/lifecycle operator reference.** For an already provisioned demo,
-present from [the canonical guide](delivery-runsheet.md), not the setup
+present from the generated `.local/presenter-runsheet.md`, using
+[the SRE guide source](delivery-runsheet.md), not the setup
 commands below. [The docs map](README.md) explains the minimum reading path.
 
 ## Supported path and protocol pin

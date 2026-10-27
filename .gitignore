@@ -1,5 +1,6 @@
 # Local Azure CLI / deployment scratch
 .azure/
+.local/
 *.azcli.output.json
 *.guest.ps1
 

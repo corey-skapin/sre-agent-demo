@@ -1,7 +1,7 @@
 # T09 — Azure-native Container App closed-loop SRE runbook
 
 **Operator reference, not the presenter script.** Start with
-[the docs map](README.md) and [canonical combined guide](delivery-runsheet.md).
+[the docs map](README.md), then use the generated `.local/presenter-runsheet.md`.
 The historical 2026-10-20 instance validated v3 Review routing and the
 alert/RCA/approval/repair/recovery path. The replacement instance's reconstructed
 configuration was verified, but a new end-to-end rehearsal was not performed.
@@ -163,9 +163,8 @@ built-in tools, and `container-app-restart-review-v3`: Azure Monitor, Sev2, lite
 three-hour cooldown. No duplicate quickstart match or active legacy handler is
 allowed. Report conflicts and obtain scoped authorization before changes.
 
-For read-only presentation, the [canonical guide](delivery-runsheet.md) describes
-the current documented **Incidents > Triggers + response plans** path, the
-published Builder variant and verified-bookmark/Inspect fallback. It does not
+For read-only presentation, the [SRE guide source](delivery-runsheet.md) describes
+the documented response-plan view and keeps navigation read-only. It does not
 claim every authenticated layout was observed. Do not create, save or toggle a
 plan merely to rehearse or replace a missing investigation.
 
@@ -253,9 +252,9 @@ See [Azure Monitor reinvestigation cooldown](https://learn.microsoft.com/azure/s
 Before the authorized fault, sign in to `https://sre.azure.com`, select the
 configured agent and be ready to open the new incident investigation. Expand
 the actual Azure infrastructure operation card, not just the RCA prose.
-The [canonical guide's approval section](delivery-runsheet.md#5-live-t09-only-where-the-real-approval-happens)
-gives documented thread navigation and the explicit unobserved-card/fallback
-boundary. There is no Azure Monitor alert-state or chat-message substitute.
+The [SRE guide's optional incident step](delivery-runsheet.md#6-optional-one-approved-live-incident)
+requires the current run's exact card and separate fault consent.
+An Azure Monitor alert state or chat message cannot approve that card.
 Confirm the current thread, affected app, resource group, subscription and
 complete command. Narration such as "approved" or "applying" is not an approval
 record. If there is no actual card, do not send an approval message or enable

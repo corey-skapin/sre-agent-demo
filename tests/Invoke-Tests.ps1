@@ -56,6 +56,7 @@ try {
 }
 $skin = Get-DemoSkin -RepoRoot $root
 & (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
+& (Join-Path $PSScriptRoot 'Test-PresenterRunsheet.ps1')
 Assert-True ($skin.sre.requiredScenarios[0] -is [string]) 'JSON array strings remain strings, not PSCustomObject Length properties'
 foreach ($file in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
     $config = Get-DemoSkin -Path (Join-Path $root "config\$file") -RepoRoot $root

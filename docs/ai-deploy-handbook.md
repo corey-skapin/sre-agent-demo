@@ -5,6 +5,54 @@ this repo adds SRE without editing the Arc checkout or redeploying its workloads
 This is an operator/AI setup reference, not the presenter script. Start at
 [the docs map](README.md) for audience, reading order and presentation guidance.
 
+## Local presenter guide
+
+After successful setup, the assistant saves the confirmed names, IDs and URLs
+from the approved inputs and setup readbacks in repo-root
+`.local/demo-context.json`, then runs:
+
+```powershell
+.\scripts\New-PresenterRunsheet.ps1
+```
+
+Open the returned `.local/presenter-runsheet.md` for the SRE presentation.
+The generator is offline. It reads JSON and fills the tracked
+`docs/delivery-runsheet.md` source; plain Markdown does not interpolate JSON.
+Refresh after setup changes. Saved context timestamps describe the inputs,
+not fresh health checks. Do not query Azure solely to generate a document.
+
+Context schema version 1 requires these exact nonsecret fields:
+
+| Field | Saved setup source |
+| --- | --- |
+| `schemaVersion` | Integer `1` |
+| `subscriptionId`, `tenantId` | Explicit approved target |
+| `recordedAtUtc` | UTC timestamp ending in `Z` for the saved context |
+| `resourceGroups` | Object with confirmed `arc`, `infra`, `sre` names |
+| `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment |
+| `applicationUrl` | Container App HTTPS endpoint |
+| `applicationInsightsResourceId` | SRE diagnostics component |
+| `logAnalyticsWorkspaceId` | Existing Arc workspace |
+| `containerAppResourceId`, `arcMachineResourceId` | Exact T09 app and T11 Arc machine |
+| `containerResponsePlan`, `lobResponsePlan` | Rendered plan names |
+| `lobAlertTitleContains`, `lobEventSource` | Approved rendered LOB signal values |
+| `companionArcRunsheetPath` (optional) | Explicit absolute path to the Arc guide, preferably its generated local copy |
+
+The assistant collects these once during setup, not from the presenter.
+Deployment skins remain internal setup inputs and require no presenter changes.
+The generator rejects missing fields, wrong subscription/group/type IDs,
+unsafe names and credential-bearing URLs. Unknown fields are rejected so a
+deployment export or token envelope cannot be used as presenter context.
+Keep credentials, tokens, contact details, exports and raw incident payloads out
+of this file. The entire `.local` directory is gitignored; do not force-add it.
+The JSON and generated guide contain identifiers and should stay on the operator
+machine. Never publish either by default.
+
+The optional companion link is computed relative to the generated file, with
+path segments escaped. A missing companion file produces a skip note without a
+broken link. Changing context or rendering the guide changes no deployment,
+lifecycle state, permissions or fault flags.
+
 ## Handoff prompt
 
 ```text
@@ -36,6 +84,8 @@ For Ready:
    recovery. T11 RCA is not reliable yet. Use the canonical guide's evidence-only
    fallback rather than treating old-instance proof as a new-instance pass.
 8. Leave a requested Ready demo running. Do not automatically hibernate.
+   Refresh .local/demo-context.json from approved inputs/readbacks and run
+   New-PresenterRunsheet.ps1 so the presenter opens one filled-in SRE guide.
 9. After successful combined activation/SRE reactivation, follow the
    Post-activation incident offer below: the SRE assistant must ask once in
    conversation whether to trigger one T09 incident. Do not leave the user to
