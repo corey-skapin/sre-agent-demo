@@ -7,7 +7,7 @@ Confirm current product prerequisites, capabilities and commercial terms before
 using this in a proposal. This is not a customer-specific eligibility assessment,
 pricing offer or a zero-cost hibernation claim.
 This is optional workshop planning, not a portal runsheet; presenters start with
-[the docs map](README.md) and [canonical combined guide](delivery-runsheet.md).
+[the docs map](README.md), then open the generated `.local/presenter-runsheet.md`.
 
 ## Positioning
 
@@ -150,7 +150,7 @@ During Act 1, establish the customer already has:
 - operational alerts,
 - data in Azure Monitor.
 
-During Act 2, show SRE Agent on the Azure-native Container App path first. This
+In the SRE section, show the Azure-native Container App path first. This
 is the validated closed-loop capability, not an unconditional claim that a newly
 reconstructed instance has completed it. Follow the canonical guide's live gates
 and evidence-only fallback.

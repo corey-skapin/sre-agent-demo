@@ -2,12 +2,15 @@
 
 This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` companion repository. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
-The tracked [`config\demo-skin.json`](config/demo-skin.json) and alternative example use fictional organizations. Put real customer/context values in a private skin outside the repo and pass `-SkinPath`; keep `azure.namePrefix` aligned with the Arc skin. Subscription and tenant remain required runtime inputs. External repository context is blank by default; see [`docs\reskin-guide.md`](docs/reskin-guide.md).
+**Present from `.local/presenter-runsheet.md`.** Setup generates this local SRE
+guide with the actual resource names, portal links and scoped queries. Follow it
+top to bottom after the Arc section in the companion repo. No presenter input
+card or customization step is required.
 
 ## Start here
 
 - **AI coding assistants:** read [`AGENTS.md`](AGENTS.md) first.
-- **First-time presenter:** start with [`docs\README.md`](docs/README.md), then use the single [`combined presenter guide`](docs/delivery-runsheet.md). The index identifies every document, the minimum reading order and which engineering/history files to skip.
+- **Presenter:** open `.local/presenter-runsheet.md`. If it is missing, the setup assistant follows [local guide generation](docs/ai-deploy-handbook.md#local-presenter-guide). The [docs index](docs/README.md) keeps operator/history references outside the presenter path.
 - **Setup/repair SRE response plans:** use [`docs\sre-response-plan-automation.md`](docs/sre-response-plan-automation.md).
 - **Do not use every doc as a presenter script.** Several files under `docs\` are engineering evidence or historical runbooks.
 
@@ -301,11 +304,11 @@ automatic demo downgrade. Keep a requested running demo running.
 ## Scenario runbooks
 
 The complete audience/status map is [`docs\README.md`](docs/README.md).
-Only `docs\delivery-runsheet.md` is the canonical combined presentation; the
-scenario files below are optional talk-track or operator/engineering references,
-not additional timed scripts or evidence that a replacement instance is rehearsed.
+Open `.local/presenter-runsheet.md` for the SRE presentation. The Arc repo owns
+its own section. The files below are operator/engineering references, outside
+the presenter path.
 
-- `docs\delivery-runsheet.md` - Three-act Arc + Monitor + SRE delivery storyboard across both repos.
+- `docs\delivery-runsheet.md` - Source for the generated SRE-only presenter guide.
 - `docs\sre-cost-and-demo-fidelity.md` - SRE cost levers, parking tradeoffs and demo-preserving boundaries.
 - `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
 - `docs\sre-sales-rollout-guidance.md` - Internal sales, PoC and rollout guidance for SRE Agent conversations.

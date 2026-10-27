@@ -1,8 +1,8 @@
 # T11 - LOB-app-on-Arc bridge package
 
 **Engineering reference and historical evidence ledger, not the presenter path.**
-Use [the docs map](README.md) and [canonical combined guide](delivery-runsheet.md)
-for the short read-only scene; the optional
+Use the generated `.local/presenter-runsheet.md` for the SRE scene.
+[The docs map](README.md) keeps this file outside that path; the optional
 [hybrid talk track](t11-hybrid-diagnostics-wow.md) expands the story.
 Guest operations here, including `Status`, execute Run Command and are not
 navigation-only preparation.

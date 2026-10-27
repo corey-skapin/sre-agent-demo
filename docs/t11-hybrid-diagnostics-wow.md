@@ -1,8 +1,8 @@
 # T11 hybrid diagnostics wow - LOB app on Arc
 
 **Optional story/operator reference.** The
-[canonical combined guide](delivery-runsheet.md) contains the short read-only
-presenter scene. Its navigation rehearsal does not require any command below.
+[SRE guide source](delivery-runsheet.md) contains the short read-only scene;
+present from the generated `.local/presenter-runsheet.md`. It requires no command below.
 Historical evidence here does not certify a newly reconstructed SRE instance.
 
 ## Purpose
