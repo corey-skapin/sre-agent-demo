@@ -17,6 +17,8 @@ Check ($identityModule.resourceGroup -eq $parentModule.resourceGroup) 'Identity 
 Check (@($parentModule.properties.template.resources | Where-Object type -EQ 'Microsoft.ManagedIdentity/userAssignedIdentities').Count -eq 0) 'Ephemeral parent module never creates a replacement identity'
 $parent = @($parentModule.properties.template.resources | Where-Object type -EQ 'Microsoft.App/agents')[0]
 Check ($parent.identity.type -eq 'SystemAssigned,UserAssigned' -and $parent.properties.actionConfiguration.mode -eq 'Review') 'Validated identity shape and governed Review preserved'
+Check ($parent.properties.incidentManagementConfiguration.type -ceq 'AzMonitor') 'Fresh parent and wake explicitly select Azure Monitor through supported ARM configuration'
+Check (($template | ConvertTo-Json -Depth 100) -notmatch '749f88d5-cbae-40b8-bcfc-e573ddc772fa') 'Repo IaC never creates the subscription Azure Monitor platform role'
 Check ($parent.properties.actionConfiguration.identity -eq $parent.properties.knowledgeGraphConfiguration.identity) 'Actions and knowledge graph bind the same retained UAMI'
 Check ($parentModule.properties.parameters.managedIdentityName.value -like '*sre-agent-identity*identityName*') 'Parent references retained identity module output'
 $expectedRoles = @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')

@@ -155,7 +155,11 @@ Microsoft IaC template protocols for full reads, named upserts and verification.
 Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
 P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review,
 and instructions/tools on the handling custom agent. Fresh bootstrap creates one
-handler and two filters; modern updates preserve the same objects/history.
+handler and two filters, or three when the optional SQL scenario is enabled;
+modern updates preserve the same objects/history.
+SQL uses the Arc-owned real lock-timeout signal for investigation and operator
+recommendations only. Its exact setup and retained-identity wake behavior are in
+the [configuration reference](docs/sre-response-plan-automation.md#exact-desired-demo-configuration).
 Legacy migration/cutover is not supported; legacy settings or enabled unowned
 routes stop before writes. See the canonical protocol/fallback reference above.
 

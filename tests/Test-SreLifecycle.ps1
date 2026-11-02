@@ -105,6 +105,20 @@ try {
     $global:AzCalls.Clear()
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Repeated parked invocation makes zero writes'
+    $platformGrant = @{ id = "$base/providers/Microsoft.Authorization/roleAssignments/platform"; name = 'platform'; properties = @{ principalId = $principal; scope = $base; roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' } }
+    $global:LifecycleState.assignments += $platformGrant
+    $platformParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
+    Check ($platformParked.status -eq 'pass' -and @($platformParked.checks | Where-Object { $_.id -eq 'retained-platform-grant' -and $_.status -eq 'pass' }).Count -eq 1) 'Exact platform grant remains accepted with no live parent'
+    Check (@($platformParked.checks | Where-Object { $_.id -in @('retained-workload-grants','retained-state-drift') -and $_.status -eq 'pass' }).Count -eq 2) 'Known subscription prerequisite is not reported as workload-grant excess or lifecycle drift'
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0 -and $global:LifecycleState.assignments.Count -eq 7) 'Already parked platform grant is retained with zero IAM or resource writes'
+    $duplicatePlatform = $platformGrant.Clone()
+    $duplicatePlatform.id = "$base/providers/Microsoft.Authorization/roleAssignments/duplicate-platform"
+    $duplicatePlatform.name = 'duplicate-platform'
+    $global:LifecycleState.assignments += $duplicatePlatform
+    $duplicateParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
+    Check ($duplicateParked.status -eq 'pass' -and @($duplicateParked.checks | Where-Object { $_.id -eq 'retained-platform-grant' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Duplicate grants are surfaced without confusing a parked cost-state with Active readiness'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Duplicate Azure Monitor'
     Reset-Fixture
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId '00000000-0000-0000-0000-000000000099' -Confirm:$false } 'differs'
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Mismatched saved principal fails before mutation'
@@ -228,8 +242,8 @@ try {
     Check (@($global:LifecycleState.assignments | Where-Object name -EQ unowned).Count -eq 1) 'Unrelated group IAM is retained and does not block known-parent parking'
     Reset-Fixture
     $global:LifecycleState.assignments[0].properties.scope = $base
-    $global:LifecycleState.assignments[0].properties.roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa'
-    $global:LifecycleState.assignments[0].id = "$base/providers/Microsoft.Authorization/roleAssignments/legacy-monitoring"
+    $global:LifecycleState.assignments[0].properties.roleDefinitionId = '/roles/b24988ac-6180-42a0-ab88-20f7382dd24c'
+    $global:LifecycleState.assignments[0].id = "$base/providers/Microsoft.Authorization/roleAssignments/legacy-contributor"
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
     $excessParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
     Check ($excessParked.status -eq 'pass' -and @($excessParked.checks | Where-Object { $_.id -eq 'retained-workload-grants' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Legacy broad standing grant is reported as wake failure but not a cost-parking failure'

@@ -7,15 +7,31 @@ Use the generated `.local/presenter-runsheet.md` for the SRE scene.
 Guest operations here, including `Status`, execute Run Command and are not
 navigation-only preparation.
 
+The generated presenter guide now includes a bounded human-invoked SRE
+investigation of existing LOB events and configured host Perf counters, with
+suggested operator steps only. The expanded query and optional bounded Degraded
+warning received a separately authorized rehearsal on 2026-11-02. Source handler
+instructions cover 4200 and host context. The bounded warning restored config
+without restarting the worker; no route, tool or access grant was changed.
+This does not establish why the earlier automatic RCA stalled. The manual
+presenter query still needs its own live completion evidence.
+
 ## Current status
 
 **Live validation complete for Arc signal, Azure Monitor alerting, SRE incident
 creation, and operator Arc recovery.**
 The LOB app was deployed on `win-app-01`, emitted a real Application Event fault,
 triggered an Azure Monitor scheduled-query alert, and opened an SRE Agent incident.
-The latest live run showed the response-plan handler can stall before final RCA,
-so present this as hybrid evidence plus manual/operator Arc Run Command recovery,
-not as a proven SRE RCA, fully closed-loop, or autonomous Arc remediation story.
+An earlier crash run showed the response-plan handler can stall before final RCA.
+The 2026-11-02 bounded warning did complete five automatic KQL calls and a final
+investigation, but incorrectly inferred an ongoing warning from stale evidence
+and overconfidently excluded host pressure from sparse counters. Guest and LAW
+evidence independently verified healthy recovery. See the
+[current rehearsal ledger](sre-response-plan-automation.md#observed-lob-warning-and-reporting-limits).
+Present hybrid evidence plus operator recovery, not a proven reliable SRE RCA,
+fully closed-loop, or autonomous Arc remediation story. New evidence-age and
+sparse-counter instructions are applied but await the coordinated step-7 live
+test from merged main; this rehearsal did not include another LOB run.
 Treat SRE-executed Arc app repair only as a possible future capability.
 
 Default prefix, target machine, LOB app labels, and code-context repository values

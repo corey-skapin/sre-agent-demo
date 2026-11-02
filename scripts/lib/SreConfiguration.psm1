@@ -10,6 +10,7 @@ function Get-SreDesiredConfiguration {
     Assert-SreContextIds -SubscriptionId $SubscriptionId -TenantId $TenantId
     $skin = Get-DemoSkin -Path $SkinPath
     $prefix = $skin.azure.namePrefix
+    $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
     $tokens = @{
         arcGroup = "rg-$prefix"; infraGroup = "rg-$prefix-infra"; containerApp = "ca-$prefix-fault"
         arcMachine = $skin.sre.targetArcMachine; eventSource = $skin.labels.lobEventSource
@@ -20,13 +21,18 @@ function Get-SreDesiredConfiguration {
         }
     }
     $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-handler.instructions.txt') -Raw
+    if ('SQL' -in $scenarios) {
+        $tokens.sqlMachineId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.HybridCompute/machines/$($skin.sre.sqlTargetArcMachine)"
+        $tokens.sqlWorkspaceId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.OperationalInsights/workspaces/law-$prefix"
+        $tokens.sqlEventSource = $skin.labels.sqlEventSource
+        $instructions += "`n" + (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-sql.instructions.txt') -Raw)
+    }
     foreach ($key in $tokens.Keys) { $instructions = $instructions.Replace("{$key}", $tokens[$key]) }
-    $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
     $plans = @()
     foreach ($scenario in $scenarios) {
-        if ($scenario -notin @('T09', 'T11')) { continue }
-        $name = if ($scenario -eq 'T09') { $skin.labels.containerResponsePlan } else { $skin.labels.lobResponsePlan }
-        $title = if ($scenario -eq 'T09') { 'containerapp-restarts' } else { $skin.labels.lobAlertTitleContains }
+        if ($scenario -notin @('T09', 'T11', 'SQL')) { continue }
+        $name = switch ($scenario) { 'T09' { $skin.labels.containerResponsePlan }; 'T11' { $skin.labels.lobResponsePlan }; 'SQL' { $skin.labels.sqlResponsePlan } }
+        $title = switch ($scenario) { 'T09' { 'containerapp-restarts' }; 'T11' { $skin.labels.lobAlertTitleContains }; 'SQL' { $skin.labels.sqlAlertTitleContains } }
         $service = if ($scenario -eq 'T09') { 'Azure Container Apps' } else { 'Azure Arc' }
         $plans += @{
             scenario = $scenario; name = $name; type = 'IncidentFilter'; tags = @()
@@ -38,6 +44,15 @@ function Get-SreDesiredConfiguration {
             }
         }
         if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }
+    }
+    for ($i = 0; $i -lt $plans.Count; $i++) {
+        for ($j = $i + 1; $j -lt $plans.Count; $j++) {
+            $left = $plans[$i].properties.titleContains
+            $right = $plans[$j].properties.titleContains
+            if ($left.IndexOf($right, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $right.IndexOf($left, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw 'Required response-plan title keywords overlap; review the explicit routing scope.'
+            }
+        }
     }
     @{
         schemaVersion = 2; kind = 'SreDesiredConfiguration'; sourceRevision = $script:TemplateRevision
@@ -231,6 +246,36 @@ function Find-SreConfigurationObject {
     return $null
 }
 
+function Wait-SreConfigurationReadBack {
+    param([Collections.IDictionary]$Session, [Collections.IDictionary]$Desired,
+        [AllowNull()][Collections.IDictionary]$Operation)
+    $readSession = @{}
+    foreach ($key in $Session.Keys) { $readSession[$key] = $Session[$key] }
+    $limit = [DateTime]::UtcNow.AddMinutes(5)
+    if ($readSession.deadlineUtc -gt $limit) { $readSession.deadlineUtc = $limit }
+    $delay = 2
+    do {
+        $snapshot = Get-SreConfigurationSnapshot $readSession
+        $plan = Get-SreConfigurationPlan $Desired $snapshot
+        if ($Operation) {
+            $observed = Find-SreConfigurationObject $snapshot $Operation
+            if ($null -ne $observed -and (Test-SreProperties $observed.properties $Operation.after.properties)) {
+                return $snapshot
+            }
+            if ((Get-SreComparableJson $observed) -cne (Get-SreComparableJson $Operation.before)) {
+                throw "Ambiguous/partial update for $($Operation.name); inspect the saved backup and current state. PUT was not replayed."
+            }
+        } elseif (-not $plan.operations.Count) {
+            return $snapshot
+        }
+        $remaining = ($readSession.deadlineUtc - [DateTime]::UtcNow).TotalSeconds
+        if ($remaining -le 0) { break }
+        Start-Sleep -Seconds ([Math]::Min($delay, [Math]::Ceiling($remaining)))
+        $delay = [Math]::Min(20, $delay * 2)
+    } while ([DateTime]::UtcNow -lt $readSession.deadlineUtc)
+    throw 'SRE configuration read-back deadline exceeded; desired state remains unverified. No PUT was replayed. Retain the backup and inspect before a separately reviewed apply.'
+}
+
 function Set-SreConfigurationOperation {
     param([Collections.IDictionary]$Session, [Collections.IDictionary]$Operation, [Collections.IDictionary]$Desired)
     if ($Operation.method -ne 'Put') { throw 'Only named current-schema PUT operations are supported; no write attempted.' }
@@ -243,28 +288,16 @@ function Set-SreConfigurationOperation {
     if ((Get-SreComparableJson $current) -cne (Get-SreComparableJson $Operation.before)) {
         throw "Concurrent change detected for $($Operation.name); stop and create a new backup/preview."
     }
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
-        $writeError = $null
-        try { Invoke-SreConfigurationRequest -Session $Session -Method Put -Path $Operation.path -Body $Operation.after | Out-Null }
-        catch {
-            $writeError = $_
-            $status = if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
-            if ($status -in @(400, 401, 403, 404) -or ($status -ge 400 -and $status -lt 500 -and $status -notin @(408, 429))) {
-                throw
-            }
+    try { Invoke-SreConfigurationRequest -Session $Session -Method Put -Path $Operation.path -Body $Operation.after | Out-Null }
+    catch {
+        $status = if ($_.Exception.PSObject.Properties['Response'] -and $_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+        if ($status -in @(400, 401, 403, 404) -or ($status -ge 400 -and $status -lt 500 -and $status -notin @(408, 429))) {
+            throw
         }
-        # A timeout may have committed. Never replay a write before read-back.
-        $observed = Find-SreConfigurationObject (Get-SreConfigurationSnapshot $Session) $Operation
-        $matches = $null -ne $observed
-        if ($matches) { $matches = Test-SreProperties $observed.properties $Operation.after.properties }
-        if ($matches) { return $observed }
-        if (-not $writeError) { throw "PUT returned but desired state is not verified for $($Operation.name); do not claim success." }
-        if ($attempt -eq 3) { throw $writeError }
-        if ((Get-SreComparableJson $observed) -cne (Get-SreComparableJson $Operation.before)) {
-            throw "Ambiguous/partial update for $($Operation.name); inspect the saved backup and current state before retrying."
-        }
-        Start-Sleep -Seconds (2 * $attempt)
+        Write-Warning "PUT outcome for $($Operation.name) is ambiguous: $($_.Exception.Message). Verifying with read-only polling; the PUT will not be replayed."
     }
+    $verified = Wait-SreConfigurationReadBack -Session $Session -Desired $Desired -Operation $Operation
+    return Find-SreConfigurationObject $verified $Operation
 }
 
 function Invoke-SreConfigurationReconcile {
@@ -290,9 +323,7 @@ function Invoke-SreConfigurationReconcile {
     foreach ($operation in $plan.operations) {
         Set-SreConfigurationOperation -Session $Session -Operation $operation -Desired $Desired | Out-Null
     }
-    $after = Get-SreConfigurationSnapshot $Session
-    $remaining = Get-SreConfigurationPlan $Desired $after
-    if ($remaining.operations.Count) { throw 'Final SRE configuration verification failed; retain backup and inspect partial state.' }
+    $after = Wait-SreConfigurationReadBack -Session $Session -Desired $Desired
     @{ changed = $true; verified = $true; backupPath = $fullPath; before = $before; after = $after; operations = @($plan.operations | ForEach-Object { $_.path }) }
 }
 

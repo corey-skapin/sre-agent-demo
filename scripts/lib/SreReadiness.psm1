@@ -4,6 +4,49 @@ Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreConfiguration.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreLifecycle.psm1')
 
+function Get-SreSqlAlertQuery {
+    param([string]$MachineResourceId)
+    $hostId = $MachineResourceId.ToLowerInvariant()
+    @"
+Event
+| where TimeGenerated > ago(15m)
+| where tolower(_ResourceId) == '$hostId'
+| where Source == 'ArcSqlEngineDemo' and EventID == 6201
+| extend Incident = parse_json(RenderedDescription)
+| where toint(Incident.schemaVersion) == 1
+| where tostring(Incident.scenario) == 'sql-lock-timeout' and tostring(Incident.state) == 'detected'
+| where toint(Incident.sqlErrorNumber) == 1222
+| project TimeGenerated, Computer, _ResourceId, Incident
+"@
+}
+
+function Test-SreSqlAlertDefinition {
+    param([object]$Alert, [string]$AlertId, [string]$MachineResourceId,
+        [string]$WorkspaceId, [string]$ActionGroupId, [string]$DisplayName)
+    $definition = $Alert | ConvertTo-Json -Depth 50 | ConvertFrom-Json -AsHashtable
+    if ($definition -isnot [Collections.IDictionary]) { return $false }
+    $p = $definition['properties']
+    if ($p -isnot [Collections.IDictionary] -or $p['criteria'] -isnot [Collections.IDictionary] -or
+        $p['actions'] -isnot [Collections.IDictionary] -or $definition['tags'] -isnot [Collections.IDictionary]) { return $false }
+    $conditions = @($p.criteria['allOf'])
+    if ($conditions.Count -ne 1 -or $conditions[0] -isnot [Collections.IDictionary] -or
+        $conditions[0]['failingPeriods'] -isnot [Collections.IDictionary]) { return $false }
+    $criterion = $conditions[0]
+    $actualQuery = ([string]$criterion['query'] -replace '\s+', ' ').Trim()
+    $expectedQuery = ((Get-SreSqlAlertQuery -MachineResourceId $MachineResourceId) -replace '\s+', ' ').Trim()
+    $scopes = @($p['scopes'])
+    $groups = @($p.actions['actionGroups'])
+    return ($definition['id'] -ieq $AlertId -and
+        $definition.tags['managedBy'] -ceq 'arc-demo-sql-incident' -and $definition.tags['workload'] -ceq 'sql-lock-timeout' -and
+        $p['enabled'] -eq $true -and $p['severity'] -eq 2 -and $p['displayName'] -ceq $DisplayName -and
+        $p['evaluationFrequency'] -ceq 'PT1M' -and $p['windowSize'] -ceq 'PT15M' -and $p['autoMitigate'] -eq $true -and
+        $scopes.Count -eq 1 -and $scopes[0] -ieq $WorkspaceId -and
+        $groups.Count -eq 1 -and $groups[0] -ieq $ActionGroupId -and
+        $criterion['timeAggregation'] -ceq 'Count' -and $criterion['operator'] -ceq 'GreaterThan' -and $criterion['threshold'] -eq 0 -and
+        $criterion.failingPeriods['numberOfEvaluationPeriods'] -eq 1 -and $criterion.failingPeriods['minFailingPeriodsToAlert'] -eq 1 -and
+        $actualQuery -ceq $expectedQuery)
+}
+
 function Get-SreReadinessReport {
     [CmdletBinding()]
     param(
@@ -63,11 +106,13 @@ function Get-SreReadinessReport {
                 $presentIds = @($lifecycle.resources | ForEach-Object { $_.id })
                 Add-Check 'retained-diagnostics' $sreGroupId $(if (@($diagnosticIds | Where-Object { $_ -notin $presentIds }).Count) { 'pending' } else { 'pass' }) $diagnosticIds $presentIds 'Existing diagnostics are retained, not created by Hibernate. Missing legacy diagnostics are wake information, not a cost-state failure.' $false
                 $expectedGrantKeys = @(foreach ($rg in $groups[1..2]) { foreach ($role in $expectedRoles) { "$base/$rg|$role" } })
-                $observedGrantKeys = @($lifecycle.externalAssignments | ForEach-Object { "$($_.scope)|$(($_.roleDefinitionId -split '/')[-1])" })
+                $platformGrants = @($lifecycle.externalAssignments | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
+                $observedGrantKeys = @($lifecycle.externalAssignments | Where-Object { -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) } | ForEach-Object { "$($_.scope)|$(($_.roleDefinitionId -split '/')[-1])" })
                 $extra = @($observedGrantKeys | Where-Object { $_ -notin $expectedGrantKeys })
                 $missing = @($expectedGrantKeys | Where-Object { $_ -notin $observedGrantKeys })
                 $duplicate = @($observedGrantKeys | Group-Object | Where-Object Count -GT 1)
                 Add-Check 'retained-workload-grants' $identityId $(if ($extra.Count -or $duplicate.Count) { 'fail' } elseif ($missing.Count) { 'pending' } else { 'pass' }) $expectedGrantKeys $observedGrantKeys 'Existing grants are retained, not revoked. Missing grants are recreated on authorized wake; excess/duplicate standing access needs explicit reconciliation before Active.' $false
+                Add-Check 'retained-platform-grant' $identityId $(if ($platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'At most one exact retained subscription Monitoring Contributor grant' @($platformGrants | ForEach-Object { $_.id }) 'Parent absence does not invalidate this platform prerequisite. No grant is created or revoked.' $false
                 Add-Check 'parent-scope-grants' $agentId $(if ($lifecycle.parentAssignments.Count) { 'pending' } else { 'pass' }) 'Parent-lifetime grants absent or reconciled before Active' @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'These belong to the deployer, not the stable UAMI. A stale free entry does not keep the paid parent running.' $false
             }
             Add-Check 'retained-state-drift' $sreGroupId $(if ($lifecycle.drift.Count) { 'fail' } else { 'pass' }) 'No unexpected resources/permissions before Active or Removed' $lifecycle.drift 'Drift is reported without broad deletion; inspection denials still fail the whole report.' ($DesiredState -eq 'Removed')
@@ -79,7 +124,13 @@ function Get-SreReadinessReport {
             Add-Check 'parent' $agentId $(if ($running) { 'pass' } elseif ($p.provisioningState -eq 'Failed') { 'fail' } else { 'pending' }) 'Succeeded/Running' "$($p.provisioningState)/$($p.runningState)" 'Control-plane provisioning and resource running state.'
             Add-Check 'review-mode' $agentId $(if ($p.actionConfiguration.mode -eq 'Review') { 'pass' } else { 'fail' }) 'Review' $p.actionConfiguration.mode 'Parent mode does not prove response-plan mode.'
             Add-Check 'access-level' $agentId $(if ($p.actionConfiguration.accessLevel -eq $skin.sre.accessLevel) { 'pass' } else { 'fail' }) $skin.sre.accessLevel $p.actionConfiguration.accessLevel 'Requested skin access profile.'
-            Add-Check 'incident-platform' $agentId $(if ($p.incidentManagementConfiguration.type -eq 'AzMonitor') { 'pass' } else { 'fail' }) 'AzMonitor' $p.incidentManagementConfiguration.type 'Azure Monitor incident source.'
+            $incidentConfiguration = $p.PSObject.Properties['incidentManagementConfiguration']
+            $platformType = if ($incidentConfiguration -and $incidentConfiguration.Value) { $incidentConfiguration.Value.PSObject.Properties['type'] }
+            $incidentPlatform = if ($platformType) { [string]$platformType.Value } else { '' }
+            $monitorConnected = $incidentPlatform -eq 'AzMonitor'
+            $platformMessage = if ($monitorConnected) { 'Azure Monitor incident source.' } else { "WARNING: alerts won't reach the agent until Azure Monitor is connected. Retained platform access alone is not incident connectivity." }
+            Add-Check 'incident-platform' $agentId $(if ($monitorConnected) { 'pass' } else { 'pending' }) 'AzMonitor' $incidentPlatform $platformMessage $false
+            if (-not $monitorConnected) { Write-Warning $platformMessage }
             $attachedIdentityIds = @($agent.identity.userAssignedIdentities.PSObject.Properties.Name)
             $identityMatches = $principalId -and $p.actionConfiguration.identity -eq $identityId -and $p.knowledgeGraphConfiguration.identity -eq $identityId -and $identityId -in $attachedIdentityIds
             Add-Check 'identity' $identityId $(if ($identityMatches) { 'pass' } else { 'fail' }) $identityId $p.actionConfiguration.identity 'Action and knowledge graph must use the live user-assigned identity.'
@@ -88,6 +139,9 @@ function Get-SreReadinessReport {
             $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
             if ('T09' -in $scenarios) { $expectedManaged += "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault" }
             if ('T10' -in $scenarios -or 'T11' -in $scenarios) { $expectedManaged += "$base/$($groups[1])/providers/Microsoft.HybridCompute/machines/$($skin.sre.targetArcMachine)" }
+            if ('SQL' -in $scenarios -and "$base/$($groups[1])" -notin $p.knowledgeGraphConfiguration.managedResources) {
+                $expectedManaged += "$base/$($groups[1])/providers/Microsoft.HybridCompute/machines/$($skin.sre.sqlTargetArcMachine)"
+            }
             $missing = @($expectedManaged | Where-Object { $_ -notin $p.knowledgeGraphConfiguration.managedResources })
             Add-Check 'managed-resources' $agentId $(if ($missing.Count) { 'fail' } else { 'pass' }) $expectedManaged $p.knowledgeGraphConfiguration.managedResources "Missing managed IDs: $($missing -join ', ')"
             foreach ($scenario in $scenarios) {
@@ -107,14 +161,26 @@ function Get-SreReadinessReport {
                     $alertHealthy = $alert.enabled -and $alert.severity -eq 2 -and $app.id -in $alert.scopes
                     Add-Check 'T09-alert' $alert.id $(if ($alertHealthy) { 'pass' } else { 'fail' }) 'Enabled Sev2, Container App scope' $alert.enabled 'Azure Monitor signal configuration, not firing-state proof.'
                 } else {
-                    $machine = Read-AzJson @('connectedmachine', 'show', '-g', $groups[1], '-n', $skin.sre.targetArcMachine)
-                    Add-Check "$scenario-resource-health" $machine.id $(if ($machine.status -eq 'Connected') { 'pass' } else { 'pending' }) 'Connected' $machine.status 'Arc connection only; guest app/telemetry verification remains separate.'
+                    $machineName = if ($scenario -eq 'SQL') { $skin.sre.sqlTargetArcMachine } else { $skin.sre.targetArcMachine }
+                    $machine = Read-AzJson @('connectedmachine', 'show', '-g', $groups[1], '-n', $machineName)
+                    $expectedMachineId = "$base/$($groups[1])/providers/Microsoft.HybridCompute/machines/$machineName"
+                    $machineStatus = if ($scenario -eq 'SQL' -and $machine.id -ine $expectedMachineId) { 'fail' } elseif ($machine.status -eq 'Connected') { 'pass' } else { 'pending' }
+                    Add-Check "$scenario-resource-health" $expectedMachineId $machineStatus 'Connected intended Arc host' $machine.status 'Arc connection only; guest app/SQL engine/telemetry verification remains separate.'
                     if ($scenario -eq 'T11') {
                         $alertId = "$base/$($groups[1])/providers/Microsoft.Insights/scheduledQueryRules/alert-$prefix-lob-arc-app-fault"
                         $alert = Read-AzJson @('resource', 'show', '--ids', $alertId)
                         $ap = $alert.properties
                         $alertHealthy = $ap.enabled -and $ap.severity -eq 2 -and $ap.displayName.Contains($skin.labels.lobAlertTitleContains)
                         Add-Check 'T11-alert' $alertId $(if ($alertHealthy) { 'pass' } else { 'fail' }) "Enabled Sev2, title contains $($skin.labels.lobAlertTitleContains)" $ap.displayName 'Literal title keyword must align with the intended plan; region changes are not implied.'
+                    }
+                    if ($scenario -eq 'SQL') {
+                        $alertId = "$base/$($groups[1])/providers/Microsoft.Insights/scheduledQueryRules/al-$prefix-sql-lock-timeout"
+                        $alert = Read-AzJson @('resource', 'show', '--ids', $alertId)
+                        $alertHealthy = Test-SreSqlAlertDefinition -Alert $alert -AlertId $alertId -MachineResourceId $expectedMachineId `
+                            -WorkspaceId "$base/$($groups[1])/providers/Microsoft.OperationalInsights/workspaces/law-$prefix" `
+                            -ActionGroupId "$base/$($groups[1])/providers/Microsoft.Insights/actionGroups/ag-$prefix" `
+                            -DisplayName "$($skin.labels.sqlAlertTitleContains) - $prefix"
+                        Add-Check 'SQL-alert' $alertId $(if ($alertHealthy) { 'pass' } else { 'fail' }) 'Owned enabled Sev2, exact SQL host/source/1222 JSON query, LAW/Action Group, PT1M/PT15M, count>0/1of1, autoMitigate' $alert.properties 'Strict source contract with Arc sql-incident-alert.bicep; permits whitespace differences only. Does not prove receiver delivery, current firing state or SQL health.'
                     }
                 }
             }
@@ -162,8 +228,13 @@ function Get-SreReadinessReport {
             if ($principalId) {
                 $allAssignments = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId "/subscriptions/$SubscriptionId" -PrincipalId $principalId)
                 $expectedScopes = @("$base/$($groups[1])", "$base/$($groups[2])")
-                $excess = @($allAssignments | Where-Object { $_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles })
-                Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count) { 'fail' } else { 'pass' }) 'Only the requested profile at the two workload groups' @($excess | ForEach-Object { $_.id }) 'Retained excessive IAM is not a parking blocker, but must be reconciled explicitly before Active.'
+                $platformGrants = @($allAssignments | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
+                $excess = @($allAssignments | Where-Object {
+                    -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+                    ($_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles)
+                })
+                Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count -or $platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'Requested workload-group profile plus at most one exact AzMonitor platform grant' @($excess | ForEach-Object { $_.id }) "Exact AzMonitor platform grants: $($platformGrants.Count); excess grants: $($excess.Count). Exact retained subscription Monitoring Contributor is permitted with or without a parent or connected incident platform. No role is created or revoked."
+                Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is connected' @($platformGrants | ForEach-Object { $_.id }) 'A connected Azure Monitor scanner requires subscription Monitoring Contributor. Missing access needs the supported separately authorized connection setup, not an implicit role grant.' $monitorConnected
             }
             foreach ($rg in $groups[1..2]) {
                 $scope = "$base/$rg"
@@ -176,11 +247,11 @@ function Get-SreReadinessReport {
                     continue
                 }
                 $assignments = @(Read-AzJson @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false'))
-                $owned = @($assignments | Where-Object principalId -EQ $principalId)
+                $owned = @($assignments | Where-Object { $_.principalId -eq $principalId -and -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) })
                 $observed = @($owned | ForEach-Object { ($_.roleDefinitionId -split '/')[-1] })
                 $missingRoles = @($expectedRoles | Where-Object { $_ -notin $observed })
                 $extraRoles = @($observed | Where-Object { $_ -notin $expectedRoles })
-                $valid = -not $missingRoles.Count -and -not $extraRoles.Count -and $observed.Count -eq $expectedRoles.Count
+                $valid = -not $missingRoles.Count -and -not $extraRoles.Count -and $observed.Count -eq $expectedRoles.Count -and @($owned | Where-Object scope -NE $scope).Count -eq 0
                 Add-Check "rbac-$rg" $scope $(if ($valid) { 'pass' } else { 'fail' }) $expectedRoles $observed 'Checks missing/excess/duplicate grants, including inherited grants; never revokes roles.'
             }
         }

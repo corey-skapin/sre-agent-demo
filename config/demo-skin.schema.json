@@ -31,7 +31,8 @@
         "nativeContainerFaultState": { "const": "Status" },
         "t10Scenario": { "enum": ["HeartbeatByBackingVm", "StopService", "DiskPressure", "CpuPressure", "WriteEvent"] },
         "lobFaultMode": { "enum": ["CrashOnProcessing", "Degraded"] },
-        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11"] } }
+        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11", "SQL"] } },
+        "sqlTargetArcMachine": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" }
       }
     },
     "labels": {
@@ -45,7 +46,10 @@
         "lobAlertTitleContains": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_. -]{0,79}$" },
         "lobAppName": { "type": "string", "minLength": 1 },
         "lobEventSource": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,79}$" },
-        "lobTaskName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" }
+        "lobTaskName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$" },
+        "sqlResponsePlan": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,79}$" },
+        "sqlAlertTitleContains": { "const": "Arc SQL lock timeout" },
+        "sqlEventSource": { "const": "ArcSqlEngineDemo" }
       }
     },
     "codeContext": {
@@ -63,5 +67,15 @@
       }]
     },
     "tags": { "type": "object", "additionalProperties": { "type": "string" } }
-  }
+  },
+  "allOf": [{
+    "if": { "properties": { "sre": {
+      "required": ["requiredScenarios"],
+      "properties": { "requiredScenarios": { "contains": { "const": "SQL" } } }
+    } } },
+    "then": { "properties": {
+      "sre": { "required": ["sqlTargetArcMachine"] },
+      "labels": { "required": ["sqlResponsePlan", "sqlAlertTitleContains", "sqlEventSource"] }
+    } }
+  }]
 }

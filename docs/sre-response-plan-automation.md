@@ -59,7 +59,30 @@ state or schema drift, **stop explicitly**. Do not infer absence, guess POST,
 fall back to another endpoint/account, grant permissions, delete the parent or
 claim partial setup is ready. Apply backs up before writes; a later failure can
 leave partial changes, so retain the backup and inspect before resuming. An
-ambiguous PUT is read back before retry; denied/invalid writes are not retried.
+ambiguous PUT is verified by read-only polling, never replayed.
+
+### Post-write visibility and troubleshooting
+
+The service can accept a PUT before list reads expose the new properties.
+Configuration apply sends each PUT **once**, then polls the supported read-only
+collections with 2, 4, 8, 16 and capped 20-second backoff. Per-object and final
+whole-configuration verification use the same pattern, for up to five minutes
+without extending the existing overall `-TimeoutSeconds` deadline (default
+180 seconds, maximum 600). Use an explicitly reviewed timeout when a longer
+verification budget is needed; no background verification continues after exit.
+
+A timeout or transport error after PUT is an ambiguous outcome, not permission
+to replay it. Read-only polling can establish that the write committed.
+Denied/invalid writes or denied reads fail explicitly; unsupported routing,
+foreign edits and partial target changes stop rather than being overwritten.
+If the deadline expires, report **unverified**, retain the external backup and
+Inspect again before reviewing any new apply. Do not retry the PUT to cure a
+stale read. After fresh readback proves a completed step, resume only genuinely
+unperformed operations within the approved scope.
+
+This delay occurred during both the one-time SQL cooldown reduction and its
+restoration. Fresh reads proved the writes committed; neither PUT was repeated.
+The helper now polls instead of treating the first stale read as failure.
 
 If the contract changes, use the supported SRE portal following current
 [subagent guidance](https://learn.microsoft.com/azure/sre-agent/create-subagent)
@@ -118,24 +141,221 @@ RBAC and human approval. No connector or new RBAC grant is created.
 |---|---|---|---|---|
 | T09 | `labels.containerResponsePlan` | `AzMonitor` / `["Sev2"]` | `containerapp-restarts` | `labels.agentName` / `Review` |
 | T11 | `labels.lobResponsePlan` | `AzMonitor` / `["Sev2"]` | `labels.lobAlertTitleContains` | `labels.agentName` / `Review` |
+| SQL (opt-in) | `labels.sqlResponsePlan` | `AzMonitor` / `["Sev2"]` | exact `Arc SQL lock timeout` | `labels.agentName` / `Review` |
 
 Filters are enabled. The literal title is one keyword, never an `OR` expression.
 The default impacted services remain `Azure Container Apps` and `Azure Arc`;
 verify actual incident matching in the separately authorized rehearsal.
 The renderer explicitly sets `mergeEnabled=true` and `mergeWindowHours=3` on
-both modern routes, for fresh creation and reconciliation. This matches the
+all configured modern routes, for fresh creation and reconciliation. This matches the
 validated live settings; they are no longer left to service defaults.
-Inspect actual cooldown before a repeat: a recurring fire can merge into/reopen
-an existing thread. Any temporary disable and exact restoration need scoped
-approval; neither closing a thread nor a resolved alert guarantees a fresh one.
+Inspect actual cooldown before a repeat. Azure Monitor's scanner also
+[merges firings from the same rule with a seven-day lookback](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
+That scanner rule identity is separate from the filter's three-hour cooldown:
+shortening the latter alone does not guarantee a fresh investigation. Any
+temporary override and exact restoration need scoped approval; neither closing
+a thread nor a resolved alert is a documented fresh-thread reset.
 The custom agent investigates T09 and proposes only the expected app repair.
 T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
 Do not claim reliable T11 RCA or autonomous Arc repair.
 
+SQL is enabled only by adding `SQL` to `sre.requiredScenarios` with an explicit
+`sre.sqlTargetArcMachine` and the three SQL labels. SQL-disabled inputs need no
+SQL fields; the example values are dormant, not deployment or readiness proof.
+The renderer appends `config\sre-sql.instructions.txt` only when SQL is enabled.
+It binds the exact SQL host/workspace and existing Event/Perf tools to real
+`ArcSqlEngineDemo` 6201/6001 evidence and operator-only recommendations, not SQL
+execution, session termination or Arc repair. No connector or extra role is
+created. All configured plan names and title keywords must be nonoverlapping.
+
+The Arc owner supplies `al-<prefix>-sql-lock-timeout`, exact display name
+`Arc SQL lock timeout - <prefix>`, existing LAW/Action Group and its canonical
+host/source/JSON query. SRE readiness compares that frozen predicate, including
+schemaVersion 1, detected `sql-lock-timeout`, Event6201 and actual error1222,
+plus enabled Sev2, one-minute evaluation, fifteen-minute lookback, autoMitigate
+and Count greater than zero for one of one evaluations. It checks the owner's
+tags and exact IDs without running KQL or SQL. Guest engine, DCR collection,
+cleanup and actual alert/SRE completion require the separate approved rehearsal.
+The self-recovered lock may no longer exist when the alert arrives.
+
+### Observed SQL rehearsal
+
+One authorized SQL rehearsal on **2026-11-01 UTC** produced a real 1222 detected
+event at 23:24:21 and verified recovery at 23:24:28. Azure Monitor fired at
+23:25:12, executed the existing Action Group at 23:25:13 and delivered an
+automatic Review investigation at 23:26:22. No manual SRE message, cooldown
+bypass, second fault or LOB fault was used. The existing managed Arc group
+covered the SQL host; only handler instructions and one filter were applied.
+The repeated configuration apply was no-op and the parent properties stayed
+unchanged. This is SQL-scene evidence, not full Active-estate readiness.
+
+The final thread reported investigation Complete, with its narrative at
+23:27:47. The documented message API preserved the complete report but omitted
+the built-in Event/Perf result objects. Thread-bound Application Insights audit
+paired two actual query ToolStart/ToolEnd calls and preserved their inputs and
+partial actual results. Both ToolOutput strings were truncated to 1003
+characters; **full raw query output was not obtained**. The report correctly
+distinguished historical lock timeout, self-recovery and operator-only steps.
+Its Perf claim of 62 rows disagreed with the actual aggregated result header of
+12 rows; do not confuse source samples with returned summary rows.
+
+The agent also incorrectly inferred no incident platform from empty optional
+connector configuration, despite actual AzMonitor delivery. Its connector-file
+grep exited 1, and internal memory writes were recorded. No SQL/guest repair was
+observed; the audit marked assisted true and mitigated false. Action Group
+execution did not verify email receipt. Investigation completion/Idle did not
+prove resolved MonitorCondition or a closed incident. Keep raw target-bound
+evidence private. This first run remains historical evidence, including its
+incorrect claims; do not silently rewrite it as a corrected investigation.
+
+### Reporting correction and memory limits
+
+On **2026-11-02 UTC**, a handler-only configuration update applied the reporting
+correction, with an external backup and a repeated no-op verified at 00:01:50.
+The general handler and optional SQL instructions require exact query-header
+row counts, distinguish aggregated rows from source samples, and forbid
+connector-file inspection as a test of incident-platform connectivity. Claim
+delivery via Azure Monitor only when actual alert/audit metadata establishes it.
+The three filters, parent settings and IAM were unchanged by this update.
+Whether the next investigation follows those instructions needs new evidence.
+
+One separately authorized maintenance message in a new, non-incident thread
+requested only the narrow memory correction, with no investigation or Azure/SQL
+tool use. Its raw file-edit result reported successful replacement of the false
+platform sentence. No 62-row claim was found in the two memory files it read.
+At maintenance time, independent memory search and the returned file citation
+both failed with HTTP 400. The subsequent automatic SQL investigation's actual
+read-file result contained the corrected note and not the old false sentence,
+providing persisted readback without another maintenance message.
+**Memory search remains unverified**; do not describe that read-file evidence as
+a successful independent search. Keep the instruction override.
+
+The documented memory document APIs are not a general synthesized-file editing
+interface. Do not invent a file-edit endpoint, alter the provider to bypass a
+failed search, or send an extra maintenance/investigation message without scope.
+
+### Observed SQL rerun
+
+The separately authorized **2026-11-02 UTC** rerun used one distinct temporary
+rule and one real fault, with **cooldown reduced for this single run
+(user-authorized)**. Detection at 00:17:51.9609032 and recovery at
+00:17:59.2515432 preceded the alert at 00:18:49.1672495. A different automatic
+thread was created at 00:19:26.3204117, with the exact temporary rule as its
+source. The actual AgentStart audit was 00:19:26.7549611, before the first
+Event/Perf queries at 00:19:43. Its final narrative arrived at 00:20:57.6666356; a read at 00:21:29
+reported investigation Complete and messages Idle. No manual investigation
+message was used.
+
+The two completed query audit headers were **2 Event rows and 119 Perf rows**.
+The narrative quoted both exactly and correctly described the Perf query as
+individual samples: this run used projection rather than the first run's
+aggregation, so 119 is not directly comparable with the first run's 12 summary
+rows. It did not repeat the false platform/optional-connector inference or
+inspect connector files. Those two reporting errors were corrected in this run.
+This is not a guarantee of future model behavior.
+
+The captured actions were read-only workspace/alert/rule lookups, Event/Perf
+queries, memory reads/updates and tool discovery. No approval request, SQL/guest
+execution or resource repair was observed. The Arc owner independently verified
+owned-session/probe cleanup and the healthy Orders worker. Full raw built-in
+query output remained unavailable: both audit results still truncated at 1003
+characters. Headers and partial actual results are stronger than a narrative,
+but do not independently verify every performance value in that narrative.
+The later audit snapshot recorded Review/AzMonitor, assisted true and mitigated
+false. Action Group execution was verified, but inbox receipt was not.
+The same-rule merge limitation was avoided by the distinct rule identity,
+not by closing an old thread. After the source-event expiry guard, direct reads
+at **00:36:47 UTC** verified canonical enabled, temporary absent and SQL cooldown
+restored to three hours, with Review and the other filters unchanged.
+Investigation completion alone would not have proved that restoration.
+
+### Observed LOB warning and reporting limits
+
+One separately authorized **2026-11-02 UTC** `WarnForDuration 120` ran after SQL
+capture. The existing worker remained running; no restart, kill or redeployment
+was used. The helper changed config at 00:27:32, ended the warning at 00:29:32
+and restored the original config at **00:29:34**, with exit 0 and the same PID.
+Eight real Event 4200 warnings were generated from 00:27:36 through 00:29:21;
+no 4100/4101 errors were observed. LOB routing and its three-hour cooldown were
+not changed.
+
+Azure Monitor fired at 00:28:39, executed the existing Action Group and delivered
+an automatic exact-rule investigation at 00:29:41. Five KQL calls completed;
+their actual result headers were **33, 1, 8, 7 and 1 rows**. The report correctly
+distinguished eight Perf summary rows from 91 source samples. Final narrative
+arrived at 00:31:10 and a read at 00:31:24 showed Complete/Idle. No manual SRE
+chat, approval request, guest execution or SRE repair was observed. Captured
+incident audit flags remained assisted false / mitigated false; completion
+does not imply those flags changed.
+
+The narrative incorrectly inferred ongoing warnings from older ingested events
+and too strongly excluded host pressure from sparse counters. Healthy Event
+4000 at **00:30:21** was not ingested until **00:31:00**, after the investigation
+started. Independent guest Status at 00:32:39 verified Healthy/running with the
+original PID; a LAW read at 00:36:04 confirmed post-restoration healthy events
+through 00:34:21. Ingestion lag explains why a query could miss recovery, not
+why an older warning establishes current state. A Fired/Acknowledged alert can
+also retain the warning inside its ten-minute lookback after recovery.
+This proves automatic capture and completed investigation, **not reliable
+current-state/RCA or SRE repair**.
+
+At **00:43:40 UTC**, a config-only handler refinement was applied with a new
+external backup, repeated no-op and independent zero-operation Inspect.
+Filters and ARM parent properties were unchanged. It requires evidence age
+relative to investigation time, explicit ingestion lag, and evidence newer than
+the last change before calling a fault active, ongoing or resolved. Otherwise
+say "latest evidence at HH:MM UTC, current state unconfirmed"; sparse counters
+support "not observed in the available counters", not "ruled out".
+**These refinements have not been tested by another live incident.** The
+coordinated step-7 rehearsal from merged main owns that test; no LOB rerun or
+additional cooldown bypass was authorized here.
+
+### Reset between demo runs
+
+The normal configuration remains Review with enabled three-hour cooldown.
+First inspect the actual alert condition, previous investigation, last routing
+time and current filter. An old Complete/Idle thread, a closed alert workflow,
+and resolved MonitorCondition are different facts. Reuse an existing thread
+for an evidence walkthrough when a genuinely fresh automatic run is unnecessary.
+
+For a separately authorized fresh SQL rehearsal inside the seven-day merge
+lookback, use this narrowly reviewed isolation procedure:
+
+1. Save external copies of the canonical scheduled-query rule and configuration.
+   Review one distinctly named temporary rule with the same host, predicate,
+   LAW, Action Group, severity, evaluation frequency and lookback. Its title
+   must still match the existing SQL filter. No extra IAM or connector is needed.
+2. Disable only the canonical rule, create/enable only that temporary rule and
+   inspect the exact state. If separately authorized, reduce only the SQL
+   filter's cooldown; retain merge enabled and Review. Label the evidence
+   **cooldown reduced for this single run (user-authorized)**. Never change the
+   renderer's three-hour default or the other scenario filters.
+3. Require a zero-alert baseline for the exact temporary rule ID and fresh guest
+   readiness before the Arc owner fires one bounded incident. No manual SRE chat
+   starts the investigation. Verify actual thread source against the temporary
+   rule; do not assume that a distinct name proves successful fresh delivery.
+4. After capture, wait until the detected source event has aged out of the
+   canonical rule's entire lookback, with a margin. For its fifteen-minute
+   window, use at least sixteen minutes from actual detection, not caller start.
+   Restore the SQL filter to three hours, re-enable the unchanged canonical
+   rule, then delete only the temporary rule.
+5. Independently read back canonical enabled, temporary absent and SQL
+   `mergeEnabled=true` / `mergeWindowHours=3`; compare all other configuration
+   against the saved baseline. On an ambiguous write, read back without replaying
+   the PUT; resume only unperformed operations after verified state inspection.
+   Report a failed or pending restore immediately; do not claim normal readiness.
+
+This procedure changes routing resources and is not included in ordinary
+presentation or configuration apply. Never apply it to LOB or another rule
+without separate authorization. Resolve/close old alerts or threads only with
+their own approval and supported operation; closure alone is not a documented
+way to clear the seven-day merge history. A parent rebuild also loses history,
+but is not an acceptable reset shortcut for a running demonstration.
+
 ## Fresh bootstrap and existing-state boundary
 
 Default v3 filters route directly to the handling custom agent. A fresh bootstrap
-creates one agent and two filters; a repeated bootstrap is no-op. Modern drift
+creates one agent and two filters, or three with SQL enabled; a repeated bootstrap is no-op. Modern drift
 uses named in-place PUT with backup, concurrent-edit detection and read-back.
 Keep these fresh/reused-instance safeguards; they are not migration machinery.
 
@@ -167,6 +387,22 @@ Use `-ParentOnly` explicitly if only the parent is intended. It is not Ready.
 Do not redeploy the running parent merely to repair modern plans: inspect/apply
 configuration directly. Full deployment follows skin resource names; custom
 parent overrides require explicit reskinning or parent-only intent.
+
+An existing exact managed Arc resource group covers its SQL host; readiness
+does not require a redundant explicit host entry when that group is managed.
+The host must still exist with its exact expected ARM ID. A foreign group is
+not coverage. Fresh deployment can include the explicit SQL host as well.
+
+### Existing-parent preview warning
+
+A SQL rehearsal preview caught potential removal of `defaultModel`,
+`monthlyAgentUnitLimit`, `experimentalSettings`, `sandboxConfiguration` and
+`upgradeChannel` because the current parent template omits these existing
+settings. **That parent deployment was not applied.** Use configuration-only
+Inspect/Apply for handler and filter updates on the Running parent. Do not treat
+these settings as harmless read-only what-if noise or approve a broad redeploy
+to add a redundant host ID. A supported preservation fix needs separate work
+and validation before redeploying that existing parent.
 
 ```powershell
 .\scripts\Test-SreReadiness.ps1 `
@@ -225,9 +461,22 @@ Managed identities have [no extra cost](https://learn.microsoft.com/entra/identi
 Normal parking now also retains its external Contributor access. Restrict who
 can attach/use the identity; free permissions still carry a security tradeoff.
 Before Active, deployment/readiness reject excessive or inherited assignments
-outside the requested profile at the two workload groups, including old
-subscription Monitoring Contributor. Reconciliation requires separate scope
-approval, not implicit revocation. Wake adopts existing direct grant names,
+outside the requested profile at the two workload groups, with one narrow
+exception: an existing subscription Monitoring Contributor grant on the exact
+retained UAMI, regardless of whether the parent exists or has a connected incident platform.
+This is the documented [Azure Monitor alert-management prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
+It is platform-managed, not created by this repo. Other roles, scopes,
+principals or duplicate grants remain rejected. The same exact-grant tolerance
+applies before wake, so retained platform access does not block reconstruction
+after parent deletion. Hibernated readiness reports it separately from workload
+grants. A disconnected or unset platform on an existing parent emits an optional
+readiness warning: alerts will not reach the agent until Azure Monitor is
+connected. That warning does not invalidate retained access or establish
+incident readiness. When AzMonitor is selected, missing subscription scanner
+access is a required failure, not a reason to grant it silently.
+This rehearsal did not test a live park/wake cycle with that grant.
+Reconciliation requires separate scope approval, not implicit revocation.
+Otherwise, wake adopts existing direct grant names,
 creates missing grants and avoids unnecessary Graph principal-name lookups.
 Retained Application Insights must match the requested workspace/location; it
 is not silently relocated. Full identity/group deletion uses the explicit
@@ -289,9 +538,30 @@ normal Hibernated even with a saved old principal. Only after SRE is verified
 parked should Arc/networking be parked. Parent deletion avoids its always-on
 cost, not all remaining storage, monitoring or Arc-service charges.
 
+Fresh creation and wake already select `incidentManagementConfiguration.type:
+AzMonitor` in `infra\modules\sre-agent.bicep`, through the
+[supported parent ARM property](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
+This is not a handler/filter configuration step or an optional data connector.
+Read back both that setting and the exact retained subscription Monitoring
+Contributor assignment before declaring automatic incident routing ready.
+The [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)
+requires that role and documents **Incidents > Connect an incident platform >
+Azure Monitor** if connection setup remains incomplete. Obtain separate approval
+for that supported portal step and any platform-managed access consequence; the
+repo never creates the subscription role. Do not disconnect another platform,
+replay guessed connection APIs or redeploy an existing parent to hide a warning.
+Compiled-template and mocked wake checks establish source wiring, not a live
+recreation/delivery test.
+
 For the next demo, activate and verify Arc first. Deploy the SRE parent using the
 retained identity, then render/Inspect/approve/Apply the versioned modern custom agent and
 v3 filters with a new external backup, or use complete deployment above.
+Keep the same SQL-enabled setup input on wake so the SQL host managed-resource
+ID, conditional instructions and third filter are restored. Dropping SQL from
+that input while its enabled filter remains is refused as unowned routing,
+not silently disabled or deleted. SRE Hibernate/Removed never deletes the Arc
+SQL host, database, probe data or Arc-owned alert; those remain the Arc owner's
+scope. No additional workload role IDs are introduced by SQL.
 Retired v2 objects, learned memory and deleted history are not restored. The
 modern v3 filters explicitly restore enabled three-hour cooldown and Review/Sev2.
 Do not replay an old full export as a PUT payload: it is reference

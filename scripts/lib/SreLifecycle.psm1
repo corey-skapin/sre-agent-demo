@@ -1,6 +1,14 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 
+function Test-SreAzMonitorPlatformGrant {
+    param([object]$Assignment, [string]$SubscriptionId, [string]$PrincipalId)
+    return (-not [string]::IsNullOrWhiteSpace($PrincipalId) -and
+        $Assignment.principalId -ieq $PrincipalId -and
+        $Assignment.scope -ieq "/subscriptions/$SubscriptionId" -and
+        ($Assignment.roleDefinitionId -split '/')[-1] -ieq '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
+}
+
 function Get-SreArmRoleAssignments {
     param([string]$SubscriptionId, [string]$ScopeId, [string]$PrincipalId)
     $path = "$ScopeId/providers/Microsoft.Authorization/roleAssignments"
@@ -82,9 +90,14 @@ function Get-SreLifecycleInventory {
     if ($principalId) {
         $owned = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId $subscriptionScope -PrincipalId $principalId)
         if (@($owned | Where-Object principalId -NE $principalId).Count) { throw 'ARM principal-filter response contains another principal; inspection is incomplete.' }
-        $scopes = @($subscriptionScope, "$subscriptionScope/resourceGroups/$ArcResourceGroupName", "$subscriptionScope/resourceGroups/$InfraResourceGroupName")
-        $roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
-        if (@($owned | Where-Object { $_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles }).Count) {
+        $scopes = @("$subscriptionScope/resourceGroups/$ArcResourceGroupName", "$subscriptionScope/resourceGroups/$InfraResourceGroupName")
+        $roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+        $platformGrants = @($owned | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
+        if ($platformGrants.Count -gt 1) { $drift.Add('Duplicate Azure Monitor platform grants. Reconcile before Active or Removed.') }
+        if (@($owned | Where-Object {
+            -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+            ($_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles)
+        }).Count) {
             $drift.Add('Unexpected identity-owned scope or role. Reconcile before Active or Removed.')
         }
         $externalAssignments = @($owned | Sort-Object id -Unique)
@@ -99,4 +112,4 @@ function Get-SreLifecycleInventory {
     }
 }
 
-Export-ModuleMember -Function Get-SreArmRoleAssignments, Get-SreLifecycleInventory
+Export-ModuleMember -Function Get-SreArmRoleAssignments, Get-SreLifecycleInventory, Test-SreAzMonitorPlatformGrant

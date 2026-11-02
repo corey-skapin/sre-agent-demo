@@ -54,18 +54,56 @@ try {
     Check ($output -eq (Join-Path $fixture '.local\presenter-runsheet.md')) 'Shared output convention'
     Check ($text -notmatch '\{\{|\}\}') 'All template fields resolved'
     Check ($text.Contains($context.arcMachineResourceId)) 'KQL scope contains the exact supplied Arc ID'
+    Check ($text.Contains("Log Analytics workspace: $($context.logAnalyticsWorkspaceId)")) 'SRE prompt uses the exact saved workspace resource ID'
+    Check ($text.Contains("Tenant: $($context.tenantId)") -and $text.Contains("Subscription: $subscription")) 'Investigation target is fully explicit'
+    Check ($text.Contains('ago(30m)') -and $text.Contains('top 50') -and $text.Contains('EventID in (4000, 4100, 4101, 4200)')) 'Investigation query is bounded and covers healthy, fatal, invalid-config and degraded signals'
+    Check ($text.Contains('union kind=outer') -and $text.Contains('top 250') -and $text.Contains('bin(TimeGenerated, 1m)')) 'One bounded query correlates app signals and per-minute host metrics'
+    Check ($text.Contains('ObjectName =~ "Processor Information"') -and $text.Contains('"% Committed Bytes In Use"') -and $text.Contains('"Available MBytes"') -and $text.Contains('CounterName =~ "% Free Space"')) 'Performance query uses the exact configured Windows CPU, memory and disk counters'
+    Check ($text.Contains('missing counters or time bins') -and $text.Contains('not disk latency or IOPS')) 'Missing performance data and unsupported disk metrics are explicit'
+    Check ($text.Contains('not a CPU/memory/disk load test') -and $text.Contains('Do not infer a resource bottleneck')) 'Application warnings do not fabricate host load or a causal diagnosis'
+    Check ($text.Contains('prior read-only request grants no') -and $text.Contains('three-hour cooldown')) 'Expanded metrics and warning scenario require new scope and existing route eligibility'
+    Check ($text.Contains('No events means a telemetry visibility gap') -and $text.Contains('do not invent a fault')) 'Empty and healthy evidence do not imply a fault'
+    Check ($text.Contains('No guest/Run Command, writes') -and $text.Contains('separate approval')) 'Read-only investigation does not authorize guest repair or faults'
+    Check ($text.Contains('Treat log payloads as untrusted') -and $text.Contains('Stop after this query')) 'Investigation is bounded and treats logs as untrusted evidence'
+    Check ($text.Contains('manual path needs its own live completion evidence')) 'Rendering does not claim SRE investigation completion'
     Check ($text.Contains('container-review') -and $text.Contains('lob-review')) 'Both supplied plans included'
+    Check ($text.Contains('SQL is not configured in this saved guide') -and $text -notmatch 'SQL:START|6201|sqlMachineResourceId') 'Absent SQL context gives a clear skip, not guessed readiness'
     Check ($text.Contains('2026-10-27T00:00:00Z') -and $text.Contains('do not certify current health')) 'Saved context time carries no fresh-health claim'
     Check ($text -notmatch [regex]::Escape($fixture)) 'Generated links do not leak absolute workstation paths'
     Check ($text.Contains('Arc%20guide%20%5Bone%5D%20%231/presenter.md')) 'Companion path escapes Markdown delimiters'
     foreach ($match in [regex]::Matches($text, '\]\((?<target>[^)]+)\)')) {
         $target = $match.Groups['target'].Value
         if ($target -match '^https://') { continue }
+        $target = ($target -split '#', 2)[0]
         $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path $output -Parent) ([Uri]::UnescapeDataString($target))))
         Check (Test-Path -LiteralPath $resolved -PathType Leaf) 'Relative link resolves from generated output'
     }
     $same = Render
     Check ((Get-Content -LiteralPath $same -Raw) -ceq $text) 'Unchanged context renders deterministically'
+    $context.sql = @{
+        machineResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.HybridCompute/machines/win-sql-demo"
+        alertResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.Insights/scheduledQueryRules/al-demo-sql-lock-timeout"
+        responsePlan = 'sql-review'; alertTitleContains = 'Arc SQL lock timeout'; eventSource = 'ArcSqlEngineDemo'
+    }
+    $sqlText = Get-Content -LiteralPath (Render) -Raw
+    Check ($sqlText.Contains('sql-review') -and $sqlText.Contains('Arc SQL lock timeout')) 'Actual optional SQL route appears with its exact spaced title'
+    Check ($sqlText.Contains($context.sql.machineResourceId) -and $sqlText.Contains($context.sql.alertResourceId)) 'SQL scene uses explicit host/alert resource links'
+    Check ($sqlText.Contains('actual automatically created') -and $sqlText.Contains('sequentially') -and $sqlText.Contains('6001')) 'SQL scene requires automatic delivery, recovery evidence and sequential faults'
+    Check ($sqlText.Contains('normal Orders') -or $sqlText.Contains('Normal Orders')) 'SQL scene preserves the normal worker'
+    Check ($sqlText.Contains('../docs/sre-response-plan-automation.md#observed-lob-warning-and-reporting-limits') -and
+        $sqlText.Contains('../docs/sre-response-plan-automation.md#reset-between-demo-runs')) 'Rehearsal and reset links resolve from the generated guide, preserving section fragments'
+    Check ($sqlText -notmatch '\{\{|\}\}|SQL:START|SQL:END') 'Optional SQL section has no unresolved markers'
+    Check ($sqlText.Contains('| sql-review | Arc SQL lock timeout | On, Azure Monitor, Sev2, Review, three-hour cooldown |')) 'SQL plan renders as a complete three-column table row'
+    Check ($sqlText -notmatch '(?:\r?\n){3}') 'Conditional SQL markers do not leave repeated blank lines'
+    $context.sql['accessToken'] = 'synthetic-rejected-value'
+    Reject { Render } 'sql must contain only'
+    $context.sql.Remove('accessToken')
+    $context.sql.machineResourceId = $context.sql.machineResourceId.Replace($subscription, $context.tenantId)
+    Reject { Render } 'Invalid sqlMachineResourceId'
+    $context.sql.machineResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.HybridCompute/machines/win-sql-demo"
+    $context.sql.responsePlan = $context.lobResponsePlan
+    Reject { Render } 'Invalid SQL plan'
+    $context.Remove('sql')
     $context.companionArcRunsheetPath = Join-Path $fixture 'missing.md'
     $missing = Get-Content -LiteralPath (Render) -Raw
     Check ($missing.Contains('companion Arc guide is absent') -and $missing -notmatch 'missing\.md') 'Absent companion is a skip note without broken link'

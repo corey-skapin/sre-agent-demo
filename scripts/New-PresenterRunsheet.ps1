@@ -24,7 +24,7 @@ $required = @(
 )
 if ($context -isnot [System.Collections.IDictionary]) { throw 'Context must be a JSON object.' }
 foreach ($key in $context.Keys) {
-    if ($key -notin ($required + 'companionArcRunsheetPath')) {
+    if ($key -notin ($required + @('companionArcRunsheetPath', 'sql'))) {
         throw "Unsupported context field '$key'. Store only the documented nonsecret presenter fields."
     }
 }
@@ -68,6 +68,27 @@ $resources = @{
     containerAppResourceId = @('infra', 'Microsoft.App/containerApps')
     arcMachineResourceId = @('arc', 'Microsoft.HybridCompute/machines')
 }
+if ($context.Contains('sql')) {
+    $sql = $context.sql
+    $sqlFields = @('machineResourceId', 'alertResourceId', 'responsePlan', 'alertTitleContains', 'eventSource')
+    if ($sql -isnot [Collections.IDictionary] -or @($sql.Keys | Where-Object { $_ -notin $sqlFields }).Count) {
+        throw 'sql must contain only the documented nonsecret SQL presenter fields.'
+    }
+    foreach ($key in $sqlFields) {
+        if (-not $sql.Contains($key) -or $sql[$key] -isnot [string] -or [string]::IsNullOrWhiteSpace($sql[$key])) {
+            throw "Missing or invalid sql.$key."
+        }
+    }
+    if ($sql.responsePlan -notmatch '^[a-z][a-z0-9-]{1,79}$' -or
+        $sql.responsePlan -in @($context.containerResponsePlan, $context.lobResponsePlan) -or
+        $sql.alertTitleContains -cne 'Arc SQL lock timeout' -or $sql.eventSource -cne 'ArcSqlEngineDemo') {
+        throw 'Invalid SQL plan, exact alert title or event source contract.'
+    }
+    $context['sqlMachineResourceId'] = $sql.machineResourceId
+    $context['sqlAlertResourceId'] = $sql.alertResourceId
+    $resources.sqlMachineResourceId = @('arc', 'Microsoft.HybridCompute/machines')
+    $resources.sqlAlertResourceId = @('arc', 'Microsoft.Insights/scheduledQueryRules')
+}
 foreach ($key in $resources.Keys) {
     $scope = "/subscriptions/$($context.subscriptionId)/resourceGroups/$($context.resourceGroups[$resources[$key][0]])/providers/$($resources[$key][1])/"
     if ($context[$key] -notmatch ('^' + [regex]::Escape($scope) + '[A-Za-z0-9][A-Za-z0-9._-]*$')) {
@@ -98,7 +119,7 @@ function Get-RelativeLink([string]$Path) {
     return (($relative -split '[\\/]') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
 }
 $values = @{}
-foreach ($key in @('recordedAtUtc', 'agentName', 'agentUrl', 'applicationUrl', 'containerResponsePlan', 'lobResponsePlan', 'lobAlertTitleContains', 'lobEventSource', 'arcMachineResourceId')) {
+foreach ($key in @('recordedAtUtc', 'subscriptionId', 'tenantId', 'agentName', 'agentUrl', 'applicationUrl', 'containerResponsePlan', 'lobResponsePlan', 'lobAlertTitleContains', 'lobEventSource', 'arcMachineResourceId', 'logAnalyticsWorkspaceId')) {
     $values[$key] = $context[$key]
 }
 foreach ($key in $resources.Keys) {
@@ -118,6 +139,19 @@ if ($context.Contains('companionArcRunsheetPath')) {
 $values.operatorGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t09-native-containerapp-closed-loop.md')
 $values.lifecycleGuideUrl = Get-RelativeLink (Join-Path $root 'docs\sre-response-plan-automation.md')
 $template = Get-Content -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Raw
+$values.sqlPlanRow = ''
+if ($context.Contains('sql')) {
+    $values.sqlPlanRow = $sql.responsePlan
+    $values.sqlPlanSignal = $sql.alertTitleContains
+    $values.sqlPlanCheck = 'On, Azure Monitor, Sev2, Review, three-hour cooldown'
+    $values.sqlEventSource = $sql.eventSource
+    $values.sqlMachineResourceId = $sql.machineResourceId
+    $template = [regex]::Replace($template, '(?m)^<!-- SQL:(START|END) -->\r?\n?', '')
+} else {
+    $template = [regex]::Replace($template, '(?m)^\| \{\{sqlPlanRow\}\}.*\r?\n', '')
+    $template = [regex]::Replace($template, '(?s)<!-- SQL:START -->.*?<!-- SQL:END -->',
+        'SQL is not configured in this saved guide. Skip the SQL scene until setup has verified its engine, signal and SRE route; do not infer readiness from source defaults.')
+}
 $rendered = [regex]::Replace($template, '\{\{([A-Za-z]+)\}\}', {
     param($match)
     if (-not $values.ContainsKey($match.Groups[1].Value)) { throw "Unknown template field $($match.Value)." }
