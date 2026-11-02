@@ -53,6 +53,14 @@ try {
     $text = Get-Content -LiteralPath $output -Raw
     Check ($output -eq (Join-Path $fixture '.local\presenter-runsheet.md')) 'Shared output convention'
     Check ($text -notmatch '\{\{|\}\}') 'All template fields resolved'
+    $pickup = "Everything you've seen so far told us what's true. Now something goes wrong. The same alert rules you saw start an investigation by themselves: the agent gathers the evidence, proposes an action and stops at a person for anything that changes Azure. We'll watch that happen three times: the orders database, the application worker, and a container app."
+    $closing = "Back to Monday morning. How many servers, are they safe, do we have room, where is the money going, and who is looking when it breaks? You've seen each answered from one view, with the gaps showing as gaps. Arc gave every server, Windows, Linux and SQL, an identity in Azure. Azure Monitor gave us evidence that says when it doesn't know. The workbooks turned that evidence into decisions we can defend. And the SRE agent turned an alert into an investigation while a person decided what, if anything, changed."
+    Check ($text.Contains("## 1. Pick up from Arc`n`n**Say:** `"$pickup`"") -or
+        $text.Contains("## 1. Pick up from Arc`r`n`r`n**Say:** `"$pickup`"")) 'Exact story pickup starts step one'
+    Check ($text.TrimEnd().EndsWith("**Say:** `"$closing`"")) 'Exact shared Arc closing is the last spoken text'
+    Check (($text -replace '\s+', ' ').Contains('first live fault is **SQL**, then LOB, then T09')) 'Live story follows the orders database first'
+    Check (($text -replace '\s+', ' ').Contains('only **after Arc chapter 7 has shown the alert rules**') -and
+        $text.Contains('best moment is its audience question') -and $text.Contains('Prepare disables the')) 'GO follows the Arc alert-rule view, at the audience question'
     Check ($text.Contains($context.arcMachineResourceId)) 'KQL scope contains the exact supplied Arc ID'
     Check ($text.Contains("Log Analytics workspace: $($context.logAnalyticsWorkspaceId)")) 'SRE prompt uses the exact saved workspace resource ID'
     Check ($text.Contains("Tenant: $($context.tenantId)") -and $text.Contains("Subscription: $subscription")) 'Investigation target is fully explicit'

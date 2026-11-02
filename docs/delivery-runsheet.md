@@ -6,10 +6,15 @@ Context recorded: **{{recordedAtUtc}}**. These saved links do not certify curren
 
 ## 1. Pick up from Arc
 
+**Say:** "Everything you've seen so far told us what's true. Now something goes wrong. The same alert rules you saw start an investigation by themselves: the agent gathers the evidence, proposes an action and stops at a person for anything that changes Azure. We'll watch that happen three times: the orders database, the application worker, and a container app."
+
 {{arcStep}}
 
-**Say:** "Arc gives the servers an Azure identity and monitoring. SRE Agent uses
-those signals to investigate an incident and propose a controlled action."
+The first live fault is **SQL**, then LOB, then T09, continuing Arc's orders-database
+story. With dated threads, describe the earlier incident rather than a new live fault.
+Say **GO** to prepare the live-fault copies only **after Arc chapter 7 has shown
+the alert rules**; the best moment is its audience question. Prepare disables the
+original rules while their copies exist, so do not run it before showing those rules.
 
 This section takes about 15 minutes. Navigation stays read-only. Sending the
 investigation or incidents in step 5 and triggering a fault in step 6 need
@@ -280,9 +285,9 @@ Describe operator fallback as operator-assisted recovery if it was needed.
 
 Return to [the application]({{applicationUrl}}).
 
-**Say:** "The sequence is signal, investigation, proposed action, human review
-and verified recovery. This demo keeps the two workloads and their recovery
-owners explicit."
-
 Leave the requested Active demo running. Parking is a separately approved
 [operator task]({{lifecycleGuideUrl}}), with SRE parked before Arc.
+
+Deliver this closing after the SRE half, whether using live incidents or dated threads:
+
+**Say:** "Back to Monday morning. How many servers, are they safe, do we have room, where is the money going, and who is looking when it breaks? You've seen each answered from one view, with the gaps showing as gaps. Arc gave every server, Windows, Linux and SQL, an identity in Azure. Azure Monitor gave us evidence that says when it doesn't know. The workbooks turned that evidence into decisions we can defend. And the SRE agent turned an alert into an investigation while a person decided what, if anything, changed."
