@@ -43,6 +43,8 @@ param(
 
     [switch]$ParentOnly,
 
+    [switch]$ApproveParentCreation,
+
     [string]$ConfigurationBackupPath,
 
     [ValidateRange(1, 600)]
@@ -120,6 +122,7 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreLifecycle.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreConfiguration.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 if (Test-Path -LiteralPath $skinModule) {
     Import-Module $skinModule -Force
@@ -240,9 +243,7 @@ if ($sreExists) {
     }
     $existingParent = $resources | Where-Object { $_.type -eq 'Microsoft.App/agents' -and $_.name -eq $AgentName } | Select-Object -First 1
     if ($existingParent) {
-        if (-not $principalId) { throw 'Existing parent has no expected UAMI. Refusing implicit identity replacement; inspect and reconcile separately.' }
-        $currentParent = Invoke-AzCli -Arguments @('resource', 'show', '--ids', $existingParent.id, '-o', 'json') | ConvertFrom-Json -Depth 100
-        $AdditionalManagedResourceIds = @(@($AdditionalManagedResourceIds) + @($currentParent.properties.knowledgeGraphConfiguration.managedResources) | Sort-Object -Unique)
+        throw 'Existing parent detected: Deploy refuses to PUT over it, including in WhatIf, because a replacement body can strip live settings. Use Initialize-SreConfiguration.ps1 -Inspect/-Apply for handlers/plans; inspect parent-setting differences separately. No deployment attempted.'
     }
     if ($principalId) {
         Write-Host "Reusing retained SRE UAMI principal: $principalId. Incremental IaC preserves its deterministic resource ID."
@@ -278,6 +279,10 @@ foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
     $existingNames[$scope] = $names
 }
 
+if (-not $WhatIf -and -not $ApproveParentCreation) {
+    throw 'Creating the paid SRE parent starts the AAU meter. Preview first, then explicitly approve -ApproveParentCreation; no deployment attempted.'
+}
+$parentSettings = Get-Content -LiteralPath (Join-Path $repoRoot 'config\sre-parent-settings.json') -Raw | ConvertFrom-Json -AsHashtable -Depth 50
 Write-Host 'Building Bicep template...'
 Invoke-AzCli -Arguments @('bicep', 'build', '--file', $templateFile, '--stdout') | Out-Null
 
@@ -298,6 +303,7 @@ $templateParameters = @{
     arcRoleAssignmentNames       = @{ value = $existingNames[$arcResourceGroupId] }
     infraRoleAssignmentNames     = @{ value = $existingNames[$infraResourceGroupId] }
     tags                         = @{ value = $demoTags }
+    parentSettings               = @{ value = $parentSettings }
 }
 @{
     '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
@@ -333,6 +339,21 @@ $outputs = $result.properties.outputs
 if ($principalId -and $outputs.managedIdentityPrincipalId.value -ne $principalId) {
     throw 'Deployment did not retain the preflight UAMI principal. Stop before data-plane configuration and inspect identity/RBAC drift.'
 }
+$parentUrl = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$SreResourceGroupName/providers/Microsoft.App/agents/${AgentName}?api-version=2025-05-01-preview"
+$settingsClock = [Diagnostics.Stopwatch]::StartNew()
+do {
+    $parentReadback = Invoke-AzCli -Arguments @('rest', '--method', 'get', '--url', $parentUrl, '-o', 'json') |
+        ConvertFrom-Json -AsHashtable -Depth 100
+    if ($parentReadback.id -ine "/subscriptions/$SubscriptionId/resourceGroups/$SreResourceGroupName/providers/Microsoft.App/agents/$AgentName") {
+        throw 'Parent settings read-back returned a different target; stop before data-plane configuration.'
+    }
+    if (Test-SreProperties -Actual $parentReadback.properties -Expected $parentSettings) { break }
+    if ($parentReadback.properties.provisioningState -eq 'Failed' -or $settingsClock.Elapsed.TotalSeconds -ge $ConfigurationTimeoutSeconds) {
+        throw 'Parent exists but its model/AAU/channel/experimental/sandbox settings are unverified. Inspect it before any retry; the parent is left running, not automatically hibernated.'
+    }
+    Start-Sleep -Seconds 5
+} while ($true)
+Write-Host 'All five versioned parent settings verified by ARM read-back.'
 Write-Host ''
 Write-Host 'SRE parent deployment complete; data-plane configuration and routing readiness are NOT confirmed.'
 Write-Host "  Agent:       $($outputs.agentName.value)"

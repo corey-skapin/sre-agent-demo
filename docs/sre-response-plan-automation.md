@@ -603,6 +603,7 @@ For a new/rebuilt layer, complete deployment can chain parent plus configuration
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
+  -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 ```
 
@@ -621,11 +622,34 @@ not coverage. Fresh deployment can include the explicit SQL host as well.
 A SQL rehearsal preview caught potential removal of `defaultModel`,
 `monthlyAgentUnitLimit`, `experimentalSettings`, `sandboxConfiguration` and
 `upgradeChannel` because the current parent template omits these existing
-settings. **That parent deployment was not applied.** Use configuration-only
+settings. **That parent deployment was not applied.** Deploy now refuses any
+existing parent **before** IaC preview or deployment, so neither the five settings
+nor unmodeled live properties can be stripped. There is no override switch.
+Use configuration-only
 Inspect/Apply for handler and filter updates on the Running parent. Do not treat
 these settings as harmless read-only what-if noise or approve a broad redeploy
-to add a redundant host ID. A supported preservation fix needs separate work
-and validation before redeploying that existing parent.
+to add a redundant host ID.
+
+Fresh creation and retained-identity wake load all five values from
+`config\sre-parent-settings.json`: Anthropic/Automatic, monthly active-flow AAU
+limit 10000, Stable channel, the recorded experimental flags and the complete
+Limited sandbox configuration. The limit does not cap always-on charges.
+The [pinned Microsoft template](https://github.com/microsoft/sre-agent/blob/ff317310cca5894fcd42ccc32f5452c3f408cc3c/sreagent-templates/bicep/agent-core.bicep)
+uses `2025-05-01-preview` for these writable properties; the
+[2026 schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents)
+does not expose AAU/experimental/sandbox settings. The parent module therefore
+uses the pinned preview API, not an invented REST payload or an ignored property.
+The [Learn API reference](https://learn.microsoft.com/azure/sre-agent/api-reference#agent-properties)
+also documents model, limit, channel and experimental properties.
+
+Actual creation requires `-ApproveParentCreation` because it starts the AAU meter;
+WhatIf does not. The companion wrapper passes that switch only after its SRE
+creation approval. After deployment, bounded read-only ARM inspection must match
+every complete settings value before handler configuration proceeds. Failure
+leaves the parent present and reports unverified setup; it never replays the
+deployment or silently hibernates it. Review mode and the retained combined
+identity shape are unchanged. Compilation and mocked read-back are not a live
+recreation test; verify the same settings on the separately authorized rebuild.
 
 ```powershell
 .\scripts\Test-SreReadiness.ps1 `
