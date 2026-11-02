@@ -36,6 +36,7 @@ Context schema version 1 requires these exact nonsecret fields:
 | `containerAppResourceId`, `arcMachineResourceId` | Exact T09 app and T11 Arc machine |
 | `containerResponsePlan`, `lobResponsePlan` | Rendered plan names |
 | `lobAlertTitleContains`, `lobEventSource` | Approved rendered LOB signal values |
+| `sql` (optional) | Object with exactly `machineResourceId`, `alertResourceId`, `responsePlan`, `alertTitleContains`, `eventSource`, saved only after verified SQL setup |
 | `companionArcRunsheetPath` (optional) | Explicit absolute path to the Arc guide, preferably its generated local copy |
 
 The assistant collects these once during setup, not from the presenter.
@@ -52,6 +53,211 @@ The optional companion link is computed relative to the generated file, with
 path segments escaped. A missing companion file produces a skip note without a
 broken link. Changing context or rendering the guide changes no deployment,
 lifecycle state, permissions or fault flags.
+
+The optional SQL object uses the actual Arc host and scheduled-query rule IDs,
+the rendered plan name, exact title `Arc SQL lock timeout` and source
+`ArcSqlEngineDemo`. Its IDs must match the explicit subscription and Arc group.
+Omit it until the Arc engine/signal and SRE route are verified; the guide then
+shows a skip note. Source defaults alone are not verified setup.
+
+### LOB investigation validation
+
+The generated guide contains a ready-to-send request for one read-only SRE
+investigation of the exact Arc machine's existing Application events and host
+performance logs. It uses the saved workspace resource ID and one bounded
+30-minute union query: at most 50 events and 250 total rows, including per-minute
+host summaries. No additional context field is needed.
+Existing `QueryLogAnalyticsByWorkspaceId` and read CLI tools are already assigned
+to the handling agent. The workspace and Arc machine are already managed
+resources; required readiness checks validate the scoped role profile.
+[Built-in log queries](https://learn.microsoft.com/azure/sre-agent/diagnose-azure-observability)
+can use resource IDs or workspace IDs without a connector.
+
+Before any live test, obtain scoped approval for one SRE chat request and the
+associated read-only log/metadata access and usage. This does not authorize a
+fault, notification, guest command, repair, new role or connector. Keep Review
+and existing tools unchanged. Stop on access denial, a request to elevate, or
+unexpected side effects; never accept a request to add permissions for the query.
+Preserve the existing exact Azure Monitor platform prerequisite described below.
+The [supported interaction](https://learn.microsoft.com/azure/sre-agent/first-investigation)
+is New thread, a specific scoped prompt, then Send.
+
+Success needs a completed SRE query with real target-bound rows/timestamps and
+an evidence-grounded explanation with conditional operator steps. If only 4000
+is present, a healthy-telemetry conclusion is useful; no failure RCA is claimed.
+No data, tool failure, stalled output or a manual portal query alone leaves SRE
+investigation unverified. Record its actual outcome and thread link privately.
+The historical alert-triggered T11 RCA stalled with no established backend
+root cause. This bounded manual path does not fix or certify that automatic path.
+
+### Host context and an optional bounded LOB warning
+
+Arc's core DCR source (`scripts/Deploy-ArcDemo.ps1`, `New-CoreDcrBody`) specifies
+`Microsoft-Perf` to `Perf` every 60 seconds. Its Windows paths include
+`\Processor Information(_Total)\% Processor Time`,
+`\Memory\% Committed Bytes In Use`, `\Memory\Available MBytes` and
+`\LogicalDisk(_Total)\% Free Space`. The guide uses the documented
+[Perf columns](https://learn.microsoft.com/azure/azure-monitor/reference/tables/perf)
+and scoped [aggregation pattern](https://learn.microsoft.com/azure/azure-monitor/logs/get-started-queries#aggregate-and-group-results).
+The separate VM Insights `Microsoft-InsightsMetrics` stream is not this table.
+Source intent does not prove current collection. Missing samples are a visibility
+gap, not zero CPU or a healthy memory/disk assessment. These are host counters,
+not per-process metrics; free-space percent does not measure storage latency.
+
+The proposed default incident is an **app-warning-only** scenario. It does not
+allocate load, consume extra disk or crash/restart the worker. After the user
+chooses that scenario, agree the exact host, warning duration, observation
+deadline, existing notification recipients/usage costs and operator cleanup
+fallback before any live operation. Actual bounded CPU/memory/disk load is a
+different scenario and is not implemented or authorized here.
+
+Use the existing helper with explicit approved target inputs and
+`-Action WarnForDuration -WarningSeconds 120`. First preview with `-WhatIf`;
+execution additionally requires `-ApproveWarningWindow`. The assistant fills
+subscription, tenant, resource group, machine, task, app root, source and saved
+skin from approved setup, never defaults guessed from an ambient login.
+`-GuestScriptOutputPath` can render the same guarded guest script offline;
+rendering is not execution approval. No new deployment or agent tool is needed.
+
+The guest baseline requires Healthy mode, the expected source, a running task,
+the existing worker PID bound to this script/config and a 5-to-60-second loop.
+It requires at least two app cycles, temporarily changes only the mode and
+incident marker, and restores the exact original config in `finally` if that
+config is still its own. It does not restart the task or kill a process. It
+checks actual local 4200 events and continued worker/task state. Duration is
+30 to 180 seconds; the existing Arc command timeout is 300 seconds.
+This is best-effort scoped cleanup, not a watchdog: session/process termination,
+Run Command ambiguity or a concurrent edit can leave recovery unverified.
+Stop, inspect the existing command and config, and use only the separately
+approved operator ResetFault fallback when appropriate. Never blindly retry,
+overwrite another change, approve an SRE repair card or suppress a cleanup error.
+
+Before that guest command, obtain a fresh read-only readiness/host baseline
+within the authorized window and check the existing scheduled rule, Action Group,
+enabled LOB title keyword/Sev2/Review match, and enabled three-hour cooldown.
+The source rule has count greater than zero for 4100/4101/4200, one failing
+evaluation, a ten-minute lookback and five-minute evaluation frequency.
+Warning severity on the Windows event still routes through a Sev2 Azure alert.
+No rule, routing, cooldown, RBAC or connector change is part of this scenario.
+An already fired alert or cooldown can prevent a new incident. Confirm current
+eligibility; do not bypass it.
+
+The source handling-agent instructions include 4200 and the configured host
+counters. Changing source alone does not update a deployed agent.
+Before live automatic correlation, render and Inspect the desired configuration,
+then separately authorize the exact handler-only update with a new external
+backup. If enabling SQL as well, use the larger explicit scope below instead.
+Stop on changes outside the approved preview. Re-read the instructions
+and run required readiness checks before the warning. No new tools or permissions
+are required by this source change; this is not approval to apply it.
+
+Proposed rehearsal limits for approval: obtain a fresh ten-minute baseline,
+warn for 120 seconds, and require verified Healthy config/original running worker
+by five minutes after the accepted guest start. If restoration is unverified,
+stop the presentation and invoke only the agreed narrow operator fallback after
+inspection. Observe the alert/new incident until at most twenty minutes after
+that start, without rerunning the warning or bypassing cooldown. Capture at
+least five minutes of post-window host samples where available; the assistant
+fills real timestamps from the command result, not presenter-supplied IDs.
+Existing Action Group receivers may get fired/resolved notifications and the
+agent may incur investigation/query usage. Confirm actual recipients and consent
+before execution. No new receiver, chat request or rule is created implicitly.
+
+Record UTC baseline, warning start/end, config restoration and post-window
+evidence. Allow for AMA ingestion and scheduled evaluation after the warning
+has ended. Bound observation explicitly; there is no delivery deadline guarantee.
+Prove each stage independently: Event 4200, a newly fired alert/Monitor condition,
+its Action Group/SRE delivery, a new actual investigation and completed query
+results/recommendations. A restored Healthy config does not resolve an alert
+immediately while events remain inside its lookback. Correlate actual CPU,
+memory and free-space bins before/during/after, reporting missing stages.
+No relationship between synthetic dependency warnings and resource pressure is
+assumed. Existing historical automatic RCA remains unproven, and the previous
+read-only investigation exposed only partial tool/report evidence. New metrics
+queries, guest warning, notifications and investigation usage need new scope;
+the previous one-query consent is consumed.
+
+### SQL setup and sequential rehearsal
+
+The Arc owner owns SQL installation, license decisions, the normal Orders worker,
+bounded incident/cleanup helper, Application collection and the optional
+`sql-incident-alert.bicep` module. Obtain that owner's fresh engine/worker and
+cleanup-readiness handoff before SRE setup. This repo neither installs SQL nor
+accepts a license. The agreed signal is real lock timeout 1222 on an owned probe
+row, not a deadlock or an Orders outage. See the supported
+[1222 explanation](https://learn.microsoft.com/sql/relational-databases/errors-events/mssqlserver-1222-database-engine-error).
+
+Enable the optional `SQL` scenario only in the approved private setup input:
+append it to `sre.requiredScenarios`, set `sre.sqlTargetArcMachine` to the actual
+SQL Arc host and supply distinct `labels.sqlResponsePlan`, exact
+`labels.sqlAlertTitleContains = Arc SQL lock timeout` and
+`labels.sqlEventSource = ArcSqlEngineDemo`. The two fictional examples keep SQL
+disabled. The presenter never edits these fields or hunts for resource IDs.
+
+For the currently running two-route demo, an exact managed Arc resource group
+already covers its SQL host. Use an in-place handler instruction update and one
+SQL filter without redeploying that parent. Existing T09/LOB plans, Review, Sev2,
+enabled three-hour cooldown, tools, identity and group grants remain unchanged.
+For a fresh deployment or rebuild, review `Deploy-SreAgent.ps1 -WhatIf` and obtain
+authorization for its parent update. For an existing Running parent, heed the
+[parent preview warning](sre-response-plan-automation.md#existing-parent-preview-warning).
+Render/Inspect configuration, approve its exact changes, Apply with a new external backup and
+repeat to prove no-op. Stop on unrelated differences, denial or ambiguous writes.
+Required SRE readiness also validates the exact SQL alert predicate, owner tags,
+host, LAW, Action Group and one-minute/fifteen-minute settings. It does not run
+KQL or certify the guest engine, collection or automatic investigation.
+
+Agree and release one SQL window and one LOB window, **sequentially**, only after
+fresh readiness and the actual Action Group receiver/common-schema and SRE
+delivery checks. Disclose possible fired/resolved notifications and ingestion,
+query/SRE charges. Check each alert's Monitor condition and actual cooldown;
+do not disable routing or cooldown to force a new incident without a separately
+approved exception. The [reset procedure](sre-response-plan-automation.md#reset-between-demo-runs)
+distinguishes the three-hour filter setting from Azure Monitor's seven-day
+same-rule merge; alert/thread closure alone is not a documented reset. Use the existing
+inspection path for actual completed tool output, not merely a tool-start label
+or truncated narrative. If that path is unavailable, state the evidence limit
+before the run instead of claiming full verification.
+The [recorded SQL rehearsal](sre-response-plan-automation.md#observed-sql-rehearsal)
+proved automatic routing and completed query execution, but not full raw-result
+capture. It does not certify the separate LOB route or a future instance.
+
+The documented [data-plane thread API](https://learn.microsoft.com/azure/sre-agent/api-reference#threads-and-chat)
+offers read-only GETs of the actual thread and its messages on the endpoint read
+from the exact parent, using the `https://azuresre.dev` token audience.
+Keep tokens in memory, raw responses outside git and those reads separate from
+the configuration adapter's narrower handler/filter route allowlist. Inspect
+actual execution status, command, full output/error and timestamps. Do not send
+a message or approve an action to obtain evidence. A shortened canvas summary
+or Application Insights tool-start event is not the raw completed result.
+The documented [audit events](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions)
+can pair `AgentToolExecution` ToolStart/ToolEnd by thread and CallId. Inspect
+actual ToolOutput for truncation: a completed event with a shortened result is
+execution and partial-result evidence, not full raw output. Preserve those limits
+instead of substituting the final narrative or rerunning the fault.
+The documented [GenAI content table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/appgenaicontent)
+also exposes tool-result fields, but their existence does not mean this agent
+populates them. An exact-trace read for the first SQL run returned assistant
+messages with empty tool results and input messages; it did not recover the
+missing query output. Do not enable new telemetry or claim full capture merely
+because a table schema supports it.
+
+For SQL, record the helper's actual UTC start, incidentId, real 1222, observed
+blocker/victim/wait and rollback/probe/owned-session cleanup results. The blocker
+rolls back after twelve seconds and the victim times out after five seconds;
+this is not a promise of Azure delivery within twelve seconds. Require the Arc
+owner's verified cleanup/healthy Orders result within the agreed recovery
+deadline, proposed five minutes after accepted start. Stop if it cannot be
+proved; only the separately agreed narrow operator cleanup is authorized.
+Observe event 6201/detected, matching 6001/recovered, a new SQL alert, actual
+SRE delivery, completed target-bound Event/Perf queries and recommendations for
+at most twenty minutes. Recovery normally precedes alert evaluation because
+the rule retains fifteen minutes of events. Do not retry a consumed fault,
+send an extra chat request or infer a current blocker from an old alert.
+Only after SQL cleanup is verified may the separate LOB warning window begin,
+using the bounds above. Missing/denied/stalled evidence is an actual incomplete
+stage, not a successful automatic RCA. Save evidence privately and refresh the
+local SQL context from approved readbacks only after setup is verified.
 
 ## Handoff prompt
 
@@ -238,8 +444,16 @@ fails explicitly pending a separately approved reconciliation.
 High uses Reader/Log Analytics Contributor/Contributor at the two workload groups.
 Low uses true Log Analytics Reader, not the formerly mislabeled Contributor ID.
 Hibernate retains existing grants (free, but still standing access); before Active,
-deployment/readiness reject incompatible/inherited/extra grants, including legacy
-Monitoring Contributor, for separately approved reconciliation. Deployment adopts
+deployment/readiness reject incompatible/inherited/extra grants for separately
+approved reconciliation. The sole exception is one existing subscription
+Monitoring Contributor grant for the exact retained UAMI, including while the
+parent is absent or its incident platform is disconnected. It is a documented
+[platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
+The repo never creates it; other scopes/roles/principals and duplicates are not
+exempt. Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
+selection and required scanner grant. A disconnected platform emits a warning,
+not alert-delivery proof or a failure solely for disconnection. Never infer this
+state from optional connector files. Deployment adopts
 existing direct assignment names and does not query Graph display names.
 Retained AppInsights must match the requested workspace/location; wake does not
 silently relocate it. Older UAMI-only parking rebuilds missing diagnostics through

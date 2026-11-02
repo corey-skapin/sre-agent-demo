@@ -30,6 +30,12 @@
 - Warn about unrelated retained free-resource/IAM drift during normal Hibernate;
   do not strand the known paid parent or delete extra resources to hide drift.
 - Reconcile excessive/inherited/duplicate IAM explicitly before Active.
+- Preserve only the exact existing subscription Monitoring Contributor grant on
+  the retained UAMI, including while the parent is absent or disconnected; it is
+  a [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
+  Never create it here or exempt other roles, scopes, principals or duplicates.
+- Fresh/wake IaC explicitly selects AzMonitor. Read back incident connectivity
+  and required scanner access; a disconnected-platform warning is not alert readiness.
 - Do not switch global accounts, bypass denial or silently grant permissions.
 - Preserve fault flags, workload resources, retained disks and the HDD guard.
 - Do not change autonomy, model, telemetry, cooldown or connectors without scope.
@@ -48,10 +54,16 @@
   MCP `severity: high`, invalid P1/P2 or response-level instruction payloads.
 - Keep instructions/tools on the handling agent and exact Sev2 on AzMonitor plans.
 - Keep enabled three-hour cooldown; check actual settings before a repeat.
+- Azure Monitor also merges same-rule firings across seven days. Closing a
+  thread/alert is not a documented reset; use the separately authorized reset
+  procedure and verify restoration, never silently bypass cooldown.
+- Quote actual query-header row counts and distinguish summary rows from source
+  samples. Never infer incident connectivity from optional connector files.
 - Stop on unsupported legacy settings or enabled unowned/quickstart routing;
   never migrate, disable, delete or rebuild automatically.
 - Preserve current objects/history and external backups during ordinary updates.
-- Read back ambiguous writes before retrying; stop on concurrent changes.
+- Configuration PUTs run once; poll read-only with backoff before reporting
+  unverified state. Never replay a PUT; stop on denial or concurrent changes.
 - Report failed/partial setup explicitly; never claim zero-touch or successful
   configuration through an unverified manual fallback.
 - Run `Test-SreReadiness.ps1` with the same explicit target/skin.
@@ -86,6 +98,9 @@
 - Never approve a stale card after fallback or promise a watchdog/hard cancellation.
 - Present T09 as the primary Review closed loop; keep T10/T11 recovery operator-led.
 - Do not claim autonomous Arc repair or reliable T11 RCA.
+- SQL uses the Arc owner's real lock-timeout signal and verified cleanup handoff.
+  Keep SQL investigation read-only; never execute SQL, kill sessions or restart
+  SQL/Arc. Release SQL and LOB rehearsal windows separately and sequentially.
 
 ## Hibernation, removal and reactivation
 

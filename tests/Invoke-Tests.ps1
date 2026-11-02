@@ -57,6 +57,7 @@ try {
 $skin = Get-DemoSkin -RepoRoot $root
 & (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
 & (Join-Path $PSScriptRoot 'Test-PresenterRunsheet.ps1')
+& (Join-Path $PSScriptRoot 'Test-LobWarning.ps1')
 Assert-True ($skin.sre.requiredScenarios[0] -is [string]) 'JSON array strings remain strings, not PSCustomObject Length properties'
 foreach ($file in @('demo-skin.json', 'dummy-customer.demo-skin.json')) {
     $config = Get-DemoSkin -Path (Join-Path $root "config\$file") -RepoRoot $root
@@ -103,6 +104,8 @@ Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
 Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
 Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
 Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
+Assert-True ($desired.handler.properties.instructions -match '4200 degraded' -and $desired.handler.properties.instructions -match 'Processor Information\(_Total\)' -and $desired.handler.properties.instructions -match 'Memory/Available MBytes') 'Rendered handler correlates actual warning and configured host counters'
+Assert-True ($desired.handler.properties.instructions -match 'no induced host load' -and $desired.handler.properties.instructions -match 'Do not execute Arc guest commands') 'Handler preserves contextual host metrics and operator-only Arc recovery'
 Assert-True ($desired.handler.properties.instructions -match 'No external source repository is configured') 'Default handler explicitly omits external repository context'
 $sourceSkinPath = [IO.Path]::GetTempFileName()
 $sourceGuestPath = [IO.Path]::GetTempFileName()
@@ -145,6 +148,8 @@ Assert-True (-not (Get-Command (Join-Path $root 'scripts\Deploy-SreAgent.ps1')).
 $second = & $initialize -SubscriptionId $subscription -TenantId $tenant
 Assert-True (($desired | ConvertTo-Json -Depth 30 -Compress) -eq (($second | ConvertFrom-Json) | ConvertTo-Json -Depth 30 -Compress)) 'Repeated desired-state rendering is deterministic'
 & (Join-Path $PSScriptRoot 'Test-SreConfiguration.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreSqlConfiguration.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreSqlReadiness.ps1')
 
 Import-Module (Join-Path $root 'scripts\lib\SreReadiness.psm1') -Force
 $hibernated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
@@ -170,9 +175,12 @@ try {
         function script:New-SreConfigurationSession { @{ token = 'unit-test' } }
         function script:Get-SreConfigurationSnapshot {
             if ($script:ReadinessFailure -eq 'denied') { throw 'Synthetic Forbidden data-plane read' }
+            $filters = $script:ReadinessDesired.plans | ConvertTo-Json -Depth 30 | ConvertFrom-Json -AsHashtable
+            if ($script:ReadinessFailure -eq 'sql-filter') { $filters = @($filters | Where-Object scenario -ne 'SQL') }
+            if ($script:ReadinessFailure -eq 'sql-cooldown') { ($filters | Where-Object scenario -eq 'SQL').properties.mergeWindowHours = 1 }
             @{
                 subagents = @($script:ReadinessDesired.handler)
-                filters = @($script:ReadinessDesired.plans)
+                filters = @($filters)
                 handlers = @()
             }
         }
@@ -181,6 +189,16 @@ try {
                 foreach ($role in @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')) {
                     @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = "$script:ReadinessBase/$rg"; roleDefinitionId = "/roles/$role" }
                 }
+            }
+            if ($script:ReadinessFailure -ne 'platform-missing') {
+            $grant = @{ id='/unit-test/platform-role'; principalId='00000000-0000-0000-0000-000000000003'; scope="/subscriptions/$($script:ReadinessDesired.subscriptionId)"; roleDefinitionId='/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' }
+            switch ($script:ReadinessFailure) {
+                'platform-role' { $grant.roleDefinitionId='/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' }
+                'platform-principal' { $grant.principalId='00000000-0000-0000-0000-000000000004' }
+                'platform-scope' { $grant.scope='/subscriptions/00000000-0000-0000-0000-000000000004' }
+                'platform-duplicate' { $grant.Clone() }
+            }
+            $grant
             }
         }
         function script:Invoke-SreAz {
@@ -193,6 +211,14 @@ try {
                 'resource list*' { @(@{ id = $script:ReadinessIdentityId }, @{ id = $script:ReadinessAgentId }); break }
                 'identity show*' { @{ principalId = '00000000-0000-0000-0000-000000000003' }; break }
                 'resource show*Microsoft.App/agents/*' {
+                    $managedResources = @("$base/rg-arc-demo", "$base/rg-arc-demo-infra", "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo", "$base/rg-arc-demo/providers/Microsoft.Insights/actionGroups/ag-arc-demo", $appId, "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-app-01")
+                    if ($script:ReadinessFailure -eq 'sql-scope') {
+                        $managedResources = @($managedResources | Where-Object { $_ -ne "$base/rg-arc-demo" })
+                        $managedResources += "$base/foreign-group"
+                    }
+                    if ('SQL' -in $script:ReadinessSkin.sre.requiredScenarios -and $script:ReadinessFailure -notin @('sql-scope', 'sql-group-covered')) {
+                        $managedResources += "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/$($script:ReadinessSkin.sre.sqlTargetArcMachine)"
+                    }
                     @{
                         id = $script:ReadinessAgentId
                         identity = @{ type = 'SystemAssigned,UserAssigned'; userAssignedIdentities = @{ $script:ReadinessIdentityId = @{} } }
@@ -200,10 +226,10 @@ try {
                             provisioningState = $(if ($script:ReadinessFailure -eq 'parent') { 'Failed' } else { 'Succeeded' })
                             runningState = 'Running'
                             actionConfiguration = @{ mode = 'Review'; accessLevel = 'High'; identity = $script:ReadinessIdentityId }
-                            incidentManagementConfiguration = @{ type = 'AzMonitor' }
+                            incidentManagementConfiguration = $(if ($script:ReadinessFailure -eq 'platform-unset') { @{} } else { @{ type = $(if ($script:ReadinessFailure -eq 'platform-disconnected') { 'None' } else { 'AzMonitor' }) } })
                             knowledgeGraphConfiguration = @{
                                 identity = $script:ReadinessIdentityId
-                                managedResources = @("$base/rg-arc-demo", "$base/rg-arc-demo-infra", "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo", "$base/rg-arc-demo/providers/Microsoft.Insights/actionGroups/ag-arc-demo", $appId, "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-app-01")
+                                managedResources = $managedResources
                             }
                         }
                     }; break
@@ -211,9 +237,29 @@ try {
                 'containerapp show*' { @{ id = $appId; properties = @{ provisioningState = 'Succeeded'; runningStatus = 'Running'; template = @{ containers = @(@{ env = @(@{ name = 'SIMULATE_CRASH'; value = 'false' }) }) } } }; break }
                 'containerapp revision list*' { ,@(@{ properties = @{ active = $true; healthState = 'Healthy'; replicas = 1; trafficWeight = 100 } }); break }
                 'monitor metrics alert show*' { @{ id = '/unit-test/alert'; enabled = $true; severity = 2; scopes = @($appId) }; break }
-                'connectedmachine show*' { @{ id = '/unit-test/machine'; status = $(if ($script:ReadinessFailure -eq 'arc') { 'Disconnected' } else { 'Connected' }) }; break }
+                'connectedmachine show*' {
+                    $index = [Array]::IndexOf($Arguments, '-n')
+                    $machineName = $Arguments[$index + 1]
+                    if ($script:ReadinessFailure -eq 'sql-target' -and $machineName -eq $script:ReadinessSkin.sre.sqlTargetArcMachine) { $machineName = 'wrong-host' }
+                    @{ id = "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/$machineName"; status = $(if ($script:ReadinessFailure -eq 'arc') { 'Disconnected' } else { 'Connected' }) }; break
+                }
+                'resource show*scheduledQueryRules/al-*-sql-lock-timeout*' {
+                    $query = Get-SreSqlAlertQuery -MachineResourceId "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/$($script:ReadinessSkin.sre.sqlTargetArcMachine)"
+                    if ($script:ReadinessFailure -eq 'sql-query') { $query = $query.Replace('1222', '1205') }
+                    @{
+                        id = "$base/rg-arc-demo/providers/Microsoft.Insights/scheduledQueryRules/al-arc-demo-sql-lock-timeout"
+                        tags = @{ managedBy = 'arc-demo-sql-incident'; workload = 'sql-lock-timeout' }
+                        properties = @{
+                            displayName = 'Arc SQL lock timeout - arc-demo'; enabled = $true; severity = 2
+                            scopes = @("$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo")
+                            evaluationFrequency = 'PT1M'; windowSize = 'PT15M'; autoMitigate = $true
+                            actions = @{ actionGroups = @("$base/rg-arc-demo/providers/Microsoft.Insights/actionGroups/ag-arc-demo") }
+                            criteria = @{ allOf = @(@{query=$query;timeAggregation='Count';operator='GreaterThan';threshold=0;failingPeriods=@{numberOfEvaluationPeriods=1;minFailingPeriodsToAlert=1}}) }
+                        }
+                    }; break
+                }
                 'resource show*scheduledQueryRules/*' { @{ properties = @{ enabled = $true; severity = 2; displayName = $script:ReadinessSkin.labels.lobAlertTitleContains } }; break }
-                'role assignment list*' { ,@(Get-SreArmRoleAssignments | Where-Object scope -EQ $(if ($command -match 'rg-arc-demo-infra') { "$base/rg-arc-demo-infra" } else { "$base/rg-arc-demo" })); break }
+                'role assignment list*' { ,@(Get-SreArmRoleAssignments | Where-Object { $_.scope -eq "/subscriptions/$SubscriptionId" -or $_.scope -eq $(if ($command -match 'rg-arc-demo-infra') { "$base/rg-arc-demo-infra" } else { "$base/rg-arc-demo" }) }); break }
                 default { throw "Unexpected readiness request (all real Azure calls forbidden): $command" }
             }
             ConvertTo-Json -InputObject $value -Depth 30
@@ -224,6 +270,40 @@ try {
         Assert-True ($healthyReadiness.status -eq 'pass' -and $healthyReadiness.schemaVersion -eq 1) "$state passes when all verifiable required checks pass"
         $telemetry = @($healthyReadiness.checks | Where-Object id -eq 'telemetry-and-alerts')
         Assert-True ($telemetry.Count -eq 1 -and -not $telemetry[0].required -and $telemetry[0].status -eq 'skipped' -and $null -eq $telemetry[0].observed -and $telemetry[0].message -match 'Not evaluated') 'Rehearsal is advisory, explicitly unevaluated and never success-shaped'
+    }
+    foreach ($case in @('platform-exact','platform-role','platform-scope','platform-principal','platform-duplicate','platform-disconnected','platform-unset','platform-missing')) {
+        & $readinessModule { param($Case) $script:ReadinessFailure=$Case } $case
+        $grantReport=Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
+        Assert-True ($grantReport.status -eq $(if ($case -in @('platform-exact','platform-disconnected','platform-unset')) {'pass'} else {'fail'})) "Readiness preserves exact platform access independently of connectivity: $case; $($grantReport.checks | Where-Object status -eq 'fail' | ConvertTo-Json -Depth 10 -Compress)"
+        if ($case -in @('platform-disconnected','platform-unset')) {
+            Assert-True (@($grantReport.checks | Where-Object { $_.id -eq 'incident-platform' -and -not $_.required -and $_.status -eq 'pending' -and $_.message -match "WARNING: alerts won't reach the agent until Azure Monitor is connected" }).Count -eq 1) 'Disconnected or unset incident platform is an explicit warning, not a failure or proof of alert readiness'
+        }
+        if ($case -eq 'platform-missing') {
+            Assert-True (@($grantReport.checks | Where-Object { $_.id -eq 'azure-monitor-alert-access' -and $_.required -and $_.status -eq 'fail' }).Count -eq 1) 'AzMonitor selection alone does not establish required scanner access'
+        }
+    }
+    & $readinessModule { $script:ReadinessFailure='' }
+    $sqlSkinPath = [IO.Path]::GetTempFileName()
+    try {
+        $sqlSkin = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+        $sqlSkin.sre.requiredScenarios += 'SQL'
+        $sqlSkin | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sqlSkinPath
+        $sqlDesired = Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
+        & $readinessModule { param($Desired, $Skin) $script:ReadinessDesired = $Desired; $script:ReadinessSkin = $Skin } $sqlDesired $sqlSkin
+        $sqlReport = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
+        Assert-True ($sqlReport.status -eq 'pass' -and @($sqlReport.checks | Where-Object { $_.id -eq 'SQL-alert' -and $_.status -eq 'pass' }).Count -eq 1) 'SQL readiness wires exact optional alert/host/managed route checks'
+        & $readinessModule { $script:ReadinessFailure='sql-group-covered' }
+        $covered=Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
+        Assert-True ($covered.status -eq 'pass') 'Exact managed Arc group covers the verified SQL host without a parent update'
+        $failures = @{ 'sql-scope'='managed-resources'; 'sql-target'='SQL-resource-health'; 'sql-query'='SQL-alert'; 'sql-filter'='plan-status-review'; 'sql-cooldown'='plan-filters-handler' }
+        foreach ($failure in $failures.Keys) {
+            & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
+            $failedSql = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
+            Assert-True ($failedSql.status -eq 'fail' -and @($failedSql.checks | Where-Object { $_.id -eq $failures[$failure] -and $_.status -eq 'fail' }).Count -eq 1) "Required $failure is never hidden by skipped rehearsal"
+        }
+    } finally {
+        Remove-Item -LiteralPath $sqlSkinPath -Force
+        & $readinessModule { param($Desired, $Skin) $script:ReadinessDesired=$Desired; $script:ReadinessSkin=$Skin; $script:ReadinessFailure='' } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
     }
     foreach ($failure in @('parent', 'denied', 'arc')) {
         & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
@@ -286,6 +366,8 @@ $global:CapturedParameters = @()
 $global:RetainedDiagnosticsFixture = $false
 $global:DriftedDiagnosticsFixture = $false
 $global:ExtraGrantFixture = $false
+$global:SqlManagedTargetMismatch = $false
+$global:PlatformGrantFixture = ''
 $global:AzResponder = {
     $command = $args -join ' '
     $base = '/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups'
@@ -297,6 +379,9 @@ $global:AzResponder = {
     }
     if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
     if ($command -like 'resource list*') {
+        if ($global:PlatformGrantFixture -and $global:PlatformGrantFixture -ne 'absent') {
+            return @(@{ id="$base/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo";type='Microsoft.App/agents';name='sre-arc-demo' }) | ConvertTo-Json -AsArray
+        }
         if ($global:RetainedDiagnosticsFixture) {
             return @(
                 @{ id = "$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami"; type = 'Microsoft.ManagedIdentity/userAssignedIdentities'; name = 'sre-arc-demo-uami' }
@@ -307,6 +392,9 @@ $global:AzResponder = {
         return '[]'
     }
     if ($command -like 'resource show*') {
+        if ($command -match 'Microsoft.App/agents/') {
+            return @{ properties=@{ incidentManagementConfiguration=@{type=$(if($global:PlatformGrantFixture -eq 'disconnected'){'None'}else{'AzMonitor'})};knowledgeGraphConfiguration=@{managedResources=@()} } } | ConvertTo-Json -Depth 10
+        }
         $workspace = if ($global:DriftedDiagnosticsFixture) { "$base/elsewhere/providers/Microsoft.OperationalInsights/workspaces/other" } else { "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo" }
         return @{ location = 'australiaeast'; properties = @{ WorkspaceResourceId = $workspace } } | ConvertTo-Json
     }
@@ -320,22 +408,42 @@ $global:AzResponder = {
         }
         if ($global:ExtraGrantFixture) {
             $scope = '/subscriptions/00000000-0000-0000-0000-000000000001'
-            $value += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/extra"; name = 'extra'; properties = @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa' } }
+            $value += @{ id = "$scope/providers/Microsoft.Authorization/roleAssignments/extra"; name = 'extra'; properties = @{ principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/b24988ac-6180-42a0-ab88-20f7382dd24c' } }
+        }
+        if ($global:PlatformGrantFixture) {
+            $scope='/subscriptions/00000000-0000-0000-0000-000000000001'
+            $grant=@{ id="$scope/providers/Microsoft.Authorization/roleAssignments/platform";name='platform';properties=@{principalId='00000000-0000-0000-0000-000000000003';scope=$scope;roleDefinitionId='/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa'} }
+            switch($global:PlatformGrantFixture) {
+                'role' { $grant.properties.roleDefinitionId='/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' }
+                'principal' { $grant.properties.principalId='00000000-0000-0000-0000-000000000004' }
+                'scope' { $grant.properties.scope="$scope/resourceGroups/unowned";$grant.id="$($grant.properties.scope)/providers/Microsoft.Authorization/roleAssignments/platform" }
+                'duplicate' { $value+=@{id="$scope/providers/Microsoft.Authorization/roleAssignments/duplicate";name='duplicate';properties=$grant.properties.Clone()} }
+            }
+            $value+=$grant
         }
         return @{ value = $value } | ConvertTo-Json -Depth 20
     }
     if ($command -like 'role assignment list*') {
         $scope = if ($command -match 'rg-arc-demo-infra') { "$base/rg-arc-demo-infra" } else { "$base/rg-arc-demo" }
-        return (@(
+        $grants=@(
             @{ name = 'legacy-reader'; principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/acdd72a7-3385-48ef-bd42-f606fba81ae7' }
             @{ name = 'legacy-la'; principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/92aaf0da-9dab-42b6-94a3-d43ce8d16293' }
             @{ name = 'legacy-contributor'; principalId = '00000000-0000-0000-0000-000000000003'; scope = $scope; roleDefinitionId = '/roles/b24988ac-6180-42a0-ab88-20f7382dd24c' }
-        ) | ConvertTo-Json)
+        )
+        if ($global:PlatformGrantFixture -in @('exact','disconnected','absent')) {
+            $grants+=@{name='platform';principalId='00000000-0000-0000-0000-000000000003';scope='/subscriptions/00000000-0000-0000-0000-000000000001';roleDefinitionId='/roles/749f88d5-cbae-40b8-bcfc-e573ddc772fa'}
+        }
+        return ($grants | ConvertTo-Json)
     }
     if ($command -like 'monitor log-analytics workspace show*') { return "$base/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo" }
     if ($command -like 'monitor action-group show*') { return "$base/rg-arc-demo/providers/Microsoft.Insights/actionGroups/ag-arc-demo" }
     if ($command -like 'containerapp show*') { return "$base/rg-arc-demo-infra/providers/Microsoft.App/containerApps/ca-arc-demo-fault" }
-    if ($command -like 'connectedmachine show*') { return "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-app-01" }
+    if ($command -like 'connectedmachine show*') {
+        $index = [Array]::IndexOf($args, '-n')
+        $name = $args[$index + 1]
+        if ($global:SqlManagedTargetMismatch -and $name -eq 'win-sql-01') { $name = 'other-sql' }
+        return "$base/rg-arc-demo/providers/Microsoft.HybridCompute/machines/$name"
+    }
     if ($command -like 'bicep build*') { return '{}' }
     if ($command -like 'deployment sub what-if*') {
         $index = [Array]::IndexOf($args, '--parameters')
@@ -365,6 +473,42 @@ $global:ExtraGrantFixture = $true
 Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'incompatible grant scope/role'
 $global:ExtraGrantFixture = $false
 
+$beforePlatform=$global:CapturedParameters.Count
+$global:PlatformGrantFixture='exact'
+& $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf
+Assert-True ($global:CapturedParameters.Count -eq $beforePlatform+1) 'Exact existing subscription Monitoring Contributor on retained UAMI passes parent preview'
+Assert-True ($global:CapturedParameters[-1] -eq $global:CapturedParameters[0]) 'Platform prerequisite is not adopted into or created by RG role parameters'
+foreach($case in @('disconnected','absent')) {
+    $global:PlatformGrantFixture=$case
+    $beforeWake=$global:CapturedParameters.Count
+    & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf
+    Assert-True ($global:CapturedParameters.Count -eq $beforeWake+1 -and $global:CapturedParameters[-1] -eq $global:CapturedParameters[0]) "Retained platform access does not block preview with disconnected or absent parent: $case"
+}
+foreach($case in @('role','scope','principal','duplicate')) {
+    $global:PlatformGrantFixture=$case
+    Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'incompatible grant scope/role|Duplicate Azure Monitor'
+}
+$global:PlatformGrantFixture=''
+
+$sqlSkinPath = [IO.Path]::GetTempFileName()
+try {
+    $sqlSkin = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+    $sqlSkin.sre.requiredScenarios += 'SQL'
+    $sqlSkin | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sqlSkinPath
+    & $deploy -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath -WhatIf
+    $sqlParameters = $global:CapturedParameters[-1] | ConvertFrom-Json
+    $ids = @($sqlParameters.parameters.additionalManagedResourceIds.value)
+    Assert-True ($ids.Count -eq 3 -and @($ids | Where-Object { $_ -like '*/machines/win-sql-01' }).Count -eq 1) 'SQL rebuild includes exactly the additional SQL host alongside T09/LOB resources'
+    Assert-True (($sqlParameters.parameters.arcRoleAssignmentNames.value | ConvertTo-Json -Compress) -eq ($parameters.parameters.arcRoleAssignmentNames.value | ConvertTo-Json -Compress)) 'SQL uses the existing deterministic Arc group grants without widening IAM'
+    $before = $global:CapturedParameters.Count
+    $global:SqlManagedTargetMismatch = $true
+    Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath -WhatIf } 'different host, group or subscription'
+    Assert-True ($global:CapturedParameters.Count -eq $before) 'Wrong SQL target is rejected before deployment preview/write'
+} finally {
+    $global:SqlManagedTargetMismatch = $false
+    Remove-Item -LiteralPath $sqlSkinPath -Force
+}
+
 & (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
@@ -383,5 +527,5 @@ Write-Host "$count assertions passed. All Azure calls were mocked; no cloud muta
 } finally {
     if ($previousAz) { Set-Item Function:\global:az -Value $previousAz.ScriptBlock }
     else { Remove-Item Function:\az -ErrorAction SilentlyContinue }
-    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters, RetainedDiagnosticsFixture, DriftedDiagnosticsFixture, ExtraGrantFixture -ErrorAction SilentlyContinue
+    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters, RetainedDiagnosticsFixture, DriftedDiagnosticsFixture, ExtraGrantFixture, SqlManagedTargetMismatch, PlatformGrantFixture -ErrorAction SilentlyContinue
 }

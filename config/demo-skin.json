@@ -13,6 +13,7 @@
     "accessLevel": "High",
     "requiredScenarios": ["T09", "T11"],
     "targetArcMachine": "win-app-01",
+    "sqlTargetArcMachine": "win-sql-01",
     "nativeContainerFaultState": "Status",
     "t10Scenario": "HeartbeatByBackingVm",
     "lobFaultMode": "CrashOnProcessing"
@@ -25,7 +26,10 @@
     "lobAlertTitleContains": "lob-arc-app-fault",
     "lobAppName": "Arc LOB Bridge App",
     "lobEventSource": "ArcLobBridgeApp",
-    "lobTaskName": "ArcSreLobApp"
+    "lobTaskName": "ArcSreLobApp",
+    "sqlResponsePlan": "sql-lock-timeout-review-v3",
+    "sqlAlertTitleContains": "Arc SQL lock timeout",
+    "sqlEventSource": "ArcSqlEngineDemo"
   },
   "codeContext": {
     "lobRepositoryUrl": "",

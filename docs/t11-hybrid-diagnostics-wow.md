@@ -5,6 +5,18 @@
 present from the generated `.local/presenter-runsheet.md`. It requires no command below.
 Historical evidence here does not certify a newly reconstructed SRE instance.
 
+## Current presenter path
+
+Use step 5 of the generated `.local/presenter-runsheet.md` for a separately
+approved, read-only SRE chat investigation. The filled-in request queries
+existing app telemetry and the exact configured CPU/memory/free-space counters.
+It asks for evidence and conditional operator steps. No fault is required.
+A prior app-event-only request returned partial report/tool evidence; the expanded
+query has not run. The optional bounded Degraded warning is prepared in source,
+without load or worker restart, and needs its own live window and operator
+cleanup approval. See [the preparation boundary](ai-deploy-handbook.md#host-context-and-an-optional-bounded-lob-warning).
+The older alert-triggered RCA experiment below remains historical.
+
 ## Purpose
 
 This is the customer-facing Arc/on-prem SRE moment.

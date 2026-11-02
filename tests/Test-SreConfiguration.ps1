@@ -64,11 +64,28 @@ try {
         $script:TestConcurrent = ''
         $script:TestAgentReads = 0
         $script:TestSchema = ''
+        $script:TestVisibilityDelay = 0
+        $script:TestNeverVisible = $false
+        $script:TestPending = $null
+        $script:TestPostWriteChange = ''
+        $script:TestReadForbidden = $false
+        $script:TestPutCount = 0
+        $script:TestFinalStale = $false
+        $script:TestFinalReads = 0
+        $script:TestFinalFilters = @()
+        $script:TestSleeps = [Collections.Generic.List[int]]::new()
+        function script:Start-Sleep {
+            param([int]$Seconds)
+            $script:TestSleeps.Add($Seconds)
+        }
         function script:Invoke-RestMethod {
             param($Uri, $Method, $TimeoutSec, $Headers, $ErrorAction, $ContentType, $Body)
             $script:TestCalls.Add("$Method $Uri")
             $collection = if ($Uri -match '/incidentPlayground/handlers') { 'handlers' } elseif ($Uri -match '/incidentFilters') { 'filters' } else { 'subagents' }
             if ($Method -eq 'Get') {
+                if ($script:TestReadForbidden -and $script:TestPutCount) {
+                    throw [Microsoft.PowerShell.Commands.HttpResponseException]::new('Readback forbidden', [Net.Http.HttpResponseMessage]::new([Net.HttpStatusCode]::Forbidden))
+                }
                 if ($script:TestSchema -eq 'empty') { return $null }
                 if ($script:TestSchema -eq 'missing-value') { return @{} }
                 if ($script:TestSchema -eq 'pagination') { return @{ value = @(); nextLink = 'https://untrusted.invalid/next' } }
@@ -80,14 +97,41 @@ try {
                         if ($script:TestConcurrent -eq 'routing') { $script:TestSnapshot.filters += @{ name = 'concurrent-unowned'; properties = @{ isEnabled = $true } } }
                     }
                 }
+                if ($script:TestPending -and $script:TestPending.collection -eq $collection) {
+                    if ($script:TestPostWriteChange -eq 'target') {
+                        $script:TestSnapshot.subagents[0].properties.instructions = 'foreign edit during readback'
+                        $script:TestPending = $null
+                    } elseif ($script:TestPostWriteChange -eq 'routing') {
+                        $script:TestSnapshot.filters += @{ name = 'foreign-enabled'; properties = @{ isEnabled = $true } }
+                        $script:TestPending = $null
+                    } elseif (-not $script:TestNeverVisible -and $script:TestPending.readsRemaining -eq 0) {
+                        $value = $script:TestPending.value
+                        $script:TestSnapshot[$collection] = @($script:TestSnapshot[$collection] | Where-Object name -CNE $value.name) + @($value)
+                        $script:TestPending = $null
+                    } else {
+                        $script:TestPending.readsRemaining--
+                    }
+                }
+                if ($script:TestFinalStale -and $script:TestPutCount -eq 3 -and $collection -eq 'filters') {
+                    $script:TestFinalReads++
+                    if ($script:TestFinalReads -eq 2) { return @{ value = @($script:TestFinalFilters); nextLink = $null } }
+                }
                 if ($collection -eq 'handlers') { return ,$script:TestSnapshot.handlers }
                 return @{ value = @($script:TestSnapshot[$collection]); nextLink = $null }
             }
             if ($script:TestForbidden) {
                 throw [Microsoft.PowerShell.Commands.HttpResponseException]::new('Forbidden', [Net.Http.HttpResponseMessage]::new([Net.HttpStatusCode]::Forbidden))
             }
+            $script:TestPutCount++
             $value = $Body | ConvertFrom-Json -AsHashtable
-            $script:TestSnapshot[$collection] = @($script:TestSnapshot[$collection] | Where-Object name -CNE $value.name) + @($value)
+            if ($script:TestFinalStale -and $script:TestPutCount -eq 3) {
+                $script:TestFinalFilters = $script:TestSnapshot.filters | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            }
+            if ($script:TestVisibilityDelay -or $script:TestNeverVisible -or $script:TestPostWriteChange) {
+                $script:TestPending = @{ collection = $collection; value = $value; readsRemaining = $script:TestVisibilityDelay }
+            } else {
+                $script:TestSnapshot[$collection] = @($script:TestSnapshot[$collection] | Where-Object name -CNE $value.name) + @($value)
+            }
             if ($script:TestTimeoutAfterCommit) { $script:TestTimeoutAfterCommit = $false; throw [TimeoutException]::new('Ambiguous timeout after commit') }
             return $value
         }
@@ -145,8 +189,52 @@ try {
         Throws { & $module { param($Session) Invoke-SreConfigurationRequest $Session Put '/api/v1/incidentPlayground/handlers/old' @{} } $session } 'read-only'
         Check ((& $module { @($script:TestCalls | Where-Object { $_ -like 'Put */api/v1/*' }).Count }) -eq 0) 'Legacy update route cannot reach HTTP'
     } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
+    foreach ($case in @('eventual', 'timeout-eventual', 'never-visible', 'timeout-uncommitted', 'poll-target', 'poll-routing', 'read-forbidden', 'final-eventual')) {
+        & $module {
+            param($Fixture, $Case)
+            $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
+            $script:TestCalls.Clear(); $script:TestSleeps.Clear()
+            $script:TestConcurrent = ''; $script:TestAgentReads = 0
+            $script:TestPending = $null; $script:TestPutCount = 0
+            $script:TestVisibilityDelay = if ($Case -in @('eventual', 'timeout-eventual')) { 3 } else { 0 }
+            $script:TestTimeoutAfterCommit = $Case -in @('timeout-eventual', 'timeout-uncommitted')
+            $script:TestNeverVisible = $Case -in @('never-visible', 'timeout-uncommitted')
+            $script:TestPostWriteChange = switch ($Case) { 'poll-target' { 'target' }; 'poll-routing' { 'routing' }; default { '' } }
+            $script:TestReadForbidden = $Case -eq 'read-forbidden'
+            $script:TestFinalStale = $Case -eq 'final-eventual'
+            $script:TestFinalReads = 0
+        } $fixture $case
+        $other = Join-Path ([IO.Path]::GetTempPath()) "sre-config-$([guid]::NewGuid()).json"
+        $pollSession = $session.Clone()
+        if ($case -in @('never-visible', 'timeout-uncommitted')) { $pollSession.deadlineUtc = [DateTime]::UtcNow.AddSeconds(2) }
+        try {
+            if ($case -in @('eventual', 'timeout-eventual', 'final-eventual')) {
+                $applied = Invoke-SreConfigurationReconcile $desired $pollSession -BackupPath $other
+                Check ($applied.verified -and $applied.changed) "$case is verified after read-only polling"
+                Check ((& $module { $script:TestPutCount }) -eq 3) "$case writes each object exactly once"
+                if ($case -eq 'final-eventual') {
+                    Check ((& $module { $script:TestSleeps.Count }) -eq 1) 'Final whole-configuration readback also tolerates a stale replica without another PUT'
+                } else {
+                    Check (((& $module { @($script:TestSleeps | Select-Object -First 3) }) -join ',') -ceq '2,4,8') 'Read-only verification uses increasing bounded backoff'
+                }
+            } else {
+                $pattern = switch ($case) {
+                    'poll-target' { 'Ambiguous/partial' }
+                    'poll-routing' { 'Unowned enabled' }
+                    'read-forbidden' { 'Readback forbidden' }
+                    default { 'deadline exceeded' }
+                }
+                Throws { Invoke-SreConfigurationReconcile $desired $pollSession -BackupPath $other } $pattern
+                Check ((& $module { $script:TestPutCount }) -eq 1) "$case never replays the PUT or changes the next object"
+            }
+            Check (Test-Path -LiteralPath $other) "$case retains its pre-write backup"
+        } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
+    }
 } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
-    & $module { Remove-Item Function:\Invoke-RestMethod; Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestSchema -Scope Script }
+    & $module {
+        Remove-Item Function:\Invoke-RestMethod, Function:\Start-Sleep
+        Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestSchema,TestVisibilityDelay,TestNeverVisible,TestPending,TestPostWriteChange,TestReadForbidden,TestPutCount,TestFinalStale,TestFinalReads,TestFinalFilters,TestSleeps -Scope Script
+    }
 }
 Write-Host "SRE configuration: $count assertions passed."

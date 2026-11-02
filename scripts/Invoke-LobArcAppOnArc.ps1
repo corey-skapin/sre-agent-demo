@@ -9,6 +9,9 @@
     its fault mode, and collect Application-log/text-log evidence. Use
     -GuestScriptOutputPath to generate the guest script for a manual fallback
     without invoking Azure.
+    WarnForDuration needs an approved warning window. It temporarily selects
+    Degraded without restarting the healthy worker and attempts guarded config
+    restoration; process termination or concurrent changes need operator review.
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
@@ -24,7 +27,7 @@ param(
 
     [string]$MachineName = 'win-app-01',
 
-    [ValidateSet('Deploy', 'Start', 'Stop', 'Status', 'InduceFault', 'ResetFault', 'CollectLogs', 'Remove')]
+    [ValidateSet('Deploy', 'Start', 'Stop', 'Status', 'InduceFault', 'WarnForDuration', 'ResetFault', 'CollectLogs', 'Remove')]
     [string]$Action = 'Status',
 
     [ValidateSet('CrashOnProcessing', 'Degraded')]
@@ -52,6 +55,11 @@ param(
 
     [ValidateRange(5, 300)]
     [int]$LoopSeconds = 15,
+
+    [ValidateRange(30, 180)]
+    [int]$WarningSeconds = 120,
+
+    [switch]$ApproveWarningWindow,
 
     [string]$GuestScriptOutputPath,
 
@@ -350,6 +358,110 @@ $logTail = if (Test-Path -LiteralPath $logPath) { Get-Content -LiteralPath $logP
     }
 }
 
+function Get-WarningGuestScript {
+    $template = @'
+$AppRoot = __APP_ROOT__
+$TaskName = __TASK_NAME__
+$EventSource = __EVENT_SOURCE__
+$WarningSeconds = __WARNING_SECONDS__
+$configPath = Join-Path $AppRoot 'appsettings.json'
+$pidPath = Join-Path $AppRoot 'lob-arc-app.pid'
+$appPath = Join-Path $AppRoot 'LobArcBridgeApp.ps1'
+$original = [IO.File]::ReadAllText($configPath)
+$config = $original | ConvertFrom-Json
+if ($config.FaultMode -ne 'Healthy' -or $config.EventSource -cne $EventSource) {
+    throw 'Warning baseline requires Healthy mode and the exact approved event source.'
+}
+if ([string]$config.LoopSeconds -notmatch '^\d+$' -or [int]$config.LoopSeconds -lt 5 -or [int]$config.LoopSeconds -gt 60) {
+    throw 'Warning baseline requires a known loop interval of 5 to 60 seconds.'
+}
+if ($WarningSeconds -lt 2 * [int]$config.LoopSeconds) {
+    throw 'Warning window must cover at least two app cycles.'
+}
+$tasks = @(Get-ScheduledTask -TaskName $TaskName -TaskPath '\' -ErrorAction Stop)
+if ($tasks.Count -ne 1) { throw 'Warning baseline requires exactly one approved root scheduled task.' }
+$task = $tasks[0]
+$pidText = [IO.File]::ReadAllText($pidPath).Trim()
+if ($task.State -ne 'Running' -or $pidText -notmatch '^[1-9]\d*$') {
+    throw 'Warning baseline requires a running task and a valid existing worker PID.'
+}
+$worker = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $pidText" -ErrorAction Stop
+if (-not $worker -or $worker.ProcessId -ne [int]$pidText -or $worker.CommandLine -notmatch [regex]::Escape($appPath) -or $worker.CommandLine -notmatch [regex]::Escape($configPath)) {
+    throw 'Worker PID does not belong to the approved LOB script/configuration.'
+}
+$workerCreated = $worker.CreationDate
+if (-not $workerCreated) { throw 'Worker creation time is unavailable; refusing an ambiguous process baseline.' }
+function Set-ScenarioConfig([string]$Expected, [string]$Replacement) {
+    $temporary = Join-Path $AppRoot ('.lob-warning-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        if ([IO.File]::ReadAllText($configPath) -cne $Expected) {
+            throw 'Concurrent config change; refusing to overwrite it. Operator inspection required.'
+        }
+        [IO.File]::WriteAllText($temporary, $Replacement, [Text.UTF8Encoding]::new($false))
+        if ([IO.File]::ReadAllText($configPath) -cne $Expected) {
+            throw 'Concurrent config change; refusing to overwrite it. Operator inspection required.'
+        }
+        [IO.File]::Replace($temporary, $configPath, [System.Management.Automation.Language.NullString]::Value)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction Stop }
+    }
+}
+$runId = 'lob-warning-' + [guid]::NewGuid().ToString('N')
+$config.FaultMode = 'Degraded'
+$config.IncidentId = $runId
+$warning = $config | ConvertTo-Json -Depth 10
+$changed = $false
+$operationError = $null
+$start = [datetime]::UtcNow
+try {
+    Set-ScenarioConfig -Expected $original -Replacement $warning
+    $changed = $true
+    Start-Sleep -Seconds $WarningSeconds
+    $end = [datetime]::UtcNow
+    $events = @(Get-WinEvent -FilterHashtable @{
+        LogName = 'Application'; ProviderName = $EventSource; Id = 4200
+        StartTime = $start.ToLocalTime(); EndTime = $end.ToLocalTime()
+    } -ErrorAction Stop)
+    if ($events.Count -eq 0) { throw 'No Event 4200 observed during the warning window; do not retry automatically.' }
+} catch {
+    $operationError = $_
+} finally {
+    if ($changed) {
+        try {
+            Set-ScenarioConfig -Expected $warning -Replacement $original
+        } catch {
+            throw "Warning cleanup unverified. Inspect the exact config and use separately approved operator ResetFault only if appropriate. Operation: $operationError Cleanup: $_"
+        }
+    }
+}
+if ($operationError) { throw $operationError }
+$tasks = @(Get-ScheduledTask -TaskName $TaskName -TaskPath '\' -ErrorAction Stop)
+if ($tasks.Count -ne 1) { throw 'Config restored, but the approved root task is ambiguous. Operator inspection required.' }
+$task = $tasks[0]
+$worker = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $pidText" -ErrorAction Stop
+if ($task.State -ne 'Running' -or -not $worker -or $worker.ProcessId -ne [int]$pidText -or $worker.CreationDate -ne $workerCreated -or [IO.File]::ReadAllText($pidPath).Trim() -ne $pidText) {
+    throw 'Config restored, but the original worker/task is not verified running. Operator inspection required.'
+}
+if ([IO.File]::ReadAllText($configPath) -cne $original) {
+    throw 'Config restoration readback differs from baseline. Operator inspection required.'
+}
+[pscustomobject]@{
+    Action = 'WarnForDuration'; RunId = $runId
+    StartedAtUtc = $start.ToString('o'); WarningEndedAtUtc = $end.ToString('o')
+    RestoredAtUtc = [datetime]::UtcNow.ToString('o')
+    WarningSeconds = $WarningSeconds; WarningEvents = $events.Count
+    FaultMode = 'Healthy'; TaskState = [string]$task.State; WorkerPid = [int]$pidText
+    ConfigRestored = $true
+} | ConvertTo-Json -Compress
+'@
+    Expand-GuestTemplate -Template $template -Tokens @{
+        APP_ROOT = ConvertTo-GuestLiteral $AppRoot
+        TASK_NAME = ConvertTo-GuestLiteral $TaskName
+        EVENT_SOURCE = ConvertTo-GuestLiteral $EventSource
+        WARNING_SECONDS = [string]$WarningSeconds
+    }
+}
+
 function New-RemoveGuestScript {
     $template = @'
 $AppRoot = __APP_ROOT__
@@ -385,6 +497,7 @@ function Get-GuestScript {
             $incidentId = "t11-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
             return New-SetFaultGuestScript -Mode $FaultMode -IncidentId $incidentId
         }
+        'WarnForDuration' { return Get-WarningGuestScript }
         'ResetFault' { return New-SetFaultGuestScript -Mode 'Healthy' -IncidentId 'reset' }
         'Remove' { return New-RemoveGuestScript }
     }
@@ -454,6 +567,9 @@ Assert-SreName -Value $EventSource -Description 'event source' -Pattern '^[A-Za-
 Assert-SreName -Value $TaskName -Description 'task name' -Pattern '^[A-Za-z][A-Za-z0-9_.-]{0,63}$'
 if ($FaultMode -notin @('CrashOnProcessing', 'Degraded')) { throw 'Invalid LOB fault mode in skin.' }
 Assert-SreContextIds -SubscriptionId $SubscriptionId -TenantId $TenantId
+if ($Action -eq 'WarnForDuration' -and -not $ApproveWarningWindow -and -not $WhatIfPreference -and -not $GuestScriptOutputPath) {
+    throw 'WarnForDuration requires -ApproveWarningWindow after explicit approval of the host, duration, alert/notification effects and operator cleanup boundary.'
+}
 
 $guestScript = "`$ErrorActionPreference = 'Stop'`n$(Get-GuestScript)"
 
@@ -466,6 +582,11 @@ if ($GuestScriptOutputPath) {
         GuestScriptOutputPath = $resolvedGuestScriptPath
         ManualFallback = 'Copy this script to the target Windows Arc server and run it in an elevated PowerShell session.'
     }
+    return
+}
+
+if ($Action -eq 'WarnForDuration' -and $WhatIfPreference) {
+    $null = $PSCmdlet.ShouldProcess("Arc machine '$MachineName' in '$ArcResourceGroupName'", "run a $WarningSeconds second degraded warning with guarded config restoration; may trigger the existing alert/notifications")
     return
 }
 

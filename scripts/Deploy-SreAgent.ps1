@@ -212,6 +212,12 @@ if ('T10' -in $requiredScenarios -or 'T11' -in $requiredScenarios) {
     $machineId = Get-AzTsv -Arguments @('connectedmachine', 'show', '-g', $ArcResourceGroupName, '-n', $machineName, '--query', 'id') -Description 'required Arc machine'
     $AdditionalManagedResourceIds += $machineId
 }
+if ('SQL' -in $requiredScenarios) {
+    $sqlMachineId = Get-AzTsv -Arguments @('connectedmachine', 'show', '-g', $ArcResourceGroupName, '-n', $skin.sre.sqlTargetArcMachine, '--query', 'id') -Description 'required SQL Arc machine'
+    $expectedSqlMachineId = "/subscriptions/$SubscriptionId/resourceGroups/$ArcResourceGroupName/providers/Microsoft.HybridCompute/machines/$($skin.sre.sqlTargetArcMachine)"
+    if ($sqlMachineId -ine $expectedSqlMachineId) { throw 'SQL managed-resource lookup returned a different host, group or subscription; no deployment attempted.' }
+    $AdditionalManagedResourceIds += $sqlMachineId
+}
 $AdditionalManagedResourceIds = @($AdditionalManagedResourceIds | Sort-Object -Unique)
 
 # Adopt existing role names for this principal; never attempt to overwrite an old principal's assignment.
@@ -248,8 +254,11 @@ $retainedAssignments = @()
 if ($principalId) {
     $retainedAssignments = @(Get-SreArmRoleAssignments -SubscriptionId $SubscriptionId -ScopeId "/subscriptions/$SubscriptionId" -PrincipalId $principalId)
     $allowedRoles = if ($AccessLevel -eq 'Low') { @('73c42c96-874c-492b-b04d-ab87d138a893', 'acdd72a7-3385-48ef-bd42-f606fba81ae7') } else { @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c') }
+    $platformGrants = @($retainedAssignments | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
+    if ($platformGrants.Count -gt 1) { throw 'Duplicate Azure Monitor platform grants; reconcile explicitly before Active; no grants changed.' }
     if (@($retainedAssignments | Where-Object {
-        $_.principalId -ne $principalId -or $_.scope -notin @($arcResourceGroupId, $infraResourceGroupId) -or ($_.roleDefinitionId -split '/')[-1] -notin $allowedRoles
+        -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+        ($_.principalId -ne $principalId -or $_.scope -notin @($arcResourceGroupId, $infraResourceGroupId) -or ($_.roleDefinitionId -split '/')[-1] -notin $allowedRoles)
     }).Count) { throw "$AccessLevel profile has incompatible grant scope/role. Reconcile explicitly before Active; no grants changed." }
 }
 foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
@@ -257,6 +266,7 @@ foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
     if ($principalId) {
         $assignments = Invoke-AzCli -Arguments @('role', 'assignment', 'list', '--scope', $scope, '--include-inherited', '--fill-principal-name', 'false', '-o', 'json') | ConvertFrom-Json
         foreach ($assignment in @($assignments | Where-Object { $_.principalId -eq $principalId })) {
+            if (Test-SreAzMonitorPlatformGrant $assignment $SubscriptionId $principalId) { continue }
             $roleId = ($assignment.roleDefinitionId -split '/')[-1]
             if ($roleId -notin $allowedRoles -or $assignment.scope -ine $scope) {
                 throw "$AccessLevel profile requested but existing incompatible or inherited grant $roleId remains at $($assignment.scope). Obtain scoped approval to reconcile it before Active; incremental deployment does not revoke grants."
