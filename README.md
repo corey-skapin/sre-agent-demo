@@ -183,9 +183,14 @@ Contributor assignment on the live UAMI. Opt in with
 `Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` only after IAM approval, or
 preview and approve the [standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
 Without it, selected-AzMonitor readiness fails rather than silently granting access.
-The grant does not connect an incident platform: if connection setup remains
-incomplete, separately authorize the documented **Incidents > Connect an incident
-platform > Azure Monitor** step; do not enable a quickstart Autonomous plan.
+IaC sets `incidentManagementConfiguration.type = AzMonitor`; the script supplies
+the separately approved role grant. A portal connection click is **not a required
+rebuild step**. Readiness reports the ARM selection as `incident-platform`, not
+scanner health or alert-delivery proof. If it reports an unset/non-AzMonitor
+platform, use the separately authorized [portal fallback](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus
+the scripted grant remains **unproven until the rebuild and authorized delivery
+verification**.
 
 ### Complete Ready state
 

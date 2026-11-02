@@ -128,7 +128,7 @@ function Get-SreReadinessReport {
             $platformType = if ($incidentConfiguration -and $incidentConfiguration.Value) { $incidentConfiguration.Value.PSObject.Properties['type'] }
             $incidentPlatform = if ($platformType) { [string]$platformType.Value } else { '' }
             $monitorConnected = $incidentPlatform -eq 'AzMonitor'
-            $platformMessage = if ($monitorConnected) { 'Azure Monitor incident source.' } else { "WARNING: alerts won't reach the agent until Azure Monitor is connected. Retained platform access alone is not incident connectivity." }
+            $platformMessage = if ($monitorConnected) { 'ARM selects Azure Monitor. Check azure-monitor-alert-access separately; selection is not scanner health or alert-delivery proof.' } else { 'WARNING: ARM does not select Azure Monitor. Review the separately authorized portal fallback; retained access alone does not establish connectivity.' }
             Add-Check 'incident-platform' $agentId $(if ($monitorConnected) { 'pass' } else { 'pending' }) 'AzMonitor' $incidentPlatform $platformMessage $false
             if (-not $monitorConnected) { Write-Warning $platformMessage }
             $attachedIdentityIds = @($agent.identity.userAssignedIdentities.PSObject.Properties.Name)
@@ -256,7 +256,7 @@ function Get-SreReadinessReport {
                     ($_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles)
                 })
                 Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count -or $platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'Requested workload-group profile plus at most one exact AzMonitor platform grant' @($excess | ForEach-Object { $_.id }) "Exact AzMonitor platform grants: $($platformGrants.Count); excess grants: $($excess.Count). Exact retained subscription Monitoring Contributor is permitted with or without a parent or connected incident platform. No role is created or revoked."
-                Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is connected' @($platformGrants | ForEach-Object { $_.id }) 'A connected Azure Monitor scanner requires subscription Monitoring Contributor. Missing access needs the supported separately authorized connection setup, not an implicit role grant.' $monitorConnected
+                Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is selected' @($platformGrants | ForEach-Object { $_.id }) 'Azure Monitor scanning requires subscription Monitoring Contributor. Use -GrantAzureMonitorAlertAccess only after explicit IAM approval; IaC supplies platform selection, not this grant.' $monitorConnected
             }
             foreach ($rg in $groups[1..2]) {
                 $scope = "$base/$rg"

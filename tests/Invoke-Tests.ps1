@@ -281,13 +281,15 @@ try {
         Assert-True ($healthyReadiness.status -eq 'pass' -and $healthyReadiness.schemaVersion -eq 1) "$state passes when all verifiable required checks pass"
         $telemetry = @($healthyReadiness.checks | Where-Object id -eq 'telemetry-and-alerts')
         Assert-True ($telemetry.Count -eq 1 -and -not $telemetry[0].required -and $telemetry[0].status -eq 'skipped' -and $null -eq $telemetry[0].observed -and $telemetry[0].message -match 'Not evaluated') 'Rehearsal is advisory, explicitly unevaluated and never success-shaped'
+        $platform = @($healthyReadiness.checks | Where-Object id -eq 'incident-platform')
+        Assert-True ($platform.Count -eq 1 -and -not $platform[0].required -and $platform[0].status -eq 'pass' -and $platform[0].observed -ceq 'AzMonitor' -and $platform[0].message -match 'not scanner health or alert-delivery proof') 'ARM type alone reports configured platform without demanding connection fields or claiming delivery'
     }
     foreach ($case in @('platform-exact','platform-role','platform-scope','platform-principal','platform-duplicate','platform-disconnected','platform-unset','platform-missing')) {
         & $readinessModule { param($Case) $script:ReadinessFailure=$Case } $case
         $grantReport=Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
         Assert-True ($grantReport.status -eq $(if ($case -in @('platform-exact','platform-disconnected','platform-unset')) {'pass'} else {'fail'})) "Readiness preserves exact platform access independently of connectivity: $case; $($grantReport.checks | Where-Object status -eq 'fail' | ConvertTo-Json -Depth 10 -Compress)"
         if ($case -in @('platform-disconnected','platform-unset')) {
-            Assert-True (@($grantReport.checks | Where-Object { $_.id -eq 'incident-platform' -and -not $_.required -and $_.status -eq 'pending' -and $_.message -match "WARNING: alerts won't reach the agent until Azure Monitor is connected" }).Count -eq 1) 'Disconnected or unset incident platform is an explicit warning, not a failure or proof of alert readiness'
+            Assert-True (@($grantReport.checks | Where-Object { $_.id -eq 'incident-platform' -and -not $_.required -and $_.status -eq 'pending' -and $_.message -match 'WARNING: ARM does not select Azure Monitor' -and $_.message -match 'portal fallback' }).Count -eq 1) 'Disconnected or unset incident platform is an explicit fallback warning, not a failure or proof of alert readiness'
         }
         if ($case -eq 'platform-missing') {
             Assert-True (@($grantReport.checks | Where-Object { $_.id -eq 'azure-monitor-alert-access' -and $_.required -and $_.status -eq 'fail' }).Count -eq 1) 'AzMonitor selection alone does not establish required scanner access'
