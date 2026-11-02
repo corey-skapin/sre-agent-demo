@@ -201,6 +201,12 @@ enabled three-hour cooldown, tools, identity and group grants remain unchanged.
 For a fresh deployment or rebuild, review `Deploy-SreAgent.ps1 -WhatIf` and obtain
 authorization for its parent update. For an existing Running parent, heed the
 [parent preview warning](sre-response-plan-automation.md#existing-parent-preview-warning).
+Before that preview, complete the [rebuild prerequisites](../README.md#rebuild-prerequisites):
+the Arc-owned Container App and restart alert, plus the separately authorized
+LOB alert creation and LOB app deployment, using the same absolute private skin.
+Install the required CLI extensions and preserve the Windows CLI's bundled
+Python launcher. Missing scenario prerequisites fail their own readiness checks;
+they do not hide later handler, plan or grant findings.
 Render/Inspect configuration, approve its exact changes, Apply with a new external backup and
 repeat to prove no-op. Stop on unrelated differences, denial or ambiguous writes.
 Required SRE readiness also validates the exact SQL alert predicate, owner tags,

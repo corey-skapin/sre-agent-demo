@@ -146,6 +146,8 @@ function Get-SreReadinessReport {
             Add-Check 'managed-resources' $agentId $(if ($missing.Count) { 'fail' } else { 'pass' }) $expectedManaged $p.knowledgeGraphConfiguration.managedResources "Missing managed IDs: $($missing -join ', ')"
             foreach ($scenario in $scenarios) {
                 if ($scenario -eq 'T09') {
+                    $appId = "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault"
+                    try {
                     $app = Read-AzJson @('containerapp', 'show', '-g', $groups[2], '-n', "ca-$prefix-fault")
                     $healthy = $app.properties.provisioningState -eq 'Succeeded' -and $app.properties.runningStatus -eq 'Running'
                     $faultFlags = @($app.properties.template.containers | ForEach-Object { $_.env } | Where-Object name -EQ 'SIMULATE_CRASH')
@@ -157,30 +159,50 @@ function Get-SreReadinessReport {
                     })
                     $healthy = $healthy -and $serving.Count -gt 0
                     Add-Check 'T09-resource-health' $app.id $(if ($healthy) { 'pass' } else { 'fail' }) 'Healthy active revision serving traffic with replicas, no SIMULATE_CRASH=true' $app.properties.runningStatus 'Inspects actual revision health/replicas/traffic; active/provisioned alone is insufficient. No fault injection.'
+                    } catch {
+                        Add-Check 'T09-resource-health' $appId 'fail' 'Readable Container App and serving revisions' $null $_.Exception.Message
+                    }
+                    $alertId = "$base/$($groups[2])/providers/Microsoft.Insights/metricAlerts/alert-$prefix-containerapp-restarts"
+                    try {
                     $alert = Read-AzJson @('monitor', 'metrics', 'alert', 'show', '-g', $groups[2], '-n', "alert-$prefix-containerapp-restarts")
-                    $alertHealthy = $alert.enabled -and $alert.severity -eq 2 -and $app.id -in $alert.scopes
+                    $alertHealthy = $alert.enabled -and $alert.severity -eq 2 -and $appId -in $alert.scopes
                     Add-Check 'T09-alert' $alert.id $(if ($alertHealthy) { 'pass' } else { 'fail' }) 'Enabled Sev2, Container App scope' $alert.enabled 'Azure Monitor signal configuration, not firing-state proof.'
+                    } catch {
+                        Add-Check 'T09-alert' $alertId 'fail' 'Readable enabled Sev2 metric alert' $null $_.Exception.Message
+                    }
                 } else {
                     $machineName = if ($scenario -eq 'SQL') { $skin.sre.sqlTargetArcMachine } else { $skin.sre.targetArcMachine }
-                    $machine = Read-AzJson @('connectedmachine', 'show', '-g', $groups[1], '-n', $machineName)
                     $expectedMachineId = "$base/$($groups[1])/providers/Microsoft.HybridCompute/machines/$machineName"
+                    try {
+                    $machine = Read-AzJson @('connectedmachine', 'show', '-g', $groups[1], '-n', $machineName)
                     $machineStatus = if ($scenario -eq 'SQL' -and $machine.id -ine $expectedMachineId) { 'fail' } elseif ($machine.status -eq 'Connected') { 'pass' } else { 'pending' }
                     Add-Check "$scenario-resource-health" $expectedMachineId $machineStatus 'Connected intended Arc host' $machine.status 'Arc connection only; guest app/SQL engine/telemetry verification remains separate.'
+                    } catch {
+                        Add-Check "$scenario-resource-health" $expectedMachineId 'fail' 'Readable connected intended Arc host' $null $_.Exception.Message
+                    }
                     if ($scenario -eq 'T11') {
                         $alertId = "$base/$($groups[1])/providers/Microsoft.Insights/scheduledQueryRules/alert-$prefix-lob-arc-app-fault"
+                        try {
                         $alert = Read-AzJson @('resource', 'show', '--ids', $alertId)
                         $ap = $alert.properties
                         $alertHealthy = $ap.enabled -and $ap.severity -eq 2 -and $ap.displayName.Contains($skin.labels.lobAlertTitleContains)
                         Add-Check 'T11-alert' $alertId $(if ($alertHealthy) { 'pass' } else { 'fail' }) "Enabled Sev2, title contains $($skin.labels.lobAlertTitleContains)" $ap.displayName 'Literal title keyword must align with the intended plan; region changes are not implied.'
+                        } catch {
+                            Add-Check 'T11-alert' $alertId 'fail' 'Readable enabled Sev2 LOB alert with the skin title' $null $_.Exception.Message
+                        }
                     }
                     if ($scenario -eq 'SQL') {
                         $alertId = "$base/$($groups[1])/providers/Microsoft.Insights/scheduledQueryRules/al-$prefix-sql-lock-timeout"
+                        try {
                         $alert = Read-AzJson @('resource', 'show', '--ids', $alertId)
                         $alertHealthy = Test-SreSqlAlertDefinition -Alert $alert -AlertId $alertId -MachineResourceId $expectedMachineId `
                             -WorkspaceId "$base/$($groups[1])/providers/Microsoft.OperationalInsights/workspaces/law-$prefix" `
                             -ActionGroupId "$base/$($groups[1])/providers/Microsoft.Insights/actionGroups/ag-$prefix" `
                             -DisplayName "$($skin.labels.sqlAlertTitleContains) - $prefix"
                         Add-Check 'SQL-alert' $alertId $(if ($alertHealthy) { 'pass' } else { 'fail' }) 'Owned enabled Sev2, exact SQL host/source/1222 JSON query, LAW/Action Group, PT1M/PT15M, count>0/1of1, autoMitigate' $alert.properties 'Strict source contract with Arc sql-incident-alert.bicep; permits whitespace differences only. Does not prove receiver delivery, current firing state or SQL health.'
+                        } catch {
+                            Add-Check 'SQL-alert' $alertId 'fail' 'Readable owned SQL lock-timeout alert' $null $_.Exception.Message
+                        }
                     }
                 }
             }
