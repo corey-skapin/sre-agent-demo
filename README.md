@@ -143,6 +143,15 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 
 No companion Arc files or workloads are changed by this repo.
 
+Azure Monitor intake also requires exactly one subscription-scoped Monitoring
+Contributor assignment on the live UAMI. Opt in with
+`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` only after IAM approval, or
+preview and approve the [standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+Without it, selected-AzMonitor readiness fails rather than silently granting access.
+The grant does not connect an incident platform: if connection setup remains
+incomplete, separately authorize the documented **Incidents > Connect an incident
+platform > Azure Monitor** step; do not enable a quickstart Autonomous plan.
+
 ### Complete Ready state
 
 `-ParentOnly` explicitly acknowledges that Bicep deploys only the control plane.

@@ -120,6 +120,12 @@ try {
     Check ($duplicateParked.status -eq 'pass' -and @($duplicateParked.checks | Where-Object { $_.id -eq 'retained-platform-grant' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Duplicate grants are surfaced without confusing a parked cost-state with Active readiness'
     Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Duplicate Azure Monitor'
     Reset-Fixture
+    $global:LifecycleState.assignments += $platformGrant
+    & $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf
+    Check ($global:LifecycleState.assignments.Count -eq 8 -and @($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Removed preview retains all seven UAMI grants plus parent admin'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Full Removed deletes the exact subscription prerequisite together with six workload grants and parent admin'
+    Reset-Fixture
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -PreviousIdentityPrincipalId '00000000-0000-0000-0000-000000000099' -Confirm:$false } 'differs'
     Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Mismatched saved principal fails before mutation'
     Reset-Fixture

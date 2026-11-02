@@ -688,7 +688,8 @@ outside the requested profile at the two workload groups, with one narrow
 exception: an existing subscription Monitoring Contributor grant on the exact
 retained UAMI, regardless of whether the parent exists or has a connected incident platform.
 This is the documented [Azure Monitor alert-management prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-It is platform-managed, not created by this repo. Other roles, scopes,
+It can be adopted or explicitly created with `-GrantAzureMonitorAlertAccess`.
+Other roles, scopes,
 principals or duplicate grants remain rejected. The same exact-grant tolerance
 applies before wake, so retained platform access does not block reconstruction
 after parent deletion. Hibernated readiness reports it separately from workload
@@ -771,10 +772,46 @@ The [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/az
 requires that role and documents **Incidents > Connect an incident platform >
 Azure Monitor** if connection setup remains incomplete. Obtain separate approval
 for that supported portal step and any platform-managed access consequence; the
-repo never creates the subscription role. Do not disconnect another platform,
+grant switch authorizes only the one exact subscription assignment, not a platform
+connection or quickstart plan. Do not disconnect another platform,
 replay guessed connection APIs or redeploy an existing parent to hide a warning.
 Compiled-template and mocked wake checks establish source wiring, not a live
 recreation/delivery test.
+
+### Explicit Azure Monitor access grant
+
+The subscription grant is **opt-in**, not an incidental portal side effect.
+`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` ensures it after parent
+deployment and before handler configuration, using the newly returned UAMI
+principal. Without that switch deployment does not grant subscription access;
+the readiness check fails when AzMonitor is selected but its grant is missing.
+The caller needs permission to assign roles at the subscription. No account
+switch, Graph lookup, broad role reconciliation or permission bypass occurs.
+
+For a separate IAM approval, omit the deploy switch and use:
+
+```powershell
+.\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath <ABSOLUTE_PRIVATE_FOLDER>\sre-skin.json `
+  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -WhatIf
+
+# After approving that exact principal, role and subscription scope:
+.\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath <ABSOLUTE_PRIVATE_FOLDER>\sre-skin.json `
+  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
+```
+
+WhatIf creates no local files and previews at most one assignment. An existing
+exact assignment is a no-op, including one originally named by the portal.
+A fresh identity's principal cannot be previewed before Azure creates it; the
+deploy preview says so rather than inventing a principal. Duplicate exact
+grants, identity mismatch and inspection denial stop the operation. Creation
+is submitted once and verified by bounded read-back; on a failed or ambiguous
+request inspect the exact principal before retrying. Normal Hibernate retains
+this grant; full Remove includes it in its exact UAMI assignment inventory.
+ARM read-back does not prove effective authorization or incident delivery.
 
 For the next demo, activate and verify Arc first. Deploy the SRE parent using the
 retained identity, then render/Inspect/approve/Apply the versioned modern custom agent and
