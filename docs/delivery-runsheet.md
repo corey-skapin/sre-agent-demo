@@ -32,7 +32,7 @@ Windows server. Keep those two workloads distinct.
 
 Open [{{agentName}}]({{agentUrl}}). Open the existing response plans using the
 navigation visible in this portal. Current Learn describes
-[Builder > Incident response plans](https://learn.microsoft.com/azure/sre-agent/response-plan);
+[Incidents > Triggers & response plans](https://learn.microsoft.com/azure/sre-agent/incident-response-plans);
 if the deployed layout differs, use its visible response-plan list.
 
 Inspect these existing entries without editing:
@@ -56,8 +56,12 @@ card during this walkthrough or accept a request for additional permissions.
 
 ## 4. Walk through an existing investigation
 
-In the agent's incident list, open an existing Container App incident if one is
-available. Check its title and timestamp before describing it. Walk through
+For a navigation-only rehearsal, prefer the existing SQL and LOB investigations
+whose IDs and creation times the operator has freshly verified. Open the original
+completed investigation report, not only the later generated Session Insights:
+those summaries can repeat overconfident claims that the report qualified.
+Then open an existing Container App incident if available. Check each title and
+timestamp before describing it. Walk through
 the alert, evidence, proposed reset and recorded execution result in that order.
 
 **Say:** "A proposed command shows intent. The completed tool result and the
@@ -192,9 +196,10 @@ The SQL and LOB warnings run **sequentially**, each with its own approved window
 and verified cleanup. Do not trigger either during a navigation-only rehearsal.
 
 With the exact SQL window released, the AI runs the Arc-owned incident helper.
-It creates a real blocker/victim on one owned `dbo.IncidentProbe` row in
-`ARCDEMO` / `ArcDemoOrders`. The victim has a five-second lock timeout;
-the blocker rolls back after twelve seconds. Normal Orders work is preserved.
+It creates a real blocker/victim on one owned checkpoint row in
+`ARCDEMO` / `ArcDemoOrders`, not the retired probe table.
+The victim has a five-second lock timeout;
+the blocker rolls back within the approved bounded window. Normal Orders work is preserved.
 No service stop, artificial host load, corruption or SQL repair is part of it.
 
 **Say:** "This is a real SQL lock timeout. The controlled transaction has already

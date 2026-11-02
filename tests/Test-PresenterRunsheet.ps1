@@ -88,6 +88,8 @@ try {
     }
     $sqlText = Get-Content -LiteralPath (Render) -Raw
     Check ($sqlText.Contains('sql-review') -and $sqlText.Contains('Arc SQL lock timeout')) 'Actual optional SQL route appears with its exact spaced title'
+    Check ($sqlText.Contains('owned checkpoint row') -and $sqlText -notmatch 'dbo\.IncidentProbe') 'SQL scene uses the current checkpoint contract, not the retired table'
+    Check ($sqlText.Contains('original') -and $sqlText.Contains('Session Insights') -and $sqlText.Contains('freshly verified')) 'Existing investigation walkthrough distinguishes verified reports from generated summaries'
     Check ($sqlText.Contains($context.sql.machineResourceId) -and $sqlText.Contains($context.sql.alertResourceId)) 'SQL scene uses explicit host/alert resource links'
     Check ($sqlText.Contains('actual automatically created') -and $sqlText.Contains('sequentially') -and $sqlText.Contains('6001')) 'SQL scene requires automatic delivery, recovery evidence and sequential faults'
     Check ($sqlText.Contains('normal Orders') -or $sqlText.Contains('Normal Orders')) 'SQL scene preserves the normal worker'
