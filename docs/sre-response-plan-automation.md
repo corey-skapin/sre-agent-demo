@@ -222,6 +222,10 @@ observed from SQL, not inserted as a predetermined event value. `ARCDEMO` and
 verifies the emitter and canonical alert descriptions before SRE clones any
 temporary rule. Source readiness pins version 2, exact host/source/state/error;
 deployment and a new investigation remain separate live gates.
+The LOB 4100 message's source wording is also neutralized to "Fatal
+order-processing error" without changing its event ID, exit behavior or config
+controls. This source-only string change is not deployed to the running LOB
+worker; the approved warning uses the unchanged 4200 path.
 
 #### Change Tracking feasibility: assessment only
 

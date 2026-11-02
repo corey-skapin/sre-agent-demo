@@ -52,6 +52,9 @@ try {
     $lobAlertSource = Get-Content -LiteralPath (Join-Path $root 'scripts\New-LobArcAppMonitorAlert.ps1') -Raw
     Check ($lobAlertSource.Contains('description = "The application on $MachineName reported a degraded dependency (event 4200).') -and
         $lobAlertSource -notmatch 'description\s*=\s*"T11') 'LOB rebuild description is operational rather than scenario narration'
+    $lobWorkerSource = Get-Content -LiteralPath (Join-Path $root 'samples\lob-arc-app\LobArcBridgeApp.ps1') -Raw
+    Check ($lobWorkerSource.Contains('Fatal order-processing error. incidentId=') -and
+        $lobWorkerSource -notmatch 'fault induced for T11') 'Future fatal-event wording stays neutral without changing the event mechanism'
     Check ($instructions.Contains('distinguish returned summary rows from source') -and $instructions.Contains('query result row count')) 'Perf sample counts are not reported as aggregated result rows'
     Check ($instructions.Contains('Never infer whether an incident platform is connected from optional connector') -and $instructions.Contains('Do not inspect connector files') -and $instructions.Contains('originating incident thread')) 'Optional connector absence does not contradict actual automatic incident delivery'
     Check ($instructions.Contains('Say "delivered via Azure Monitor" only when actual alert or audit metadata proves it')) 'Delivery wording requires actual alert or audit evidence'
