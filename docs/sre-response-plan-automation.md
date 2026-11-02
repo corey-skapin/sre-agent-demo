@@ -233,6 +233,58 @@ so these headers and exact KQL do not independently verify every numerical
 statement in the narrative. Detailed thread identities and raw captures stay in
 private evidence, not tracked configuration.
 
+#### LOB comparison from the single authorized rerun
+
+The one warning interval produced eight 4200 records from **02:19:23 to
+02:21:08 UTC**, followed by a 4000 healthy transaction heartbeat at
+**02:21:23 UTC**. The fresh automatic Review investigation completed at
+**02:28:43 UTC**. The operator's guarded configuration restoration and independent
+Status read both reported the original process still running; the SRE agent
+made no guest change or repair.
+
+| Aspect | Earlier LOB report | New LOB report |
+|---|---|---|
+| Cause | Instruction-supplied simulation/no-load story | Discovered a matching operator Run Command and read its actual output; ranked that change against a dependency problem and host pressure. |
+| Current state | Described warnings as ongoing despite recovery/ingestion timing | Observed resumed 4000 records, stated their age and separated application-reported health from unverified dependency health. |
+| Host metrics | Excluded pressure too confidently | "Not observed in the available counters"; only two during-interval samples, host not process metrics. |
+| Impact | Mechanism implied a harmless rehearsal | Customer impact, dependency identity and dependency health remain unknown; severity alone does not establish criticality. |
+| Memory and wording | Repeated historical simulation framing | Read the old notes, but did not repeat their unsupported cause. Operational mechanism wording is grounded in current returned Run Command fields. |
+
+This result reads as a representative investigation of an operator-associated
+configuration change. Its discovery of the warning mode is not itself a
+failure: current Run Command output actually exposes the action, duration,
+warning count and restored state. Hiding that evidence would manufacture a
+different incident. The report qualifies the output's provenance, does not
+claim the underlying dependency was independently checked and recommends human
+review of the change and dependency telemetry.
+
+All six KQL calls used the customer ID resolved from current workspace metadata
+before querying; headers were 2 event summaries, 32 raw events, 12 counter
+summaries, 33 raw counter rows, 1 combined heartbeat/change/error summary and
+1 freshness-check row. The 80-record audit and message capture also preserve
+the actual read-only Run Command results. Several KQL audit outputs still
+truncate at 1,003 characters, so not every narrative value is independently
+verified. The report explicitly notes the activity-log cap can truncate records
+before client-side host filtering. Old memory may still guide query selection;
+the captured narrative does not prove a clean-memory baseline.
+
+Exactly one rerun per scenario was used. No additional SQL, LOB or Container App
+incident was triggered to improve the write-up. SQL's residual terminology and
+the lack of a new SQL/Container App test after the final wording refinement
+remain explicit limitations, not successful live gates.
+
+LOB restoration was verified at **02:36:20 UTC**, after the actual last warning
+plus eleven minutes and the completed capture window. Both canonical rules
+are enabled, both representative temporary rules are absent, and all three
+response filters retain merge-enabled three-hour routing in Review mode.
+The running SRE agent was not stopped, rebuilt or deprived of its history.
+Any historical canonical replay remains distinct from another source incident.
+Final read-only readiness returned **pass at 02:38:43 UTC**, with all required
+checks passing. Optional incident-loop evidence and repository connection checks
+remain skipped, not certified. An Azure CLI extension `SyntaxWarning` was
+surfaced separately as an optional inspection warning; it did not alter required
+results and was not repaired as part of this scope.
+
 #### Audit of the earlier SQL and LOB investigations
 
 The saved first SQL run, SQL rerun and LOB investigation show multiple sources
@@ -498,8 +550,11 @@ but fired again at 00:39:50 against the older 00:17:16-00:32:16 evaluation
 window. No new SQL detection occurred; the system resolved that alert at
 00:50:51. The existing canonical SRE thread then exposed merged count 2 and a
 last-fired timestamp matching the replay, with no new canonical thread or
-contemporaneous agent/query execution in the captured audit. Its merged-ID
-array did not expose the replay ID, so do not claim exact-ID inclusion there.
+contemporaneous agent/query execution in the captured audit. Its initial
+merged-ID array omitted the replay ID; a later read included it. After the
+next canonical restoration, the same thread's merged count rose to 3 with a
+02:11:09 UTC last-fired timestamp. Treat each read's actual IDs/counts/times
+separately rather than assuming the array is a complete, synchronous record.
 Later `TrajectoryInsight` messages summarize the old investigation, not a new
 query run; those summaries can repeat old incorrect conclusions.
 
