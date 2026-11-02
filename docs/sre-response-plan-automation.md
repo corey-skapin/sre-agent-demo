@@ -83,6 +83,13 @@ unperformed operations within the approved scope.
 This delay occurred during both the one-time SQL cooldown reduction and its
 restoration. Fresh reads proved the writes committed; neither PUT was repeated.
 The helper now polls instead of treating the first stale read as failure.
+The representative SQL preparation also exposed service `properties.etag`
+rotation while property visibility caught up. Verification excludes that
+post-write version token, but the pre-write concurrency comparison still checks
+it. A changed token alone after our PUT is not a partial configuration change;
+actual foreign property/routing changes still stop. Regression cases cover
+both delayed visibility with rotated etags and an etag-only concurrent edit
+before PUT. The successful cooldown write was not replayed.
 
 If the contract changes, use the supported SRE portal following current
 [subagent guidance](https://learn.microsoft.com/azure/sre-agent/create-subagent)

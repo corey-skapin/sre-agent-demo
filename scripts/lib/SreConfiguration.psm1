@@ -100,12 +100,16 @@ function Test-SreProperties {
 }
 
 function Get-SreComparableJson {
-    param([AllowNull()][object]$Value)
+    param([AllowNull()][object]$Value, [switch]$IgnoreVersionToken)
     if ($null -eq $Value) { return 'null' }
     $copy = $Value | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
     foreach ($key in @('_etag', 'updatedAt', 'createdAt')) { $null = $copy.Remove($key) }
+    if ($IgnoreVersionToken) { $null = $copy.Remove('etag') }
     if ($copy.Contains('properties')) {
         foreach ($key in @('updatedAt', 'createdAt', 'configurationWarning')) { $null = $copy.properties.Remove($key) }
+        if ($IgnoreVersionToken) {
+            foreach ($key in @('etag', '_etag')) { $null = $copy.properties.Remove($key) }
+        }
     }
     ConvertTo-SreCanonicalJson $copy
 }
@@ -256,15 +260,22 @@ function Wait-SreConfigurationReadBack {
     $limit = [DateTime]::UtcNow.AddMinutes(5)
     if ($readSession.deadlineUtc -gt $limit) { $readSession.deadlineUtc = $limit }
     $delay = 2
+    $expectedProperties = @{}
+    if ($Operation) {
+        foreach ($key in $Operation.after.properties.Keys) {
+            if ($key -notin @('etag', '_etag')) { $expectedProperties[$key] = $Operation.after.properties[$key] }
+        }
+    }
     do {
         $snapshot = Get-SreConfigurationSnapshot $readSession
         $plan = Get-SreConfigurationPlan $Desired $snapshot
         if ($Operation) {
             $observed = Find-SreConfigurationObject $snapshot $Operation
-            if ($null -ne $observed -and (Test-SreProperties $observed.properties $Operation.after.properties)) {
+            if ($null -ne $observed -and (Test-SreProperties $observed.properties $expectedProperties)) {
                 return $snapshot
             }
-            if ((Get-SreComparableJson $observed) -cne (Get-SreComparableJson $Operation.before)) {
+            if ((Get-SreComparableJson $observed -IgnoreVersionToken) -cne
+                (Get-SreComparableJson $Operation.before -IgnoreVersionToken)) {
                 throw "Ambiguous/partial update for $($Operation.name); inspect the saved backup and current state. PUT was not replayed."
             }
         } elseif (-not $plan.operations.Count) {
