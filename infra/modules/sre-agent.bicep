@@ -35,6 +35,9 @@ param deployerPrincipalType string
 @description('Existing SRE-only identity created by the retained identity module in this resource group.')
 param managedIdentityName string
 
+@description('All five parent settings from the versioned demo settings asset.')
+param parentSettings object
+
 var appInsightsName = take('${agentName}-appi', 255)
 var sreAgentAdministratorRoleDefinitionId = 'e79298df-d852-4c6d-84f9-5d13249d1e55'
 
@@ -53,7 +56,9 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-resource sreAgent 'Microsoft.App/agents@2026-01-01' = {
+// The pinned official agent-core template uses this preview for AAU/feature/sandbox properties.
+#disable-next-line BCP081
+resource sreAgent 'Microsoft.App/agents@2025-05-01-preview' = {
   name: agentName
   location: location
   tags: tags
@@ -65,6 +70,11 @@ resource sreAgent 'Microsoft.App/agents@2026-01-01' = {
     }
   }
   properties: {
+    defaultModel: parentSettings.defaultModel
+    monthlyAgentUnitLimit: parentSettings.monthlyAgentUnitLimit
+    upgradeChannel: parentSettings.upgradeChannel
+    experimentalSettings: parentSettings.experimentalSettings
+    sandboxConfiguration: parentSettings.sandboxConfiguration
     knowledgeGraphConfiguration: {
       identity: managedIdentity.id
       managedResources: managedResourceIds

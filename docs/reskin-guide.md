@@ -52,6 +52,7 @@ Keep constant:
      -SubscriptionId <SUBSCRIPTION_ID> `
      -TenantId <TENANT_ID> `
      -ParentOnly `
+     -ApproveParentCreation `
      -SkinPath <ABSOLUTE_PRIVATE_LAB_FOLDER>\sre-skin.json
    ```
 
@@ -99,7 +100,8 @@ resources/grants block that full-removal path. Neither lifecycle action deletes
 or redeploys the Arc estate. Save its identity principal ID, Inspect export and
 incident/audit evidence first, then verify asynchronous deletion with Hibernated
 readiness and that saved principal. Finish SRE before Arc hibernation.
-Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly` using the retained UAMI, then render
+Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly -ApproveParentCreation`
+using the retained UAMI, then render
 `Initialize-SreConfiguration.ps1`, inspect and apply the pinned current-schema
 configuration with a new external backup path, then run readiness. Existing
 legacy plans require separately approved migration, not MCP `high`/P1/P2 creates.

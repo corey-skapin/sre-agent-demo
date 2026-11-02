@@ -16,6 +16,17 @@ Check ($identity[0].name -eq "[format('{0}-uami', parameters('agentName'))]") 'I
 Check ($identityModule.resourceGroup -eq $parentModule.resourceGroup) 'Identity and ephemeral parent share only the dedicated SRE group'
 Check (@($parentModule.properties.template.resources | Where-Object type -EQ 'Microsoft.ManagedIdentity/userAssignedIdentities').Count -eq 0) 'Ephemeral parent module never creates a replacement identity'
 $parent = @($parentModule.properties.template.resources | Where-Object type -EQ 'Microsoft.App/agents')[0]
+Check ($parent.apiVersion -ceq '2025-05-01-preview') 'Parent uses the pinned official template API supporting all five settings'
+$settings = Get-Content (Join-Path $PSScriptRoot '..\config\sre-parent-settings.json') -Raw | ConvertFrom-Json -AsHashtable
+Check ($settings.defaultModel.provider -ceq 'Anthropic' -and $settings.defaultModel.name -ceq 'Automatic' -and $settings.monthlyAgentUnitLimit -eq 10000 -and $settings.upgradeChannel -ceq 'Stable') 'Versioned model, AAU cap and channel match the recorded demo baseline'
+Check ($settings.experimentalSettings.EnableConnectorsV2 -and -not $settings.experimentalSettings.EnableNavIaRevamp -and $settings.sandboxConfiguration.egress.mode -ceq 'Limited') 'Feature flags and sandbox retain the recorded policy'
+$defaultExpression = $template.parameters.parentSettings.defaultValue
+Check ($defaultExpression -match "^\[variables\('([^']+)'\)\]$") 'Parent settings default references the compiled JSON asset'
+$compiledSettings = $template.variables[$Matches[1]]
+foreach ($key in @('defaultModel','monthlyAgentUnitLimit','upgradeChannel','experimentalSettings','sandboxConfiguration')) {
+    Check ($parent.properties[$key] -ceq "[parameters('parentSettings').$key]") "Compiled parent carries $key without service-default fallback"
+    Check (($compiledSettings[$key] | ConvertTo-Json -Depth 30 -Compress) -ceq ($settings[$key] | ConvertTo-Json -Depth 30 -Compress)) "Compiled default preserves the complete $key value"
+}
 Check ($parent.identity.type -eq 'SystemAssigned,UserAssigned' -and $parent.properties.actionConfiguration.mode -eq 'Review') 'Validated identity shape and governed Review preserved'
 Check ($parent.properties.incidentManagementConfiguration.type -ceq 'AzMonitor') 'Fresh parent and wake explicitly select Azure Monitor through supported ARM configuration'
 Check (($template | ConvertTo-Json -Depth 100) -notmatch '749f88d5-cbae-40b8-bcfc-e573ddc772fa') 'Repo IaC never creates the subscription Azure Monitor platform role'

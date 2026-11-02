@@ -199,7 +199,8 @@ already covers its SQL host. Use an in-place handler instruction update and one
 SQL filter without redeploying that parent. Existing T09/LOB plans, Review, Sev2,
 enabled three-hour cooldown, tools, identity and group grants remain unchanged.
 For a fresh deployment or rebuild, review `Deploy-SreAgent.ps1 -WhatIf` and obtain
-authorization for its parent update. For an existing Running parent, heed the
+authorization for parent creation (`-ApproveParentCreation`, starts AAU billing).
+An existing parent is refused before IaC; heed the
 [parent preview warning](sre-response-plan-automation.md#existing-parent-preview-warning).
 Before that preview, complete the [rebuild prerequisites](../README.md#rebuild-prerequisites):
 the Arc-owned Container App and restart alert, plus the separately authorized
@@ -397,7 +398,7 @@ az bicep build --file .\infra\main.bicep --stdout
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -ParentOnly
+  -SkinPath .\config\demo-skin.json -ParentOnly -ApproveParentCreation
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
