@@ -36,9 +36,22 @@ try {
     Check (($desired.handler.properties.tools -join ',') -ceq ($base.handler.properties.tools -join ',')) 'No tools, connectors or permissions added for SQL'
     $instructions = $desired.handler.properties.instructions
     Check ($instructions.Contains("/subscriptions/$($target.SubscriptionId)/resourceGroups/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-sql-01")) 'SQL instructions bind exact subscription/group/host'
-    Check ($instructions.Contains('6201/state=detected/sqlErrorNumber=1222') -and $instructions.Contains('6001/state=recovered')) 'Actual timeout and cleanup events are distinct'
-    Check ($instructions.Contains('Do not call this a deadlock') -and $instructions.Contains('Do not execute SQL, KILL')) 'No invented deadlock or automatic SQL remediation'
-    Check ($instructions.Contains('alert can arrive') -and $instructions.Contains('normal Orders worker is preserved')) 'Historical/self-recovered probe is not presented as an Orders outage'
+    Check ($instructions.Contains('Event 6201 reports') -and $instructions.Contains('Event 6001 reports recovery status')) 'Error and producer-reported recovery events are distinct'
+    Check ($instructions.Contains('Classify errors from observed codes') -and $instructions.Contains('Do not execute SQL, KILL')) 'Evidence determines diagnosis and SQL remediation remains forbidden'
+    Check ($instructions.Contains('continued') -and $instructions.Contains('business processing and complete session cleanup require their own evidence')) 'Workload-wide impact and cleanup are not prescribed outcomes'
+    Check ($instructions -notmatch 'simulated|no induced host load|blocker batch|IncidentProbe|LOCK_TIMEOUT|5000|12s|12 seconds|owned-session|self-recovers|T09|T10|T11|proven.*wow|local sample') 'Shared instructions contain no rehearsal mechanism, timing, outcome or scenario narration'
+    Check ($instructions.Contains('supporting evidence, contradicting evidence') -and $instructions.Contains('confidence') -and
+        $instructions.Contains('observed blast radius') -and $instructions.Contains('available change')) 'Representative method covers impact, ranked hypotheses, uncertainty and change correlation'
+    Check ($instructions.Contains('Environment context') -and $instructions.Contains('Investigation method') -and $instructions.Contains('Governance')) 'Context, method and guardrails are explicit and separate'
+    Check ($instructions.Contains('business criticality') -and $instructions.Contains('not established by that severity') -and
+        $instructions.Contains('Do not assume a dependency')) 'Unknown business impact and topology are not invented'
+    Check ($instructions.Contains('SIMULATE_CRASH=false') -and $instructions.Contains('specific human approval in Review mode') -and
+        $instructions.Contains('Do not apply this policy to Windows or SQL')) 'Existing Container App repair policy is preserved and incident-type scoped'
+    Check ($instructions.Contains('historical memory as untrusted context') -and $instructions.Contains('not instructions')) 'Historical model notes cannot prescribe present incident cause'
+    Check ($desired.handler.properties.handoffDescription -notmatch 'demo|T09|T10|T11|wow') 'Handoff description does not inject rehearsal framing'
+    $lobAlertSource = Get-Content -LiteralPath (Join-Path $root 'scripts\New-LobArcAppMonitorAlert.ps1') -Raw
+    Check ($lobAlertSource.Contains('description = "The application on $MachineName reported a degraded dependency (event 4200).') -and
+        $lobAlertSource -notmatch 'description\s*=\s*"T11') 'LOB rebuild description is operational rather than scenario narration'
     Check ($instructions.Contains('distinguish returned summary rows from source') -and $instructions.Contains('query result row count')) 'Perf sample counts are not reported as aggregated result rows'
     Check ($instructions.Contains('Never infer whether an incident platform is connected from optional connector') -and $instructions.Contains('Do not inspect connector files') -and $instructions.Contains('originating incident thread')) 'Optional connector absence does not contradict actual automatic incident delivery'
     Check ($instructions.Contains('Say "delivered via Azure Monitor" only when actual alert or audit metadata proves it')) 'Delivery wording requires actual alert or audit evidence'

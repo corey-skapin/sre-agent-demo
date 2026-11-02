@@ -13,8 +13,8 @@ Event
 | where tolower(_ResourceId) == '$hostId'
 | where Source == 'ArcSqlEngineDemo' and EventID == 6201
 | extend Incident = parse_json(RenderedDescription)
-| where toint(Incident.schemaVersion) == 1
-| where tostring(Incident.scenario) == 'sql-lock-timeout' and tostring(Incident.state) == 'detected'
+| where toint(Incident.schemaVersion) == 2
+| where tostring(Incident.state) == 'detected'
 | where toint(Incident.sqlErrorNumber) == 1222
 | project TimeGenerated, Computer, _ResourceId, Incident
 "@

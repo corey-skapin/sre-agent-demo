@@ -13,11 +13,13 @@ function Get-SreDesiredConfiguration {
     $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
     $tokens = @{
         arcGroup = "rg-$prefix"; infraGroup = "rg-$prefix-infra"; containerApp = "ca-$prefix-fault"
-        arcMachine = $skin.sre.targetArcMachine; eventSource = $skin.labels.lobEventSource
+        eventSource = $skin.labels.lobEventSource
+        arcMachineId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.HybridCompute/machines/$($skin.sre.targetArcMachine)"
+        workspaceId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.OperationalInsights/workspaces/law-$prefix"
         sourceContext = if ($skin.codeContext.lobRepositoryUrl) {
             "Source context is optional: $($skin.codeContext.lobRepositoryUrl) at $($skin.codeContext.lobSourceCommit), path $($skin.codeContext.lobSourcePath)."
         } else {
-            'No external source repository is configured. Use telemetry evidence and the local sample; do not guess a repository URL or commit.'
+            'No external source repository is configured. Use authorized telemetry; source contents and repository access are unverified.'
         }
     }
     $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-handler.instructions.txt') -Raw
@@ -63,7 +65,7 @@ function Get-SreDesiredConfiguration {
             name = $skin.labels.agentName; type = 'ExtendedAgent'; tags = @()
             properties = @{
                 instructions = $instructions
-                handoffDescription = "$($skin.labels.demoTitle) Review-mode T09 and operator-only hybrid investigation."
+                handoffDescription = 'Review-mode incident investigation; governed Container App recovery and diagnostic-only Windows application/SQL analysis.'
                 handoffs = @(); tools = @('RunAzCliReadCommands', 'RunAzCliWriteCommands', 'QueryLogAnalyticsByWorkspaceId', 'SearchMemory')
                 enableSkills = $true
             }

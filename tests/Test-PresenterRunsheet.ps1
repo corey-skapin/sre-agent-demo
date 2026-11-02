@@ -60,7 +60,8 @@ try {
     Check ($text.Contains('union kind=outer') -and $text.Contains('top 250') -and $text.Contains('bin(TimeGenerated, 1m)')) 'One bounded query correlates app signals and per-minute host metrics'
     Check ($text.Contains('ObjectName =~ "Processor Information"') -and $text.Contains('"% Committed Bytes In Use"') -and $text.Contains('"Available MBytes"') -and $text.Contains('CounterName =~ "% Free Space"')) 'Performance query uses the exact configured Windows CPU, memory and disk counters'
     Check ($text.Contains('missing counters or time bins') -and $text.Contains('not disk latency or IOPS')) 'Missing performance data and unsupported disk metrics are explicit'
-    Check ($text.Contains('not a CPU/memory/disk load test') -and $text.Contains('Do not infer a resource bottleneck')) 'Application warnings do not fabricate host load or a causal diagnosis'
+    Check ($text.Contains('Do not infer a resource bottleneck') -and $text.Contains('supporting and contradicting evidence') -and
+        $text -notmatch 'Degraded is a scripted application warning') 'Investigation ranks evidence without prescribing a scripted cause or host load'
     Check ($text.Contains('prior read-only request grants no') -and $text.Contains('three-hour cooldown')) 'Expanded metrics and warning scenario require new scope and existing route eligibility'
     Check ($text.Contains('No events means a telemetry visibility gap') -and $text.Contains('do not invent a fault')) 'Empty and healthy evidence do not imply a fault'
     Check ($text.Contains('No guest/Run Command, writes') -and $text.Contains('separate approval')) 'Read-only investigation does not authorize guest repair or faults'

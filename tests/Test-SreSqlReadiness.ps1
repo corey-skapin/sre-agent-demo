@@ -22,6 +22,7 @@ $module = Get-Module SreReadiness
         $query.Contains("Source == 'ArcSqlEngineDemo' and EventID == 6201") -and
         $query.Contains('toint(Incident.sqlErrorNumber) == 1222') -and
         $query.Contains("tostring(Incident.state) == 'detected'")) 'Canonical query pins actual host/source/timeout/state JSON contract'
+    Check ($query.Contains('toint(Incident.schemaVersion) == 2') -and $query -notmatch 'Incident.scenario|maxBlockSeconds') 'Version-two predicate excludes harness-only event fields'
     $fixture = @{
         id = $target.AlertId
         tags = @{ managedBy = 'arc-demo-sql-incident'; workload = 'sql-lock-timeout' }
@@ -49,7 +50,7 @@ $module = Get-Module SreReadiness
             'source' { $c.query = $query.Replace('ArcSqlEngineDemo', 'OtherSource') }
             'error' { $c.query = $query.Replace('1222', '1205') }
             'state' { $c.query = $query.Replace("'detected'", "'recovered'") }
-            'schema' { $c.query = $query.Replace('schemaVersion) == 1', 'schemaVersion) == 2') }
+            'schema' { $c.query = $query.Replace('schemaVersion) == 2', 'schemaVersion) == 1') }
             'window-query' { $c.query = $query.Replace('ago(15m)', 'ago(1d)') }
             'rule-id' { $changed.id += '-other' }
             'owner' { $changed.tags.managedBy = 'unowned' }

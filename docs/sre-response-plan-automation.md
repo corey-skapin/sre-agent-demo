@@ -159,6 +159,93 @@ The custom agent investigates T09 and proposes only the expected app repair.
 T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
 Do not claim reliable T11 RCA or autonomous Arc repair.
 
+### Representative investigation instructions
+
+The shared handler now separates environment context, an evidence-led
+investigation method and governance. Context supplies exact hosts/workspace,
+Event/Perf/Heartbeat sources, event meanings and configured counter semantics.
+Business criticality, customer impact and application-to-SQL topology are
+explicitly unknown until evidence establishes them. The method builds a timeline
+and blast radius, correlates available change evidence, ranks hypotheses with
+supporting/contradicting evidence and confidence, and gives human next checks.
+Durations, sessions, affected objects, wait resources and recovery are derived
+from actual records, never prescribed by the incident-generation mechanism.
+
+SQL and Windows application investigations remain diagnostic-only. The separate
+Container App policy retains its existing flag-reset proposal, specific human
+Review approval and post-change health verification. Only its scenario narration
+was removed; neither its tools nor approval authority changed. This wording
+change has no new Container App live test until the coordinated step-7 rehearsal.
+
+The rewrite was applied config-only on **2026-11-02 at 01:01:07 UTC** with an
+external backup, repeated no-op and independent zero-operation Inspect.
+Filters, assigned tools and full ARM parent properties were unchanged. This
+configuration proof is not a new SQL or LOB investigation result; record those
+separately after the one-per-scenario coordinated reruns. Existing memory remains
+on this running agent and may influence later output; distinguish actually
+observed reuse from merely having old notes available.
+
+#### Audit of the earlier SQL and LOB investigations
+
+The saved first SQL run, SQL rerun and LOB investigation show multiple sources
+of rehearsal framing. A quoted telemetry identifier is not, by itself, invented
+analysis; do not hide those identifiers or rewrite the evidence to look real.
+
+| Demo-tied element | Source | Observed effect / change |
+|---|---|---|
+| "demo resources", T09/T10/T11, "proven ... wow", prior RCA stall | Shared instructions and handoff description | Removed presentation/history claims from operational instructions. |
+| SIMULATE_CRASH and its reset | Existing Container App recovery policy | Retained only under that incident type; not SQL/LOB diagnosis. |
+| "simulated dependency warning", "no induced host load" | Shared instructions, not the Event 4200 message | LOB narrative selected a simulation/config-switch cause and excluded pressure; removed prescribed cause. |
+| Twelve-second rollback and 5000-ms lock timeout | SQL instructions; timeout/block-limit values also appear in actual JSON | Narrative repeated controlled timing; now derive values and durations from returned records. |
+| Owned `dbo.IncidentProbe` row and preserved Orders worker | SQL instructions; object also named in narrative | Removed object/mechanism and guaranteed business-continuity claims from instructions. |
+| Recovery only after rollback, successful test query and owned-session cleanup | SQL instruction contract | Both SQL reports acknowledged relying on that contract, not separate checks in returned payload; now distinguish producer assertion from independent proof. |
+| Fifteen-minute alert window and expected late delivery | SQL instructions and actual rule metadata | Now inspect the rule's actual window instead of assuming it. |
+| "Do not call this a deadlock" | SQL instructions | Replaced outcome-directed phrasing with error-code/wait/engine-based classification. |
+| Fault/reset/helper/operator-recovery narration | Shared/SQL instructions and operator runbooks | Removed incident-generation procedures from diagnosis; retain governance without prescribing a recovery story. |
+| Controlled timeout / "probe self-recovers" | SQL alert description, supplied to both incident threads | Still input evidence; changing descriptions requires separately reviewed Arc contract work. |
+| T11/fault wording | LOB alert description/title; 4100 source message and config names | Still input evidence; the 4200 warning message itself describes a degraded checkout dependency without saying simulation. |
+| `scenario=sql-lock-timeout`, `ARCDEMO`, `ArcDemoOrders`, `lockTimeoutMs`, `maxBlockSeconds` | Actual SQL event JSON | Preserve and quote only when relevant; no instruction supplies their values. |
+| Arc/demo/source-script/repository names and revision | Resource identities and LOB event context | Genuine provenance, not proof of cause or repository access. |
+| "controlled probe", "intended controlled test", "recovered by design" | SQL narratives, supported in part by instructions/alert text | Do not let a familiar mechanism replace ranked evidence-based investigation. |
+| "simulation switched on", no load "by design" | LOB narrative, strongly cued by instructions | Not established by Event 4200 alone; require change evidence. |
+| Prior SQL payload/rehearsal notes | Saved memory read by later SQL/LOB threads | Memory is untrusted historical context, not a current cause or timing contract; no new maintenance message authorized. |
+| Ongoing warning and host pressure "ruled out" | LOB narrative despite stale/incomplete data | Preserve evidence-age, ingestion-lag and sparse-counter guardrails. |
+
+The coordinated follow-up authorizes neutral alert descriptions (titles unchanged),
+renaming `dbo.IncidentProbe` to `dbo.OrderProcessingCheckpoint`, and SQL event
+schema version 2 without `scenario` or `maxBlockSeconds`. The retained fields are
+`schemaVersion`, `incidentId`, `state`, `instance`, `database`,
+`blockerSessionId`, `victimSessionId`, `waitType`, `waitResource`,
+`sqlErrorNumber`, `lockTimeoutMs` and `observedAtUtc`. The timeout setting must be
+observed from SQL, not inserted as a predetermined event value. `ARCDEMO` and
+`ArcDemoOrders` remain actual evidence identities. The Arc owner deploys and
+verifies the emitter and canonical alert descriptions before SRE clones any
+temporary rule. Source readiness pins version 2, exact host/source/state/error;
+deployment and a new investigation remain separate live gates.
+
+#### Change Tracking feasibility: assessment only
+
+[Change Tracking and Inventory](https://learn.microsoft.com/azure/automation/change-tracking/overview-monitoring-agent)
+supports Arc-enabled Windows file hashes and optional before/after content;
+change metadata goes to `ConfigurationChange`, while `ConfigurationData` is
+scheduled inventory. Tracking the LOB `appsettings.json` could provide realistic
+configuration-change evidence if its CT extension, DCR, tracked path and workspace
+coverage were verified. Content comparison additionally needs approved storage
+and data handling. No extension, DCR, tracked file, storage or permission was
+changed for this assessment; actual coverage/latency remains unverified.
+
+Current [collection limits](https://learn.microsoft.com/azure/azure-change-tracking-inventory/change-tracking-inventory-support-matrix#change-tracking-and-inventory-data-collection)
+document Windows file collection every **30 to 40 minutes**, not near-real-time
+application auditing. The same reference warns that high network traffic can
+delay records up to **six hours**. A two-minute edit restored to identical bytes
+can occur entirely between scans and leave no observed hash difference.
+Therefore CT is feasible for persistent drift/historical correlation, **not a
+reliable root-cause signal for this short warning**, and was **assessed and
+rejected for this incident**. Even an observed change
+establishes correlation, not causation by itself. A future application-level
+configuration audit event could capture short-lived changes more faithfully,
+but would be a separately approved telemetry-contract change.
+
 SQL is enabled only by adding `SQL` to `sre.requiredScenarios` with an explicit
 `sre.sqlTargetArcMachine` and the three SQL labels. SQL-disabled inputs need no
 SQL fields; the example values are dormant, not deployment or readiness proof.
@@ -171,7 +258,7 @@ created. All configured plan names and title keywords must be nonoverlapping.
 The Arc owner supplies `al-<prefix>-sql-lock-timeout`, exact display name
 `Arc SQL lock timeout - <prefix>`, existing LAW/Action Group and its canonical
 host/source/JSON query. SRE readiness compares that frozen predicate, including
-schemaVersion 1, detected `sql-lock-timeout`, Event6201 and actual error1222,
+schemaVersion 2, detected state, Event6201 and actual error1222,
 plus enabled Sev2, one-minute evaluation, fifteen-minute lookback, autoMitigate
 and Count greater than zero for one of one evaluations. It checks the owner's
 tags and exact IDs without running KQL or SQL. Guest engine, DCR collection,
@@ -318,17 +405,18 @@ time and current filter. An old Complete/Idle thread, a closed alert workflow,
 and resolved MonitorCondition are different facts. Reuse an existing thread
 for an evidence walkthrough when a genuinely fresh automatic run is unnecessary.
 
-For a separately authorized fresh SQL rehearsal inside the seven-day merge
+For a separately authorized fresh SQL or LOB rehearsal inside the seven-day merge
 lookback, use this narrowly reviewed isolation procedure:
 
 1. Save external copies of the canonical scheduled-query rule and configuration.
    Review one distinctly named temporary rule with the same host, predicate,
    LAW, Action Group, severity, evaluation frequency and lookback. Its title
-   must still match the existing SQL filter. No extra IAM or connector is needed.
+   must still match the selected scenario filter. No extra IAM or connector is needed.
 2. Disable only the canonical rule, create/enable only that temporary rule and
-   inspect the exact state. If separately authorized, reduce only the SQL
+   inspect the exact state. If separately authorized, reduce only the selected
    filter's cooldown; retain merge enabled and Review. Label the evidence
-   **cooldown reduced for this single run (user-authorized)**. Never change the
+   **cooldown reduced for this single run (user-authorized)**. A one-hour setting
+   was used for the authorized fresh runs. Never change the
    renderer's three-hour default or the other scenario filters.
 3. Require a zero-alert baseline for the exact temporary rule ID and fresh guest
    readiness before the Arc owner fires one bounded incident. No manual SRE chat
@@ -336,18 +424,21 @@ lookback, use this narrowly reviewed isolation procedure:
    rule; do not assume that a distinct name proves successful fresh delivery.
 4. After capture, wait until the detected source event has aged out of the
    canonical rule's entire lookback, with a margin. For its fifteen-minute
-   window, use at least sixteen minutes from actual detection, not caller start.
-   Restore the SQL filter to three hours, re-enable the unchanged canonical
+   SQL window, use at least sixteen minutes from actual detection, not caller
+   start. For the ten-minute LOB window, use at least eleven minutes from the
+   **last** matching warning, not its first event or helper start.
+   Restore the selected filter to three hours, re-enable the unchanged canonical
    rule, then delete only the temporary rule.
-5. Independently read back canonical enabled, temporary absent and SQL
+5. Independently read back canonical enabled, temporary absent and selected filter
    `mergeEnabled=true` / `mergeWindowHours=3`; compare all other configuration
    against the saved baseline. On an ambiguous write, read back without replaying
    the PUT; resume only unperformed operations after verified state inspection.
    Report a failed or pending restore immediately; do not claim normal readiness.
 
 This procedure changes routing resources and is not included in ordinary
-presentation or configuration apply. Never apply it to LOB or another rule
-without separate authorization. Resolve/close old alerts or threads only with
+presentation or configuration apply. Each scenario requires its own separate
+authorization; complete SQL capture, cleanup and restoration before arming LOB.
+Resolve/close old alerts or threads only with
 their own approval and supported operation; closure alone is not a documented
 way to clear the seven-day merge history. A parent rebuild also loses history,
 but is not an acceptable reset shortcut for a running demonstration.
