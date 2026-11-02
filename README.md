@@ -103,6 +103,35 @@ $errors
 
 ## Deploy against an existing arc-demo environment
 
+### Rebuild prerequisites
+
+Use the same validated private skin for every SRE script, passed as an absolute
+`-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`. The companion wrapper resolves its
+`build.json` relative `sre.skinPath` against that one private lab folder, not the
+current directory. Keep it outside git, worktrees and assistant session folders.
+Store one new configuration backup per deployment under `sre-backups\`.
+
+The Arc owner must first deploy/verify the shared workspace, collection, Action
+Group and hosts. With `T09`, its Arc skin must enable Container Apps and provide
+the healthy fault app plus restart alert. With `T11`, separately authorize
+`New-LobArcAppMonitorAlert.ps1 -Action Create` and
+`Invoke-LobArcAppOnArc.ps1 -Action Deploy` using the same target/skin before SRE
+readiness. The latter is a guest Run Command write, not a read-only prerequisite
+check. `Connected` alone does not prove that the LOB app or its Event/Perf data
+exists. SQL also needs the Arc owner's SQL/collection/alert readiness handoff.
+
+Install Azure CLI and its `containerapp` and `connectedmachine` extensions
+before deployment (extension installation needs its own setup authorization).
+On Windows, keep the CLI installation's bundled Python runtime: the shared
+wrapper uses native `python.exe -IBm azure.cli`, not a shell command string or
+an unrelated Python installation. It fails explicitly if that runtime is missing.
+Keep SRE registration/region availability and caller role-assignment rights
+separate from these client prerequisites.
+
+Readiness isolates a missing, denied or malformed scenario resource/alert into
+its own failed check and still evaluates later handler, routing and IAM checks.
+It never creates missing prerequisites or injects faults.
+
 Preview first:
 
 ```powershell
@@ -148,6 +177,15 @@ If your arc-demo names differ, pass explicit IDs/names instead of relying on dis
 This layer reads the existing arc-demo resource group IDs, Log Analytics workspace ID, and Action Group ID. Those IDs become SRE Agent knowledge graph managed resources. The agent identity receives RBAC on the existing Arc/observability RG (`rg-arc-demo`) and backing workload RG (`rg-arc-demo-infra`) so later scenarios can investigate Azure Monitor alerts and, in Review mode, propose controlled fixes.
 
 No companion Arc files or workloads are changed by this repo.
+
+Azure Monitor intake also requires exactly one subscription-scoped Monitoring
+Contributor assignment on the live UAMI. Opt in with
+`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` only after IAM approval, or
+preview and approve the [standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+Without it, selected-AzMonitor readiness fails rather than silently granting access.
+The grant does not connect an incident platform: if connection setup remains
+incomplete, separately authorize the documented **Incidents > Connect an incident
+platform > Azure Monitor** step; do not enable a quickstart Autonomous plan.
 
 ### Complete Ready state
 

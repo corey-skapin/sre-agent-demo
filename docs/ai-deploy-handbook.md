@@ -202,6 +202,12 @@ For a fresh deployment or rebuild, review `Deploy-SreAgent.ps1 -WhatIf` and obta
 authorization for parent creation (`-ApproveParentCreation`, starts AAU billing).
 An existing parent is refused before IaC; heed the
 [parent preview warning](sre-response-plan-automation.md#existing-parent-preview-warning).
+Before that preview, complete the [rebuild prerequisites](../README.md#rebuild-prerequisites):
+the Arc-owned Container App and restart alert, plus the separately authorized
+LOB alert creation and LOB app deployment, using the same absolute private skin.
+Install the required CLI extensions and preserve the Windows CLI's bundled
+Python launcher. Missing scenario prerequisites fail their own readiness checks;
+they do not hide later handler, plan or grant findings.
 Render/Inspect configuration, approve its exact changes, Apply with a new external backup and
 repeat to prove no-op. Stop on unrelated differences, denial or ambiguous writes.
 Required SRE readiness also validates the exact SQL alert predicate, owner tags,
@@ -450,8 +456,10 @@ approved reconciliation. The sole exception is one existing subscription
 Monitoring Contributor grant for the exact retained UAMI, including while the
 parent is absent or its incident platform is disconnected. It is a documented
 [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-The repo never creates it; other scopes/roles/principals and duplicates are not
-exempt. Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
+Creation requires explicit `-GrantAzureMonitorAlertAccess`, either on Deploy or
+the [standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant);
+other scopes/roles/principals and duplicates are not exempt.
+Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
 selection and required scanner grant. A disconnected platform emits a warning,
 not alert-delivery proof or a failure solely for disconnection. Never infer this
 state from optional connector files. Deployment adopts

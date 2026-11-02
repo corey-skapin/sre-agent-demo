@@ -45,6 +45,8 @@ param(
 
     [switch]$ApproveParentCreation,
 
+    [switch]$GrantAzureMonitorAlertAccess,
+
     [string]$ConfigurationBackupPath,
 
     [ValidateRange(1, 600)]
@@ -327,6 +329,14 @@ try {
     $resultText = Invoke-AzCli -Arguments $deploymentArgs
     if ($WhatIf) {
         Write-Host $resultText
+        if ($GrantAzureMonitorAlertAccess) {
+            if ($principalId) {
+                & (Join-Path $PSScriptRoot 'Grant-SreAzureMonitorAlertAccess.ps1') -SubscriptionId $SubscriptionId -TenantId $TenantId `
+                    -SkinPath $SkinPath -SreResourceGroupName $SreResourceGroupName -AgentName $AgentName -PrincipalId $principalId -WhatIf
+            } else {
+                Write-Warning 'New UAMI principal is not known before deployment. Preview its exact platform assignment with Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId <NEW_PRINCIPAL> -WhatIf after creation. No IAM write occurs in this preview.'
+            }
+        }
         Write-Host 'What-if complete. No resources were deployed.'
         return
     }
@@ -354,6 +364,11 @@ do {
     Start-Sleep -Seconds 5
 } while ($true)
 Write-Host 'All five versioned parent settings verified by ARM read-back.'
+if ($GrantAzureMonitorAlertAccess) {
+    & (Join-Path $PSScriptRoot 'Grant-SreAzureMonitorAlertAccess.ps1') -SubscriptionId $SubscriptionId -TenantId $TenantId `
+        -SkinPath $SkinPath -SreResourceGroupName $SreResourceGroupName -AgentName $AgentName `
+        -PrincipalId $outputs.managedIdentityPrincipalId.value -GrantAzureMonitorAlertAccess
+}
 Write-Host ''
 Write-Host 'SRE parent deployment complete; data-plane configuration and routing readiness are NOT confirmed.'
 Write-Host "  Agent:       $($outputs.agentName.value)"

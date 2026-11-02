@@ -206,6 +206,17 @@ try {
             $command = $Arguments -join ' '
             $base = $script:ReadinessBase
             $appId = "$base/rg-arc-demo-infra/providers/Microsoft.App/containerApps/ca-arc-demo-fault"
+            $failedReads = @{
+                'missing-app' = 'containerapp show*'
+                'missing-container-alert' = 'monitor metrics alert show*'
+                'missing-arc' = 'connectedmachine show*'
+                'missing-lob-alert' = 'resource show*scheduledQueryRules/alert-*-lob-arc-app-fault*'
+                'denied-lob-alert' = 'resource show*scheduledQueryRules/alert-*-lob-arc-app-fault*'
+                'missing-sql-alert' = 'resource show*scheduledQueryRules/al-*-sql-lock-timeout*'
+            }
+            if ($failedReads.ContainsKey($script:ReadinessFailure) -and $command -like $failedReads[$script:ReadinessFailure]) {
+                throw "Azure CLI failed (3): synthetic resource inspection $($script:ReadinessFailure)"
+            }
             $value = switch -Wildcard ($command) {
                 'group exists*' { $true; break }
                 'resource list*' { @(@{ id = $script:ReadinessIdentityId }, @{ id = $script:ReadinessAgentId }); break }
@@ -283,6 +294,23 @@ try {
         }
     }
     & $readinessModule { $script:ReadinessFailure='' }
+    $isolatedFailures = @{
+        'missing-app' = @('T09-resource-health')
+        'missing-container-alert' = @('T09-alert')
+        'missing-arc' = @('T11-resource-health')
+        'missing-lob-alert' = @('T11-alert')
+        'denied-lob-alert' = @('T11-alert')
+    }
+    foreach ($case in $isolatedFailures.Keys) {
+        & $readinessModule { param($Case) $script:ReadinessFailure = $Case } $case
+        $isolated = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant
+        $failedChecks = @($isolated.checks | Where-Object { $_.required -and $_.status -eq 'fail' })
+        Assert-True ($isolated.status -eq 'fail' -and $failedChecks.Count -eq 1 -and $failedChecks[0].id -eq $isolatedFailures[$case][0] -and $failedChecks[0].message -match 'Azure CLI failed') "Resource inspection failure stays explicit and isolated: $case"
+        $laterChecks = @('handler-instructions','plan-status-review','plan-filters-handler','identity-grant-boundary','azure-monitor-alert-access','rbac-rg-arc-demo','rbac-rg-arc-demo-infra')
+        Assert-True (@($isolated.checks | Where-Object { $_.id -in $laterChecks -and $_.status -eq 'pass' }).Count -eq $laterChecks.Count) "Data-plane and IAM checks still run after $case"
+        Assert-True (@($isolated.checks | Where-Object id -EQ 'inspection-error').Count -eq 0) 'One missing prerequisite never collapses the report'
+    }
+    & $readinessModule { $script:ReadinessFailure='' }
     $sqlSkinPath = [IO.Path]::GetTempFileName()
     try {
         $sqlSkin = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
@@ -295,7 +323,7 @@ try {
         & $readinessModule { $script:ReadinessFailure='sql-group-covered' }
         $covered=Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
         Assert-True ($covered.status -eq 'pass') 'Exact managed Arc group covers the verified SQL host without a parent update'
-        $failures = @{ 'sql-scope'='managed-resources'; 'sql-target'='SQL-resource-health'; 'sql-query'='SQL-alert'; 'sql-filter'='plan-status-review'; 'sql-cooldown'='plan-filters-handler' }
+        $failures = @{ 'sql-scope'='managed-resources'; 'sql-target'='SQL-resource-health'; 'sql-query'='SQL-alert'; 'sql-filter'='plan-status-review'; 'sql-cooldown'='plan-filters-handler'; 'missing-sql-alert'='SQL-alert' }
         foreach ($failure in $failures.Keys) {
             & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
             $failedSql = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $sqlSkinPath
@@ -380,6 +408,7 @@ $global:AzResponder = {
         return "$base/rg-arc-demo"
     }
     if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
+    if ($command -like 'identity show*') { return @{ id="$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami";principalId='00000000-0000-0000-0000-000000000003' } | ConvertTo-Json }
     if ($command -like 'resource list*') {
         if ($global:ExistingParentFixture) {
             return @(@{ id="$base/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo";type='Microsoft.App/agents';name='sre-arc-demo' }) | ConvertTo-Json -AsArray
@@ -500,6 +529,8 @@ $global:PlatformGrantFixture='exact'
 & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf
 Assert-True ($global:CapturedParameters.Count -eq $beforePlatform+1) 'Exact existing subscription Monitoring Contributor on retained UAMI passes parent preview'
 Assert-True ($global:CapturedParameters[-1] -eq $global:CapturedParameters[0]) 'Platform prerequisite is not adopted into or created by RG role parameters'
+$grantPreview = & $deploy -SubscriptionId $subscription -TenantId $tenant -GrantAzureMonitorAlertAccess -WhatIf
+Assert-True ($grantPreview.status -eq 'existing' -and $grantPreview.principalId -eq '00000000-0000-0000-0000-000000000003') 'Deploy opt-in previews the verified live principal without granting access'
 foreach($case in @('disconnected','absent')) {
     $global:PlatformGrantFixture=$case
     $beforeWake=$global:CapturedParameters.Count
@@ -547,6 +578,7 @@ try {
     Remove-Item -LiteralPath $sqlSkinPath -Force
 }
 
+& (Join-Path $PSScriptRoot 'Test-SreMonitorAccess.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)

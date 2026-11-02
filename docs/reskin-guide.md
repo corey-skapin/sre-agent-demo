@@ -39,7 +39,11 @@ Keep constant:
 
 1. Reskin and deploy the companion Arc checkout first.
 2. Copy `config\demo-skin.json` or `config\dummy-customer.demo-skin.json` to a
-   private location outside the checkout; do not commit real customer/context values.
+   durable private lab folder as `sre-skin.json`; do not commit real context.
+   Use the companion wrapper's single folder containing `build.json`, `arc-skin.json`,
+   `sre-skin.json`, `evidence\` and `sre-backups\`, outside all worktrees and
+   assistant session folders. `build.json` keeps `sre.skinPath: "sre-skin.json"`;
+   the wrapper passes its resolved **absolute** path to SRE scripts.
 3. Keep `azure.namePrefix` in sync with the Arc repo.
 4. Run SRE scripts using the skin:
 
@@ -49,7 +53,7 @@ Keep constant:
      -TenantId <TENANT_ID> `
      -ParentOnly `
      -ApproveParentCreation `
-     -SkinPath .\config\demo-skin.json
+     -SkinPath <ABSOLUTE_PRIVATE_LAB_FOLDER>\sre-skin.json
    ```
 
 5. Parent-only is not Ready. Render, inspect and approve/apply the current-schema
