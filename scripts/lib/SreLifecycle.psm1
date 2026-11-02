@@ -46,12 +46,21 @@ function Get-SreLifecycleInventory {
         [string]$SubscriptionId, [string]$SreResourceGroupName, [string]$AgentName,
         [string]$ArcResourceGroupName, [string]$InfraResourceGroupName,
         [string]$PreviousIdentityPrincipalId,
-        [ValidateSet('Hibernated', 'Removed')][string]$DesiredState = 'Hibernated'
+        [ValidateSet('Hibernated', 'Removed')][string]$DesiredState = 'Hibernated',
+        [string[]]$AdditionalOwnedRoleAssignmentIds = @()
     )
     function Read-AzJson([string[]]$Arguments) {
         Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments ($Arguments + @('-o', 'json')) | ConvertFrom-Json -Depth 100
     }
     $subscriptionScope = "/subscriptions/$SubscriptionId"
+    if ($AdditionalOwnedRoleAssignmentIds.Count -and $DesiredState -ne 'Removed') {
+        throw 'AdditionalOwnedRoleAssignmentIds applies only to explicit Removed, never Hibernate or Active.'
+    }
+    foreach ($id in $AdditionalOwnedRoleAssignmentIds) {
+        $pattern = '^/subscriptions/' + [regex]::Escape($SubscriptionId) +
+            '(/[^/]+)*/providers/Microsoft\.Authorization/roleAssignments/[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$'
+        if ($id -notmatch $pattern) { throw 'Additional owned assignment must be one exact role-assignment ARM ID in the selected subscription, not a role, scope or wildcard.' }
+    }
     $groupId = "$subscriptionScope/resourceGroups/$SreResourceGroupName"
     $agentId = "$groupId/providers/Microsoft.App/agents/$AgentName"
     $identityId = "$groupId/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$AgentName-uami"
@@ -80,7 +89,8 @@ function Get-SreLifecycleInventory {
         $parentAssignments = @($groupAssignments | Where-Object { $_.scope -ieq $agentId -or $_.scope.StartsWith("$agentId/", [StringComparison]::OrdinalIgnoreCase) })
         $parentAssignmentIds = @($parentAssignments | ForEach-Object { $_.id })
         if (@($groupAssignments | Where-Object {
-            ($_.scope -ieq $groupId -or $_.scope.StartsWith("$groupId/", [StringComparison]::OrdinalIgnoreCase)) -and $_.id -notin $parentAssignmentIds
+            ($_.scope -ieq $groupId -or $_.scope.StartsWith("$groupId/", [StringComparison]::OrdinalIgnoreCase)) -and $_.id -notin $parentAssignmentIds -and
+            -not ($_.id -in $AdditionalOwnedRoleAssignmentIds -and $principalId -and $_.principalId -ieq $principalId)
         }).Count) { $drift.Add('Unexpected SRE-group scoped grants. Full group removal requires separate ownership reconciliation.') }
         if (@($parentAssignments | Where-Object { $_.scope -ine $agentId -or ($_.roleDefinitionId -split '/')[-1] -ne 'e79298df-d852-4c6d-84f9-5d13249d1e55' }).Count -or $parentAssignments.Count -gt 1) {
             $drift.Add('Unexpected parent-scoped grants. Reconcile before Active or Removed.')
@@ -94,11 +104,14 @@ function Get-SreLifecycleInventory {
         $roles = @('73c42c96-874c-492b-b04d-ab87d138a893', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
         $platformGrants = @($owned | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
         if ($platformGrants.Count -gt 1) { $drift.Add('Duplicate Azure Monitor platform grants. Reconcile before Active or Removed.') }
-        if (@($owned | Where-Object {
+        $unexpectedAssignments = @($owned | Where-Object {
             -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
-            ($_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles)
-        }).Count) {
-            $drift.Add('Unexpected identity-owned scope or role. Reconcile before Active or Removed.')
+            ($_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles) -and
+            $_.id -notin $AdditionalOwnedRoleAssignmentIds
+        })
+        if ($unexpectedAssignments.Count) {
+            $details = @($unexpectedAssignments | ForEach-Object { "$($_.id) [role=$($_.roleDefinitionId), scope=$($_.scope)]" })
+            $drift.Add("Unexpected identity-owned scope or role: $($details -join '; '). Reconcile ownership or explicitly list exact known assignment IDs for Removed.")
         }
         $externalAssignments = @($owned | Sort-Object id -Unique)
     }

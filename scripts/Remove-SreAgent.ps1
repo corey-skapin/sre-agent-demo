@@ -19,6 +19,7 @@ param(
     [string]$SkinPath,
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]
     [string]$PreviousIdentityPrincipalId,
+    [string[]]$AdditionalOwnedRoleAssignmentIds = @(),
     [ValidateRange(1, 1800)][int]$TimeoutSeconds = 300
 )
 $ErrorActionPreference = 'Stop'
