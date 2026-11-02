@@ -144,11 +144,16 @@ Preview first:
 
 Deploy:
 
+Creation starts the AAU meter and requires explicit `-ApproveParentCreation`.
+An existing parent is refused before IaC, including WhatIf: use configuration-only
+Inspect/Apply for handler and plan changes instead of overwriting live settings.
+
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -ParentOnly `
+  -ApproveParentCreation `
   -SkinPath .\config\demo-skin.json
 ```
 
@@ -159,6 +164,7 @@ If your arc-demo names differ, pass explicit IDs/names instead of relying on dis
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -ParentOnly `
+  -ApproveParentCreation `
   -ArcResourceGroupName rg-my-arc `
   -InfraResourceGroupName rg-my-arc-infra `
   -LogAnalyticsWorkspaceId /subscriptions/.../providers/Microsoft.OperationalInsights/workspaces/law-my-arc `
@@ -274,6 +280,7 @@ cost state, not that the whole group or combined lab is cost-free.
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -ParentOnly `
+  -ApproveParentCreation `
   -SkinPath .\config\demo-skin.json
 ```
 

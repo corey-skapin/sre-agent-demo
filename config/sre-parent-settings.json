@@ -1,0 +1,58 @@
+{
+  "defaultModel": {
+    "name": "Automatic",
+    "provider": "Anthropic"
+  },
+  "monthlyAgentUnitLimit": 10000,
+  "upgradeChannel": "Stable",
+  "experimentalSettings": {
+    "EnableConnectorsV2": true,
+    "EnableNavIaRevamp": false
+  },
+  "sandboxConfiguration": {
+    "egress": {
+      "allowHttpMcpServerNetworkAccess": true,
+      "allowedCodeRepositories": [
+        "Github",
+        "AzureDevOps",
+        "GithubEnterprise"
+      ],
+      "allowedHosts": [
+        "*.vault.azure.net",
+        "*.azmk8s.io",
+        "*.applicationinsights.azure.com",
+        "api.applicationinsights.io",
+        "api.loganalytics.io",
+        "api.loganalytics.azure.com",
+        "graph.microsoft.com",
+        "aka.ms",
+        "learn.microsoft.com",
+        "www.bing.com",
+        "azcliprod.blob.core.windows.net",
+        "azcliextensionsync.blob.core.windows.net",
+        "azurecliextensionsync.blob.core.windows.net",
+        "*.dev.azure.com",
+        "*.scm.azurewebsites.net",
+        "*.prometheus.monitor.azure.com",
+        "api.securitycenter.microsoft.com",
+        "api.powerbi.com",
+        "api.fabric.microsoft.com",
+        "adf.azure.com",
+        "dev.azure.com",
+        "msazure.visualstudio.com",
+        "management.azure.com",
+        "api.github.com"
+      ],
+      "allowedRegistries": [
+        "pypi",
+        "npmjs",
+        "nuget-org",
+        "ubuntu"
+      ],
+      "httpProxy": null,
+      "mode": "Limited",
+      "vnetConfiguration": null
+    },
+    "packages": null
+  }
+}

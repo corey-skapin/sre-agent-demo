@@ -48,8 +48,8 @@
 - Activate/verify Arc first; use its owner's fresh readiness handoff.
 - Render `Initialize-SreConfiguration.ps1` locally, then authorize `-Inspect`.
 - Approve the full preview before `-Apply -BackupPath <NEW_EXTERNAL_FILE>`.
-- Use complete `Deploy-SreAgent.ps1 -ConfigurationBackupPath` or explicitly
-  `-ParentOnly`; never call parent-only deployment a configured Active demo.
+- Create with `Deploy-SreAgent.ps1 -ApproveParentCreation -ConfigurationBackupPath`
+  or explicit `-ParentOnly`; existing parents refuse Deploy. Parent-only is not Active.
 - Follow the canonical protocol pin; do not invent endpoints or replay legacy
   MCP `severity: high`, invalid P1/P2 or response-level instruction payloads.
 - Keep instructions/tools on the handling agent and exact Sev2 on AzMonitor plans.

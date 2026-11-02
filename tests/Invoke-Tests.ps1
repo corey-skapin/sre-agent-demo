@@ -396,6 +396,8 @@ $global:DriftedDiagnosticsFixture = $false
 $global:ExtraGrantFixture = $false
 $global:SqlManagedTargetMismatch = $false
 $global:PlatformGrantFixture = ''
+$global:ExistingParentFixture = $false
+$global:ParentSettingsFailure = ''
 $global:AzResponder = {
     $command = $args -join ' '
     $base = '/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups'
@@ -408,7 +410,7 @@ $global:AzResponder = {
     if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
     if ($command -like 'identity show*') { return @{ id="$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami";principalId='00000000-0000-0000-0000-000000000003' } | ConvertTo-Json }
     if ($command -like 'resource list*') {
-        if ($global:PlatformGrantFixture -and $global:PlatformGrantFixture -ne 'absent') {
+        if ($global:ExistingParentFixture) {
             return @(@{ id="$base/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo";type='Microsoft.App/agents';name='sre-arc-demo' }) | ConvertTo-Json -AsArray
         }
         if ($global:RetainedDiagnosticsFixture) {
@@ -428,6 +430,15 @@ $global:AzResponder = {
         return @{ location = 'australiaeast'; properties = @{ WorkspaceResourceId = $workspace } } | ConvertTo-Json
     }
     if ($command -like 'rest --method get*') {
+        if ($command -match '/Microsoft.App/agents/') {
+            if ($global:ParentSettingsFailure -eq 'denied') { $global:LASTEXITCODE = 13; return '' }
+            $settings = Get-Content (Join-Path $root 'config\sre-parent-settings.json') -Raw | ConvertFrom-Json -AsHashtable
+            $settings.provisioningState = 'Succeeded'
+            if ($global:ParentSettingsFailure -eq 'limit') { $settings.monthlyAgentUnitLimit = 9999; $settings.provisioningState = 'Failed' }
+            $agentId = "$base/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo"
+            if ($global:ParentSettingsFailure -eq 'target') { $agentId += '-other' }
+            return @{ id=$agentId; properties=$settings } | ConvertTo-Json -Depth 30
+        }
         $value = @()
         foreach ($rg in @('rg-arc-demo', 'rg-arc-demo-infra')) {
             foreach ($role in @('acdd72a7-3385-48ef-bd42-f606fba81ae7', '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'b24988ac-6180-42a0-ab88-20f7382dd24c')) {
@@ -479,6 +490,17 @@ $global:AzResponder = {
         $global:CapturedParameters += Get-Content -LiteralPath $args[$index + 1].TrimStart('@') -Raw
         return '{}'
     }
+    if ($command -like 'deployment sub create*') {
+        $values = @{
+            managedIdentityPrincipalId = '00000000-0000-0000-0000-000000000003'
+            agentName = 'sre-arc-demo'; agentPortalUrl = 'https://example.invalid/agent'
+            managedIdentityId = "$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami"
+            accessLevel = 'High'; managedResourceIds = @("$base/rg-arc-demo", "$base/rg-arc-demo-infra")
+        }
+        $outputs = @{}
+        foreach ($key in $values.Keys) { $outputs[$key] = @{value=$values[$key]} }
+        return @{properties=@{outputs=$outputs}} | ConvertTo-Json -Depth 20
+    }
     throw "Unexpected mocked Azure call: $command"
 }
 $deploy = Join-Path $root 'scripts\Deploy-SreAgent.ps1'
@@ -520,6 +542,22 @@ foreach($case in @('role','scope','principal','duplicate')) {
     Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'incompatible grant scope/role|Duplicate Azure Monitor'
 }
 $global:PlatformGrantFixture=''
+$global:ExistingParentFixture = $true
+$beforeGuard = $global:AzCalls.Count
+Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'Existing parent detected'
+Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -ParentOnly -ApproveParentCreation } 'Existing parent detected'
+Assert-True (@($global:AzCalls | Select-Object -Skip $beforeGuard | Where-Object { $_ -like 'deployment sub*' -or $_ -like 'bicep build*' }).Count -eq 0) 'Existing parent guard stops before IaC preview or PUT can strip live properties'
+$global:ExistingParentFixture = $false
+Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -ParentOnly } 'AAU meter'
+& $deploy -SubscriptionId $subscription -TenantId $tenant -ParentOnly -ApproveParentCreation
+Assert-True (@($global:AzCalls | Where-Object { $_ -like 'rest --method get*' -and $_ -match '/Microsoft.App/agents/' }).Count -gt 0) 'New parent settings are verified through the pinned read-only ARM API'
+foreach ($case in @('limit','target','denied')) {
+    $global:ParentSettingsFailure = $case
+    $beforeWrites = @($global:AzCalls | Where-Object { $_ -like 'deployment sub create*' }).Count
+    Assert-Throws { & $deploy -SubscriptionId $subscription -TenantId $tenant -ParentOnly -ApproveParentCreation } 'unverified|different target|failed \(13\)'
+    Assert-True (@($global:AzCalls | Where-Object { $_ -like 'deployment sub create*' }).Count -eq $beforeWrites + 1) "Failed settings verification never retries the parent deployment: $case"
+}
+$global:ParentSettingsFailure = ''
 
 $sqlSkinPath = [IO.Path]::GetTempFileName()
 try {
@@ -559,5 +597,5 @@ Write-Host "$count assertions passed. All Azure calls were mocked; no cloud muta
 } finally {
     if ($previousAz) { Set-Item Function:\global:az -Value $previousAz.ScriptBlock }
     else { Remove-Item Function:\az -ErrorAction SilentlyContinue }
-    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters, RetainedDiagnosticsFixture, DriftedDiagnosticsFixture, ExtraGrantFixture, SqlManagedTargetMismatch, PlatformGrantFixture -ErrorAction SilentlyContinue
+    Remove-Variable -Scope Global -Name AzCalls, AzExitCode, AzResponder, CapturedParameters, RetainedDiagnosticsFixture, DriftedDiagnosticsFixture, ExtraGrantFixture, SqlManagedTargetMismatch, PlatformGrantFixture, ExistingParentFixture, ParentSettingsFailure -ErrorAction SilentlyContinue
 }

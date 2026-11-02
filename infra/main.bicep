@@ -40,6 +40,9 @@ param deployerPrincipalType string
 param arcRoleAssignmentNames object = {}
 param infraRoleAssignmentNames object = {}
 
+@description('Versioned demo model, AAU limit, channel, feature and sandbox settings. Changing these requires explicit scope.')
+param parentSettings object = loadJsonContent('../config/sre-parent-settings.json')
+
 @description('Tags to apply to resources created by this layer.')
 param tags object = {
   owner: 'demo'
@@ -101,6 +104,7 @@ module sreAgent 'modules/sre-agent.bicep' = {
     managedResourceIds: managedResourceIds
     deployerPrincipalType: deployerPrincipalType
     managedIdentityName: sreIdentity.outputs.identityName
+    parentSettings: parentSettings
   }
 }
 
