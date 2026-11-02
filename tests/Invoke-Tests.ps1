@@ -103,9 +103,9 @@ $desired = & $initialize -SubscriptionId $subscription -TenantId $tenant | Conve
 Assert-True ($desired.plans.Count -eq 2) 'Default skin renders T09 and T11'
 Assert-True ($desired.plans[0].properties.titleContains -eq 'containerapp-restarts') 'Filter is one keyword, not invented OR syntax'
 Assert-True (@($desired.plans | Where-Object { $_.properties.agentMode -ne 'Review' }).Count -eq 0) 'Every plan explicitly uses Review'
-Assert-True ($desired.handler.properties.instructions -match 'operator Arc Run Command') 'Handler preserves hybrid operator boundary'
-Assert-True ($desired.handler.properties.instructions -match '4200 degraded' -and $desired.handler.properties.instructions -match 'Processor Information\(_Total\)' -and $desired.handler.properties.instructions -match 'Memory/Available MBytes') 'Rendered handler correlates actual warning and configured host counters'
-Assert-True ($desired.handler.properties.instructions -match 'no induced host load' -and $desired.handler.properties.instructions -match 'Do not execute Arc guest commands') 'Handler preserves contextual host metrics and operator-only Arc recovery'
+Assert-True ($desired.handler.properties.instructions -match 'Windows application and SQL investigations are\s+read-only: no remediation') 'Handler preserves hybrid operator boundary'
+Assert-True ($desired.handler.properties.instructions -match '4200 dependency warning' -and $desired.handler.properties.instructions -match 'Processor Information\(_Total\)' -and $desired.handler.properties.instructions -match 'Memory/Available MBytes') 'Rendered handler correlates actual warning and configured host counters'
+Assert-True ($desired.handler.properties.instructions -match 'not process measurements' -and $desired.handler.properties.instructions -match 'no remediation, SQL execution, session termination, guest commands') 'Handler preserves contextual host metrics and operator-only Arc recovery'
 Assert-True ($desired.handler.properties.instructions -match 'No external source repository is configured') 'Default handler explicitly omits external repository context'
 $sourceSkinPath = [IO.Path]::GetTempFileName()
 $sourceGuestPath = [IO.Path]::GetTempFileName()

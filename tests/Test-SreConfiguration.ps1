@@ -26,6 +26,7 @@ $fixture = @{
     handlers = @()
 }
 $fixture.subagents[0].properties.instructions = 'previous instructions'
+foreach ($object in @($fixture.subagents) + @($fixture.filters)) { $object.properties.etag = 'original-version' }
 foreach ($filter in $fixture.filters) {
     $filter.properties.mergeEnabled = $false
     $filter.properties.mergeWindowHours = 1
@@ -73,6 +74,7 @@ try {
         $script:TestFinalStale = $false
         $script:TestFinalReads = 0
         $script:TestFinalFilters = @()
+        $script:TestRotateEtag = $false
         $script:TestSleeps = [Collections.Generic.List[int]]::new()
         function script:Start-Sleep {
             param([int]$Seconds)
@@ -94,6 +96,7 @@ try {
                     $script:TestAgentReads++
                     if ($script:TestAgentReads -eq 2) {
                         if ($script:TestConcurrent -eq 'target') { $script:TestSnapshot.subagents[0].properties.instructions = 'external edit' }
+                        if ($script:TestConcurrent -eq 'etag') { $script:TestSnapshot.subagents[0].properties.etag = 'foreign-version' }
                         if ($script:TestConcurrent -eq 'routing') { $script:TestSnapshot.filters += @{ name = 'concurrent-unowned'; properties = @{ isEnabled = $true } } }
                     }
                 }
@@ -124,6 +127,11 @@ try {
             }
             $script:TestPutCount++
             $value = $Body | ConvertFrom-Json -AsHashtable
+            if ($script:TestRotateEtag) {
+                $value.properties.etag = "server-version-$($script:TestPutCount)"
+                $existing = @($script:TestSnapshot[$collection] | Where-Object name -CEQ $value.name)
+                if ($existing.Count) { $existing[0].properties.etag = $value.properties.etag }
+            }
             if ($script:TestFinalStale -and $script:TestPutCount -eq 3) {
                 $script:TestFinalFilters = $script:TestSnapshot.filters | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
             }
@@ -150,7 +158,7 @@ try {
     $again = Invoke-SreConfigurationReconcile $desired $session -BackupPath $temp
     Check ($again.verified -and -not $again.changed) 'Second ensure is no-op and does not overwrite backup'
     Check ((& $module { @($script:TestCalls | Where-Object { $_ -like 'Put *' }).Count }) -eq 3) 'Second ensure makes no write'
-    foreach ($case in @('forbidden', 'target', 'routing', 'priorities', 'response')) {
+    foreach ($case in @('forbidden', 'target', 'etag', 'routing', 'priorities', 'response')) {
         & $module {
             param($Fixture, $Case)
             $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
@@ -163,7 +171,7 @@ try {
         } $fixture $case
         $other = Join-Path ([IO.Path]::GetTempPath()) "sre-config-$([guid]::NewGuid()).json"
         try {
-            $pattern = switch ($case) { 'forbidden' { 'Forbidden' }; 'target' { 'Concurrent change' }; 'routing' { 'Concurrent routing' }; default { 'not migrated' } }
+            $pattern = switch ($case) { 'forbidden' { 'Forbidden' }; { $_ -in @('target','etag') } { 'Concurrent change' }; 'routing' { 'Concurrent routing' }; default { 'not migrated' } }
             Throws { Invoke-SreConfigurationReconcile $desired $session -BackupPath $other } $pattern
             $expectedWrites = if ($case -eq 'forbidden') { 1 } else { 0 }
             Check ((& $module { @($script:TestCalls | Where-Object { $_ -like 'Put *' }).Count }) -eq $expectedWrites) "$case does not retry or partially migrate"
@@ -189,14 +197,15 @@ try {
         Throws { & $module { param($Session) Invoke-SreConfigurationRequest $Session Put '/api/v1/incidentPlayground/handlers/old' @{} } $session } 'read-only'
         Check ((& $module { @($script:TestCalls | Where-Object { $_ -like 'Put */api/v1/*' }).Count }) -eq 0) 'Legacy update route cannot reach HTTP'
     } finally { if (Test-Path -LiteralPath $other) { Remove-Item -LiteralPath $other -Force } }
-    foreach ($case in @('eventual', 'timeout-eventual', 'never-visible', 'timeout-uncommitted', 'poll-target', 'poll-routing', 'read-forbidden', 'final-eventual')) {
+    foreach ($case in @('eventual', 'timeout-eventual', 'rotated-etag', 'never-visible', 'timeout-uncommitted', 'poll-target', 'poll-routing', 'read-forbidden', 'final-eventual')) {
         & $module {
             param($Fixture, $Case)
             $script:TestSnapshot = $Fixture | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
             $script:TestCalls.Clear(); $script:TestSleeps.Clear()
             $script:TestConcurrent = ''; $script:TestAgentReads = 0
             $script:TestPending = $null; $script:TestPutCount = 0
-            $script:TestVisibilityDelay = if ($Case -in @('eventual', 'timeout-eventual')) { 3 } else { 0 }
+            $script:TestVisibilityDelay = if ($Case -in @('eventual', 'timeout-eventual', 'rotated-etag')) { 3 } else { 0 }
+            $script:TestRotateEtag = $Case -eq 'rotated-etag'
             $script:TestTimeoutAfterCommit = $Case -in @('timeout-eventual', 'timeout-uncommitted')
             $script:TestNeverVisible = $Case -in @('never-visible', 'timeout-uncommitted')
             $script:TestPostWriteChange = switch ($Case) { 'poll-target' { 'target' }; 'poll-routing' { 'routing' }; default { '' } }
@@ -208,7 +217,7 @@ try {
         $pollSession = $session.Clone()
         if ($case -in @('never-visible', 'timeout-uncommitted')) { $pollSession.deadlineUtc = [DateTime]::UtcNow.AddSeconds(2) }
         try {
-            if ($case -in @('eventual', 'timeout-eventual', 'final-eventual')) {
+            if ($case -in @('eventual', 'timeout-eventual', 'rotated-etag', 'final-eventual')) {
                 $applied = Invoke-SreConfigurationReconcile $desired $pollSession -BackupPath $other
                 Check ($applied.verified -and $applied.changed) "$case is verified after read-only polling"
                 Check ((& $module { $script:TestPutCount }) -eq 3) "$case writes each object exactly once"
@@ -234,7 +243,7 @@ try {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
     & $module {
         Remove-Item Function:\Invoke-RestMethod, Function:\Start-Sleep
-        Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestSchema,TestVisibilityDelay,TestNeverVisible,TestPending,TestPostWriteChange,TestReadForbidden,TestPutCount,TestFinalStale,TestFinalReads,TestFinalFilters,TestSleeps -Scope Script
+        Remove-Variable TestSnapshot,TestCalls,TestTimeoutAfterCommit,TestForbidden,TestConcurrent,TestAgentReads,TestSchema,TestVisibilityDelay,TestNeverVisible,TestPending,TestPostWriteChange,TestReadForbidden,TestPutCount,TestFinalStale,TestFinalReads,TestFinalFilters,TestSleeps,TestRotateEtag -Scope Script
     }
 }
 Write-Host "SRE configuration: $count assertions passed."

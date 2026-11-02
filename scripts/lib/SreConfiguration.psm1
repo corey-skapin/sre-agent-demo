@@ -13,11 +13,13 @@ function Get-SreDesiredConfiguration {
     $scenarios = @(Get-DemoSkinValue -Skin $skin -Path 'sre.requiredScenarios' -Default @('T09', 'T11'))
     $tokens = @{
         arcGroup = "rg-$prefix"; infraGroup = "rg-$prefix-infra"; containerApp = "ca-$prefix-fault"
-        arcMachine = $skin.sre.targetArcMachine; eventSource = $skin.labels.lobEventSource
+        eventSource = $skin.labels.lobEventSource
+        arcMachineId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.HybridCompute/machines/$($skin.sre.targetArcMachine)"
+        workspaceId = "/subscriptions/$SubscriptionId/resourceGroups/rg-$prefix/providers/Microsoft.OperationalInsights/workspaces/law-$prefix"
         sourceContext = if ($skin.codeContext.lobRepositoryUrl) {
             "Source context is optional: $($skin.codeContext.lobRepositoryUrl) at $($skin.codeContext.lobSourceCommit), path $($skin.codeContext.lobSourcePath)."
         } else {
-            'No external source repository is configured. Use telemetry evidence and the local sample; do not guess a repository URL or commit.'
+            'No external source repository is configured. Use authorized telemetry; source contents and repository access are unverified.'
         }
     }
     $instructions = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-handler.instructions.txt') -Raw
@@ -63,7 +65,7 @@ function Get-SreDesiredConfiguration {
             name = $skin.labels.agentName; type = 'ExtendedAgent'; tags = @()
             properties = @{
                 instructions = $instructions
-                handoffDescription = "$($skin.labels.demoTitle) Review-mode T09 and operator-only hybrid investigation."
+                handoffDescription = 'Review-mode incident investigation; governed Container App recovery and diagnostic-only Windows application/SQL analysis.'
                 handoffs = @(); tools = @('RunAzCliReadCommands', 'RunAzCliWriteCommands', 'QueryLogAnalyticsByWorkspaceId', 'SearchMemory')
                 enableSkills = $true
             }
@@ -98,12 +100,16 @@ function Test-SreProperties {
 }
 
 function Get-SreComparableJson {
-    param([AllowNull()][object]$Value)
+    param([AllowNull()][object]$Value, [switch]$IgnoreVersionToken)
     if ($null -eq $Value) { return 'null' }
     $copy = $Value | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable
     foreach ($key in @('_etag', 'updatedAt', 'createdAt')) { $null = $copy.Remove($key) }
+    if ($IgnoreVersionToken) { $null = $copy.Remove('etag') }
     if ($copy.Contains('properties')) {
         foreach ($key in @('updatedAt', 'createdAt', 'configurationWarning')) { $null = $copy.properties.Remove($key) }
+        if ($IgnoreVersionToken) {
+            foreach ($key in @('etag', '_etag')) { $null = $copy.properties.Remove($key) }
+        }
     }
     ConvertTo-SreCanonicalJson $copy
 }
@@ -254,15 +260,22 @@ function Wait-SreConfigurationReadBack {
     $limit = [DateTime]::UtcNow.AddMinutes(5)
     if ($readSession.deadlineUtc -gt $limit) { $readSession.deadlineUtc = $limit }
     $delay = 2
+    $expectedProperties = @{}
+    if ($Operation) {
+        foreach ($key in $Operation.after.properties.Keys) {
+            if ($key -notin @('etag', '_etag')) { $expectedProperties[$key] = $Operation.after.properties[$key] }
+        }
+    }
     do {
         $snapshot = Get-SreConfigurationSnapshot $readSession
         $plan = Get-SreConfigurationPlan $Desired $snapshot
         if ($Operation) {
             $observed = Find-SreConfigurationObject $snapshot $Operation
-            if ($null -ne $observed -and (Test-SreProperties $observed.properties $Operation.after.properties)) {
+            if ($null -ne $observed -and (Test-SreProperties $observed.properties $expectedProperties)) {
                 return $snapshot
             }
-            if ((Get-SreComparableJson $observed) -cne (Get-SreComparableJson $Operation.before)) {
+            if ((Get-SreComparableJson $observed -IgnoreVersionToken) -cne
+                (Get-SreComparableJson $Operation.before -IgnoreVersionToken)) {
                 throw "Ambiguous/partial update for $($Operation.name); inspect the saved backup and current state. PUT was not replayed."
             }
         } elseif (-not $plan.operations.Count) {

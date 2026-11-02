@@ -114,10 +114,10 @@ union kind=outer
 )
 | top 250 by TimeGenerated desc
 
-Sample contract, not an observation of current guest state:
+Application telemetry contract, not an observation of current guest state:
 4000 = startup or healthy business heartbeat (distinguish by its message);
-4100 = induced fatal processing fault, exit42;
-4101 = unsupported FaultMode, exit43; 4200 = degraded dependency, process continues.
+4100 = fatal processing error; 4101 = invalid configuration;
+4200 = dependency warning. Derive current process availability from evidence.
 Return a short evidence table with actual UTC timestamps and resource identity,
 then separate observed facts, hypotheses and suggested operator steps.
 These host counters are configured at 60-second sampling in the Arc core DCR.
@@ -131,9 +131,12 @@ unconfirmed". Sparse counters support "not observed in the available counters",
 not "ruled out".
 Compare host metrics before, during and after any 4200 warning interval where
 the returned time range contains those stages; report any missing stage.
-Degraded is a scripted application warning, not a CPU/memory/disk load test.
 Do not infer a resource bottleneck, app CPU usage or causation from a warning
 or coincident host metrics alone. Do not add a DCR, alert or collection rule.
+Build an incident timeline and identify observed impact and blast radius.
+Rank hypotheses using supporting and contradicting evidence and confidence.
+Correlate available application, SQL or change records only where the data and
+dependency relationship are actually established; otherwise report that gap.
 With only healthy events, report healthy telemetry; do not invent a fault or
 suggest resetting a healthy app. No events means a telemetry visibility gap,
 not proof that the app is down. Logs alone do not prove current task/config state.
@@ -172,11 +175,12 @@ host metrics across the recorded warning window. Do not promise incident
 delivery, automatic RCA or SRE Arc repair. The prior read-only request grants no
 permission to trigger this warning or run the expanded query.
 
-The [2026-11-02 rehearsal]({{lifecycleGuideUrl}}#observed-lob-warning-and-reporting-limits)
+The [earlier 2026-11-02 rehearsal]({{lifecycleGuideUrl}}#observed-lob-warning-and-reporting-limits)
 captured a completed automatic investigation, but its stale-evidence
 ongoing-warning inference and overconfident host-pressure exclusion were wrong.
-Updated handler wording is applied, not yet incident-tested; step 7 after the
-coordinated rebuild tests it. Do not present this as reliable RCA or SRE repair.
+See the [representative-instruction follow-up]({{lifecycleGuideUrl}}#representative-investigation-instructions)
+for the subsequent context/method/governance rewrite and its actual validation
+status. Do not present source setup as reliable RCA or SRE repair.
 
 <!-- SQL:START -->
 ### SQL: alert-driven investigation of a real lock timeout

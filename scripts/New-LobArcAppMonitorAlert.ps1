@@ -139,7 +139,7 @@ if ($PSCmdlet.ShouldProcess($target, 'create or update Azure Monitor alert')) {
         location = $Location
         properties = @{
             displayName = $displayName
-            description = "T11 LOB Arc bridge app fault event from $MachineName"
+            description = "The application on $MachineName reported a degraded dependency (event 4200). Investigate the application events and dependency health."
             severity = 2
             enabled = $true
             evaluationFrequency = 'PT5M'
