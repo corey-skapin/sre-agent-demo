@@ -46,7 +46,7 @@ function Invoke-SreAz {
         return ($output | Out-String).Trim()
     } finally {
         if ($invocation.installer) { [Environment]::SetEnvironmentVariable('AZ_INSTALLER', $previousInstaller, 'Process') }
-        Remove-Item -LiteralPath $stderrPath -Force
+        Remove-Item -LiteralPath $stderrPath -Force -WhatIf:$false
     }
 }
 

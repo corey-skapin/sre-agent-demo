@@ -513,8 +513,18 @@ time and current filter. An old Complete/Idle thread, a closed alert workflow,
 and resolved MonitorCondition are different facts. Reuse an existing thread
 for an evidence walkthrough when a genuinely fresh automatic run is unnecessary.
 
-For a separately authorized fresh SQL or LOB rehearsal inside the seven-day merge
-lookback, use this narrowly reviewed isolation procedure:
+Live demo: a same-rule firing within seven days can reuse an old thread; use a fresh copy.
+`Invoke-SreDemoRoute.ps1` has two actions; supply the explicit subscription, tenant and private skin.
+Choose `-Scenario SQL`, `LOB` or `ContainerApp` (T09); the script handles log and metric alerts.
+Run `-Action Prepare` shortly before the demo; it generates a unique name and disables the canonical.
+The copy retains the same criteria, scope, Action Group, severity and filter-matching title.
+Fire with the existing fault commands; this script does not fire, approve repairs or change cooldowns.
+When the user finishes, run the same command with `-Action Restore`; it deletes only the owned copy.
+Restore re-enables the canonical; **old evaluation windows can replay a ghost alert and email**.
+Both actions support `-WhatIf` without local files; writes are single-submit with GET-only backoff.
+On an ambiguous result, inspect the printed temporary name; never blindly repeat Prepare.
+
+The earlier authorized SQL/LOB isolation procedure and captured evidence follow:
 
 1. Save external copies of the canonical scheduled-query rule and configuration.
    Review one distinctly named temporary rule with the same host, predicate,
