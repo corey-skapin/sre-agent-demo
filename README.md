@@ -315,6 +315,13 @@ The separate identity module owns it in the same SRE group, so first creation an
 future reuse follow identical IaC without an extra identity group or manual identity.
 Full removal requires separate explicit approval and `Remove-SreAgent.ps1`:
 
+Its live read-only preview has been rehearsed: seven UAMI assignments, one parent
+administrator, four resources and the dedicated group; no mutation occurred.
+Destructive Removed convergence remains a separate unverified live step.
+Known extra UAMI grants require an explicit full assignment-ID
+[allow-list](docs/sre-response-plan-automation.md#explicit-removed-convergence),
+not a blanket role exemption.
+
 ```powershell
 .\scripts\Remove-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `

@@ -21,6 +21,7 @@ param(
     [ValidateSet('Hibernated', 'Removed')][string]$DesiredState = 'Hibernated',
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]
     [string]$PreviousIdentityPrincipalId,
+    [string[]]$AdditionalOwnedRoleAssignmentIds = @(),
     [ValidateRange(1, 1800)][int]$TimeoutSeconds = 300
 )
 Set-StrictMode -Version Latest
@@ -43,6 +44,7 @@ $inventoryParameters = @{
     ArcResourceGroupName = $ArcResourceGroupName; InfraResourceGroupName = $InfraResourceGroupName
     PreviousIdentityPrincipalId = $PreviousIdentityPrincipalId
     DesiredState = $DesiredState
+    AdditionalOwnedRoleAssignmentIds = $AdditionalOwnedRoleAssignmentIds
 }
 $before = Get-SreLifecycleInventory @inventoryParameters
 $removing = $DesiredState -eq 'Removed'
@@ -58,6 +60,19 @@ if (-not $resourceIds.Count -and -not $assignmentIds.Count -and -not ($removing 
 }
 $inventoryParameters.PreviousIdentityPrincipalId = $before.principalId
 $target = "delete resources [$($resourceIds -join ', ')]; revoke assignments [$($assignmentIds -join ', ')]; " + $(if ($removing) { "delete empty group $($before.groupId)" } else { 'RETAIN UAMI/group, diagnostics and workload grants' })
+if ($removing) {
+    Write-Host "UAMI assignments ($($before.externalAssignments.Count)) for $($before.principalId):"
+    foreach ($assignment in $before.externalAssignments) {
+        Write-Host "  $($assignment.id) | role=$($assignment.roleDefinitionId) | scope=$($assignment.scope)"
+    }
+    Write-Host "Parent administrator assignments ($($before.parentAssignments.Count)):"
+    foreach ($assignment in $before.parentAssignments) {
+        Write-Host "  $($assignment.id) | principal=$($assignment.principalId) | role=$($assignment.roleDefinitionId)"
+    }
+    Write-Host "Owned resources ($($resourceIds.Count)):"
+    foreach ($id in $resourceIds) { Write-Host "  $id" }
+    Write-Host "Dedicated group: $($before.groupId). Shared Arc resources and private exports are excluded."
+}
 Write-Verbose $target
 if (-not $PSCmdlet.ShouldProcess($target, "$DesiredState SRE; parent deletion loses native history/memory")) { return }
 $clock = [Diagnostics.Stopwatch]::StartNew()

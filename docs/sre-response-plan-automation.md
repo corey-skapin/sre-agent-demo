@@ -866,6 +866,27 @@ SRE-group assignments block the full-removal preview; obtain ownership reconcili
 not broad group deletion. Other principals' workload grants, shared Arc/Monitor
 resources and private exports are outside the removal boundary.
 
+For an independently verified extra UAMI grant, such as a portal-created
+Monitoring Reader assignment, pass `-AdditionalOwnedRoleAssignmentIds` with its
+**full exact assignment ARM ID**, not a role name, scope, pattern or wildcard.
+The principal must still match the saved/live UAMI; IDs must belong to the
+selected subscription. This Removed-only allow-list does not exempt other
+principals, parent administrators, unknown resources or duplicate platform
+grants, and does not change Active/Hibernated readiness. Inspect the printed
+ID/role/scope before approving any deletion. It is not permission to discover
+and auto-adopt all grants with that role.
+
+The first live read-only Removed rehearsal (2026-11-02, 03:06Z) passed with
+exactly **seven UAMI assignments** (six workload-group grants plus one exact
+subscription Monitoring Contributor), **one parent administrator entry**,
+**four resources** (parent, Application Insights, Smart Detection Action Group,
+UAMI) and **one dedicated group**. No extra allow-list was needed. The preview
+prints those categories and every exact assignment/resource ID; private
+before/after inventories matched, and the parent remained Succeeded/Running.
+Evidence stays in the single private lab folder. This proves preview/ownership
+inspection only: no grant/resource was removed, no agent was hibernated and no
+live Removed convergence or subsequent rebuild was exercised.
+
 Already absent or partially removed state converges directly; no intermediate
 Hibernated requirement or identity recreation. Save the principal before deleting
 it: if both live identity and saved principal are unavailable, removal stops and
@@ -873,7 +894,7 @@ Removed readiness reports external-grant verification pending. Failed reads are
 failures, never interpreted as absence. Pending deletion is observed within the
 deadline, not blindly resubmitted. Parent-lifetime cascade may remove its grants;
 already absent exact targets are skipped. Local mocks cover these contracts;
-this revised three-state lifecycle has not been exercised against the live estate.
+the destructive Removed convergence remains untested against the live estate.
 
 ## Evidence boundaries
 

@@ -141,6 +141,32 @@ try {
     Check ($global:LifecycleState.assignments[0].properties.roleDefinitionId -eq '/roles/unknown') 'Unexpected IAM is retained during parking'
     Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false } 'Unexpected identity-owned'
     Reset-Fixture
+    $extraId = "$base/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000005"
+    $extra = @{ id = $extraId; name = '00000000-0000-0000-0000-000000000005'; properties = @{ principalId = $principal; scope = $base; roleDefinitionId = '/roles/00000000-0000-0000-0000-000000000006' } }
+    $global:LifecycleState.assignments += $extra
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'Unexpected identity-owned'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -WhatIf
+    Check ($global:LifecycleState.assignments.Count -eq 8 -and @($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Exact known-extra allow-list is read-only during WhatIf'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds "$base/providers/Microsoft.Authorization/roleAssignments/*" -WhatIf } 'exact role-assignment'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds ($extraId.Replace($subscription, $tenant)) -WhatIf } 'selected subscription'
+    Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -WhatIf } 'only to explicit Removed'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -Confirm:$false
+    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Approved exact extra is removed with the owned assignments'
+    Reset-Fixture
+    $groupExtraId = "$group/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000005"
+    $groupExtra = @{ id = $groupExtraId; name = '00000000-0000-0000-0000-000000000005'; properties = @{ principalId = $principal; scope = $group; roleDefinitionId = '/roles/00000000-0000-0000-0000-000000000006' } }
+    $global:LifecycleState.assignments += $groupExtra
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'Unexpected SRE-group'
+    & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $groupExtraId -WhatIf
+    Check ($global:LifecycleState.assignments.Count -eq 8 -and @($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Exact UAMI extra at the SRE group is eligible only through its explicit ID'
+    $global:LifecycleState.assignments[-1].properties.principalId = $tenant
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $groupExtraId -WhatIf } 'Unexpected SRE-group'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Allow-list cannot adopt another principal at the same group scope'
+    Reset-Fixture
+    $global:LifecycleState.assignments[-1].properties.roleDefinitionId = '/roles/unowned-parent-role'
+    Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -WhatIf } 'Unexpected parent-scoped'
+    Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'UAMI allow-list never exempts parent or group permissions'
+    Reset-Fixture
     $global:LifecycleState.assignments[0].properties.scope += '/providers/Microsoft.Compute/virtualMachines/unexpected'
     $global:LifecycleState.assignments[0].id = "$($global:LifecycleState.assignments[0].properties.scope)/providers/Microsoft.Authorization/roleAssignments/unknown"
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
