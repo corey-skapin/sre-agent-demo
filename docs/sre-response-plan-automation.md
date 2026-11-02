@@ -717,9 +717,9 @@ Other roles, scopes,
 principals or duplicate grants remain rejected. The same exact-grant tolerance
 applies before wake, so retained platform access does not block reconstruction
 after parent deletion. Hibernated readiness reports it separately from workload
-grants. A disconnected or unset platform on an existing parent emits an optional
-readiness warning: alerts will not reach the agent until Azure Monitor is
-connected. That warning does not invalidate retained access or establish
+grants. An unset/non-AzMonitor ARM selection on an existing parent emits an
+optional readiness warning to review the portal fallback. That configuration
+warning does not invalidate retained access or establish scanner health or
 incident readiness. When AzMonitor is selected, missing subscription scanner
 access is a required failure, not a reason to grant it silently.
 This rehearsal did not test a live park/wake cycle with that grant.
@@ -790,19 +790,36 @@ Fresh creation and wake already select `incidentManagementConfiguration.type:
 AzMonitor` in `infra\modules\sre-agent.bicep`, through the
 [supported parent ARM property](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 This is not a handler/filter configuration step or an optional data connector.
-Read back both that setting and the exact retained subscription Monitoring
-Contributor assignment before declaring automatic incident routing ready.
-The [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)
-requires that role and documents **Incidents > Connect an incident platform >
-Azure Monitor** if connection setup remains incomplete. Obtain separate approval
-for that supported portal step and any platform-managed access consequence; the
-grant switch authorizes only the one exact subscription assignment, not a platform
-connection or quickstart plan. Do not disconnect another platform,
-replay guessed connection APIs or redeploy an existing parent to hide a warning.
-Compiled-template and mocked wake checks establish source wiring, not a live
-recreation/delivery test.
+The opt-in grant script supplies the other half: the exact subscription Monitoring
+Contributor assignment required by the
+[Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
+The normal rebuild path is **IaC platform selection plus the approved scripted
+grant**, not a required portal connection click.
+
+The existing read-only `incident-platform` readiness check reports the ARM `type`;
+`azure-monitor-alert-access` checks the role independently. ARM exposes selection
+and generic connection fields, not a scanner-connected/healthy status. A passing
+selection check is therefore not alert-delivery proof. On **2026-11-02 UTC**, a
+read-only GET of the running existing parent returned `type: AzMonitor`, with
+`apiConnectionName`, `connectionName`, `connectionKey`, `connectionUrl` and
+`oboUser` all empty. [Learn's platform guide](https://learn.microsoft.com/azure/sre-agent/incident-platforms)
+says Azure Monitor needs no supplied credentials; neither that guide nor the ARM
+schema specifies an additional required connector resource for this integration.
+This existing-parent evidence does not establish how a fresh instance initializes.
+**Fresh-agent intake from IaC plus the script remains unproven until the rebuild
+and separately authorized delivery verification.**
 
 ### Explicit Azure Monitor access grant
+
+**Portal fallback only:** if `incident-platform` readiness shows an unset or
+non-AzMonitor platform, separately authorize the documented **Incidents > Connect
+an incident platform > Azure Monitor** flow and its access consequences. Do not
+enable a quickstart Autonomous plan. The grant switch authorizes only the exact
+subscription assignment, not this fallback. Do not disconnect another platform,
+replay guessed connection APIs, create an optional connector as a prerequisite,
+or redeploy an existing parent to hide a warning. A selected platform with no
+observed alerts needs scanner-access, rule/firing and routing diagnosis, not a
+blind connection replay.
 
 The subscription grant is **opt-in**, not an incidental portal side effect.
 `Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` ensures it after parent

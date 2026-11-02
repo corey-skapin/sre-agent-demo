@@ -459,10 +459,16 @@ parent is absent or its incident platform is disconnected. It is a documented
 Creation requires explicit `-GrantAzureMonitorAlertAccess`, either on Deploy or
 the [standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant);
 other scopes/roles/principals and duplicates are not exempt.
-Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
-selection and required scanner grant. A disconnected platform emits a warning,
-not alert-delivery proof or a failure solely for disconnection. Never infer this
-state from optional connector files. Deployment adopts
+Fresh/wake Bicep sets `incidentManagementConfiguration.type = AzMonitor`; the
+opt-in script supplies the approved scanner role. No routine portal connection
+step is required. Read back the selection and grant separately. The existing
+`incident-platform` check reads ARM configuration, not scanner health: an
+unset/non-AzMonitor selection emits an advisory warning, not a new required gate.
+Only if that check shows the platform is not configured, use the separately
+authorized [portal fallback](sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+Fresh-agent intake through IaC plus the grant remains unproven until the rebuild
+and separately authorized alert-delivery verification. Never infer this state
+from optional connector files. Deployment adopts
 existing direct assignment names and does not query Graph display names.
 Retained AppInsights must match the requested workspace/location; wake does not
 silently relocate it. Older UAMI-only parking rebuilds missing diagnostics through
