@@ -30,10 +30,10 @@
 - Warn about unrelated retained free-resource/IAM drift during normal Hibernate;
   do not strand the known paid parent or delete extra resources to hide drift.
 - Reconcile excessive/inherited/duplicate IAM explicitly before Active.
-- Preserve only the exact existing subscription Monitoring Contributor grant on
-  the retained UAMI, including while the parent is absent or disconnected; it is
+- Preserve the exact subscription Monitoring Contributor grant on the UAMI,
+  including while the parent is absent or disconnected; it is
   a [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-  Never create it here or exempt other roles, scopes, principals or duplicates.
+  Create only with explicit `-GrantAzureMonitorAlertAccess`; reject other grants/duplicates.
 - Fresh/wake IaC explicitly selects AzMonitor. Read back incident connectivity
   and required scanner access; a disconnected-platform warning is not alert readiness.
 - Do not switch global accounts, bypass denial or silently grant permissions.

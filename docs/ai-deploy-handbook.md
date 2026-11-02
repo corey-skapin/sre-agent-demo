@@ -449,8 +449,10 @@ approved reconciliation. The sole exception is one existing subscription
 Monitoring Contributor grant for the exact retained UAMI, including while the
 parent is absent or its incident platform is disconnected. It is a documented
 [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-The repo never creates it; other scopes/roles/principals and duplicates are not
-exempt. Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
+Creation requires explicit `-GrantAzureMonitorAlertAccess`, either on Deploy or
+the [standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant);
+other scopes/roles/principals and duplicates are not exempt.
+Fresh/wake Bicep explicitly selects `AzMonitor`; read back the actual
 selection and required scanner grant. A disconnected platform emits a warning,
 not alert-delivery proof or a failure solely for disconnection. Never infer this
 state from optional connector files. Deployment adopts

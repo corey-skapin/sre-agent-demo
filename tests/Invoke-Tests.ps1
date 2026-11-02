@@ -378,6 +378,7 @@ $global:AzResponder = {
         return "$base/rg-arc-demo"
     }
     if ($command -like 'identity list*') { return '[{"name":"sre-arc-demo-uami","principalId":"00000000-0000-0000-0000-000000000003"}]' }
+    if ($command -like 'identity show*') { return @{ id="$base/rg-arc-demo-sre/providers/Microsoft.ManagedIdentity/userAssignedIdentities/sre-arc-demo-uami";principalId='00000000-0000-0000-0000-000000000003' } | ConvertTo-Json }
     if ($command -like 'resource list*') {
         if ($global:PlatformGrantFixture -and $global:PlatformGrantFixture -ne 'absent') {
             return @(@{ id="$base/rg-arc-demo-sre/providers/Microsoft.App/agents/sre-arc-demo";type='Microsoft.App/agents';name='sre-arc-demo' }) | ConvertTo-Json -AsArray
@@ -478,6 +479,8 @@ $global:PlatformGrantFixture='exact'
 & $deploy -SubscriptionId $subscription -TenantId $tenant -WhatIf
 Assert-True ($global:CapturedParameters.Count -eq $beforePlatform+1) 'Exact existing subscription Monitoring Contributor on retained UAMI passes parent preview'
 Assert-True ($global:CapturedParameters[-1] -eq $global:CapturedParameters[0]) 'Platform prerequisite is not adopted into or created by RG role parameters'
+$grantPreview = & $deploy -SubscriptionId $subscription -TenantId $tenant -GrantAzureMonitorAlertAccess -WhatIf
+Assert-True ($grantPreview.status -eq 'existing' -and $grantPreview.principalId -eq '00000000-0000-0000-0000-000000000003') 'Deploy opt-in previews the verified live principal without granting access'
 foreach($case in @('disconnected','absent')) {
     $global:PlatformGrantFixture=$case
     $beforeWake=$global:CapturedParameters.Count
@@ -509,6 +512,7 @@ try {
     Remove-Item -LiteralPath $sqlSkinPath -Force
 }
 
+& (Join-Path $PSScriptRoot 'Test-SreMonitorAccess.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
