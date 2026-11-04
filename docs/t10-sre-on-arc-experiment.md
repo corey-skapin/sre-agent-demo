@@ -124,6 +124,7 @@ $targetArcId = az connectedmachine show `
   -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json `
   -ParentOnly `
+  -ApproveParentCreation `
   -AdditionalManagedResourceIds $targetArcId
 ```
 

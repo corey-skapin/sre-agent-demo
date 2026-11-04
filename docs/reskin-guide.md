@@ -51,15 +51,17 @@ Keep constant:
    .\scripts\Deploy-SreAgent.ps1 `
      -SubscriptionId <SUBSCRIPTION_ID> `
      -TenantId <TENANT_ID> `
-     -ParentOnly `
+     -SkinPath <ABSOLUTE_PRIVATE_LAB_FOLDER>\sre-skin.json `
      -ApproveParentCreation `
-     -SkinPath <ABSOLUTE_PRIVATE_LAB_FOLDER>\sre-skin.json
+     -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
    ```
 
-5. Parent-only is not Ready. Render, inspect and approve/apply the current-schema
+5. `-ParentOnly` instead of `-ConfigurationBackupPath` stops after the parent and
+   is not Ready: render, inspect and approve/apply the current-schema
    configuration using `sre-response-plan-automation.md`, with a new external
-   backup. Run readiness; the optional telemetry item is skipped/not evaluated.
-   Record rehearsal evidence separately. Do not induce a fault to answer preflight.
+   backup. Either way run readiness; the optional telemetry item is skipped/not
+   evaluated. Record rehearsal evidence separately. Do not induce a fault to
+   answer preflight.
 6. Use the same skin for scenario helpers; guest deployment/fault/reset actions
    need their own approval. Container App Status and ShowQuery are read-only.
    Arc guest Status still executes Run Command and is not part of a read-only
@@ -100,10 +102,11 @@ resources/grants block that full-removal path. Neither lifecycle action deletes
 or redeploys the Arc estate. Save its identity principal ID, Inspect export and
 incident/audit evidence first, then verify asynchronous deletion with Hibernated
 readiness and that saved principal. Finish SRE before Arc hibernation.
-Recreate the parent with `Deploy-SreAgent.ps1 -ParentOnly -ApproveParentCreation`
-using the retained UAMI, then render
-`Initialize-SreConfiguration.ps1`, inspect and apply the pinned current-schema
-configuration with a new external backup path, then run readiness. Existing
+Recreate the parent with
+`Deploy-SreAgent.ps1 -ApproveParentCreation -ConfigurationBackupPath <NEW_PATH>`
+using the retained UAMI; it also applies the pinned current-schema configuration
+(use `-ParentOnly` with a separate render, inspect and approved apply to review
+it first), then run readiness. Existing
 legacy plans require separately approved migration, not MCP `high`/P1/P2 creates.
 Parent creation alone does not restore custom handlers, plans or
 repository authorization. Keep the requested Ready demo running unless cleanup
@@ -115,7 +118,7 @@ Sev2 and Review. First deployment creates the UAMI through the same IaC; normal
 park/wake retains its principal and deterministic grant IDs. The system-assigned
 parent principal still changes on parent recreation. A missing UAMI fails normal
 Hibernated readiness; do not mistake historical whole-group deletion for retention.
-The retained-identity park/wake round trip has not been live-tested here.
+Hibernate was proven live on 2026-11-04; reactivation after it is not yet proven.
 `Active` is the public desired state; `Ready` remains the compatible readiness
 alias/default. Old UAMI-only Hibernated states remain accepted; authorized wake
 recreates missing diagnostics and adopts retained grants. Requested profile,

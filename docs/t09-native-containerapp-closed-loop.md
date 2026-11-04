@@ -121,11 +121,12 @@ $containerAlertId = az monitor metrics alert show `
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
   -ParentOnly `
+  -ApproveParentCreation `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
 
-`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval. `-ParentOnly` explicitly acknowledges that this deploy does not complete the data-plane setup below. For an already running demo, do not redeploy merely to rehearse: use read-only readiness and verify the existing configuration first.
+`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions require approval. `-ParentOnly` explicitly acknowledges that this deploy does not complete the data-plane setup below; `-ApproveParentCreation` acknowledges that creation starts the paid AAU meter. For an already running demo, do not redeploy merely to rehearse: use read-only readiness and verify the existing configuration first.
 
 ## 3. Connect code context
 
