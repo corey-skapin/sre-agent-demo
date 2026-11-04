@@ -61,6 +61,39 @@ try {
     Check (($text -replace '\s+', ' ').Contains('first live fault is **SQL**, then LOB, then T09')) 'Live story follows the orders database first'
     Check (($text -replace '\s+', ' ').Contains('only **after Arc chapter 7 has shown the alert rules**') -and
         $text.Contains('best moment is its audience question') -and $text.Contains('Prepare disables the')) 'GO follows the Arc alert-rule view, at the audience question'
+    # The companion Arc repo splices this guide into its whole-demo run-through and refuses a guide without these level-2 headings.
+    function Test-ArcSpliceShape([string]$Markdown) {
+        $inFence = $false
+        $headings = @(foreach ($line in ($Markdown -split '\r?\n')) {
+                if ($line -match '^\s*(```|~~~)') { $inFence = -not $inFence; continue }
+                if (-not $inFence -and $line -match '^## (?<text>.+?)\s*$') { $Matches.text }
+            })
+        $steps = @($headings | Where-Object { $_ -match '^\d+\. ' })
+        $numbers = ($steps | ForEach-Object { [int](($_ -split '\.')[0]) }) -join ','
+        $afternoon = @($headings | Where-Object { $_ -ceq 'This afternoon: verified existing investigations' })
+        $faults = @($headings | Where-Object { $_ -ceq 'Live faults' })
+        $afternoon.Count -eq 1 -and $faults.Count -eq 1 -and $numbers -eq '1,2,3,4,5,6,7' -and $steps[6] -ceq '7. Close' -and
+            [array]::IndexOf($headings, $afternoon[0]) -lt [array]::IndexOf($headings, $faults[0]) -and
+            [array]::IndexOf($headings, $faults[0]) -lt [array]::IndexOf($headings, $steps[0])
+    }
+    Check (Test-ArcSpliceShape $text) 'Guide keeps the headings the Arc whole-demo run-through splices: This afternoon, Live faults, steps 1 to 7'
+    $flat = $text -replace '\s+', ' '
+    Check ($flat.Contains('| SQL | about 2 | about 2.5 | report about 4.5 |') -and
+        $flat.Contains('| LOB | about 6 | about 6.5 | report about 8.5 |') -and
+        $flat.Contains('| T09 | about 5 to 7 | about 6 to 8 | Review card about 7 to 10 |')) 'Observed live-fault timings are tabulated'
+    Check ($flat.Contains('Prepare takes 1 to 2 minutes') -and $flat.Contains('about 25 minutes') -and $flat.Contains('about 21 to 31 minutes') -and
+        $flat.Contains('No approval-card expiry is documented') -and $flat.Contains('One run per scenario per three hours')) 'Prepare time, total time, auto-resolve window, approval wait and cooldown are stated'
+    Check ($flat.Contains('### Running the live faults inside a 30-minute slot') -and $flat.Contains('before the Arc half or early in it') -and
+        $flat.Contains('Fire T09 about 10 minutes before its Review beat') -and
+        $flat.Contains('say the copies are the same rules, temporary, and leave the originals alone')) 'The 30-minute slot note runs Prepare, SQL and LOB early and T09 ten minutes ahead of its Review beat'
+    Check ($flat.Contains('Say "a person approved it", never "the audit proves it"') -and $flat.Contains('(`approveScope` none)') -and
+        $flat.Contains('Say that a person approved it, never that the audit proves it') -and
+        [regex]::Matches($flat, 'audit proves').Count -eq [regex]::Matches($flat, 'never (?:that )?(?:"?the )?audit proves').Count) 'Approval wording says a person approved it and never that the audit proves it'
+    $handlerText = Get-Content -LiteralPath (Join-Path $root 'config\sre-handler.instructions.txt') -Raw
+    Check ($flat.Contains('**Builder** > **Agent Canvas**') -and $flat.Contains('click the **sre-demo** subagent node') -and
+        $flat.Contains('**Instructions** box in the right panel') -and $flat.Contains('**Governance** section') -and
+        $flat.Contains('**Separate Container App recovery policy** section') -and $flat.Contains('do not edit or save')) 'Portal path to the handling agent instructions is the observed one and looks without saving'
+    Check ($handlerText -match '(?m)^Governance\r?$' -and $handlerText -match '(?m)^Separate Container App recovery policy\r?$') 'The instruction sections the guide points to exist in the handler instructions'
     Check ($text.Contains($context.arcMachineResourceId)) 'KQL scope contains the exact supplied Arc ID'
     Check ($text.Contains("Log Analytics workspace: $($context.logAnalyticsWorkspaceId)")) 'SRE prompt uses the exact saved workspace resource ID'
     Check ($text.Contains("Tenant: $($context.tenantId)") -and $text.Contains("Subscription: $subscription")) 'Investigation target is fully explicit'
@@ -104,6 +137,7 @@ try {
     Check ($sqlText.Contains('../docs/sre-response-plan-automation.md#observed-lob-warning-and-reporting-limits') -and
         $sqlText.Contains('../docs/sre-response-plan-automation.md#reset-between-demo-runs')) 'Rehearsal and reset links resolve from the generated guide, preserving section fragments'
     Check ($sqlText -notmatch '\{\{|\}\}|SQL:START|SQL:END') 'Optional SQL section has no unresolved markers'
+    Check (Test-ArcSpliceShape $sqlText) 'The SQL render keeps the same Arc splice headings'
     Check ($sqlText.Contains('| sql-review | Arc SQL lock timeout | On, Azure Monitor, Sev2, Review, three-hour cooldown |')) 'SQL plan renders as a complete three-column table row'
     Check ($sqlText -notmatch '(?:\r?\n){3}') 'Conditional SQL markers do not leave repeated blank lines'
     $context.sql['accessToken'] = 'synthetic-rejected-value'
