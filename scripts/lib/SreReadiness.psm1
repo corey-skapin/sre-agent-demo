@@ -79,6 +79,7 @@ function Get-SreReadinessReport {
         $exists = Read-AzJson @('group', 'exists', '-n', $groups[0])
         $principalId = $PreviousIdentityPrincipalId
         $agent = $null
+        $monitorConnected = $false
         if ($exists) {
             $resources = @(Read-AzJson @('resource', 'list', '-g', $groups[0]))
             if (@($resources | Where-Object id -EQ $identityId).Count) {

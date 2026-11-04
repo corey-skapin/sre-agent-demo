@@ -20,6 +20,11 @@ The generator is offline. It reads JSON and fills the tracked
 `docs/delivery-runsheet.md` source; plain Markdown does not interpolate JSON.
 Refresh after setup changes. Saved context timestamps describe the inputs,
 not fresh health checks. Do not query Azure solely to generate a document.
+The companion Arc generator can splice this guide into its whole-demo page
+(`New-PresenterRunsheet.ps1 -SreGuidePath <this guide>` in `arc-demo`). It requires
+the template's level-2 headings `This afternoon: verified existing investigations`,
+`Live faults` and steps 1 to 7 (step 7 exactly `7. Close`), so keep them when editing
+`docs/delivery-runsheet.md`; `tests/Test-PresenterRunsheet.ps1` checks this.
 
 Context schema version 1 requires these exact nonsecret fields:
 
@@ -172,10 +177,10 @@ results/recommendations. A restored Healthy config does not resolve an alert
 immediately while events remain inside its lookback. Correlate actual CPU,
 memory and free-space bins before/during/after, reporting missing stages.
 No relationship between synthetic dependency warnings and resource pressure is
-assumed. Existing historical automatic RCA remains unproven, and the previous
-read-only investigation exposed only partial tool/report evidence. New metrics
+assumed. Historical automatic RCA is unproven, and earlier read-only
+investigations exposed only partial tool/report evidence. New metrics
 queries, guest warning, notifications and investigation usage need new scope;
-the previous one-query consent is consumed.
+earlier one-time consents do not carry over.
 
 ### SQL setup and sequential rehearsal
 
@@ -194,7 +199,7 @@ SQL Arc host and supply distinct `labels.sqlResponsePlan`, exact
 `labels.sqlEventSource = ArcSqlEngineDemo`. The two fictional examples keep SQL
 disabled. The presenter never edits these fields or hunts for resource IDs.
 
-For the currently running two-route demo, an exact managed Arc resource group
+For an already running two-route demo, an exact managed Arc resource group
 already covers its SQL host. Use an in-place handler instruction update and one
 SQL filter without redeploying that parent. Existing T09/LOB plans, Review, Sev2,
 enabled three-hour cooldown, tools, identity and group grants remain unchanged.
@@ -221,7 +226,9 @@ query/SRE charges. Check each alert's Monitor condition and actual cooldown;
 do not disable routing or cooldown to force a new incident without a separately
 approved exception. The [reset procedure](sre-response-plan-automation.md#reset-between-demo-runs)
 distinguishes the three-hour filter setting from Azure Monitor's seven-day
-same-rule merge; alert/thread closure alone is not a documented reset. Use the existing
+same-rule merge; alert/thread closure alone is not a documented reset. Its
+scripted route helper is `Invoke-SreDemoRoute.ps1 -Action Prepare` before a
+fresh fault and `-Action Restore` afterwards. Use the existing
 inspection path for actual completed tool output, not merely a tool-start label
 or truncated narrative. If that path is unavailable, state the evidence limit
 before the run instead of claiming full verification.
@@ -280,12 +287,15 @@ For Ready:
 1. Confirm the Arc estate is active using Arc readiness and actual inventory.
 2. Validate skin; run local mocked tests and Bicep compilation.
 3. Preview Deploy-SreAgent.ps1 -WhatIf. Review the exact diff before changes.
-4. Deploy with -ParentOnly only when parent changes are authorized. This is
-   deliberately not a claim that the full demo is Ready.
-5. Render Initialize-SreConfiguration.ps1, then -Inspect via pinned official
-   template protocols. Review the full preview before -Apply with a new external
-   -BackupPath. Unsupported legacy settings/P1-P2 stop without migration;
-   use the canonical supported fallback, never guessed endpoints or duplicate plans.
+4. Deploy with -ApproveParentCreation and a new external -ConfigurationBackupPath
+   only when parent creation is authorized. It creates the parent, then applies
+   and verifies the handler and plans. Use -ParentOnly (deliberately not a claim
+   that the demo is Ready) only to review the configuration preview first.
+5. For a running parent, or after -ParentOnly, render Initialize-SreConfiguration.ps1,
+   then -Inspect via pinned official template protocols. Review the full preview
+   before -Apply with a new external -BackupPath. Unsupported legacy settings/P1-P2
+   stop without migration; use the canonical supported fallback, never guessed
+   endpoints or duplicate plans.
 6. Run Test-SreReadiness.ps1: handler, plan, Sev2 filters, legacy fields, Review
    and overlap have full read-back. Its telemetry item is optional, skipped/not
    evaluated; all required checks must pass. Never rewrite the report.
@@ -398,6 +408,14 @@ az bicep build --file .\infra\main.bicep --stdout
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+  -SkinPath .\config\demo-skin.json -ApproveParentCreation `
+  -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
+
+# The steps below are the manual route: -ParentOnly (not Ready) and then
+# configuration by hand. They are also how to change configuration on a
+# running parent, which Deploy refuses.
+.\scripts\Deploy-SreAgent.ps1 `
+  -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath .\config\demo-skin.json -ParentOnly -ApproveParentCreation
 
 .\scripts\Initialize-SreConfiguration.ps1 `
@@ -422,8 +440,7 @@ az bicep build --file .\infra\main.bicep --stdout
 
 See [response-plan automation](sre-response-plan-automation.md) for supported
 commands, pinned protocol sources, idempotency/timeouts and exact machine
-contract. Complete deployment can use -ConfigurationBackupPath instead of
--ParentOnly; a new live incident/recovery test still needs separate authorization.
+contract. A new live incident/recovery test still needs separate authorization.
 
 ## Lifecycle and permission boundaries
 

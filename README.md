@@ -11,7 +11,7 @@ card or customization step is required.
 
 - **AI coding assistants:** read [`AGENTS.md`](AGENTS.md) first.
 - **Presenter:** open `.local/presenter-runsheet.md`. If it is missing, the setup assistant follows [local guide generation](docs/ai-deploy-handbook.md#local-presenter-guide). The [docs index](docs/README.md) keeps operator/history references outside the presenter path.
-- **Setup/repair SRE response plans:** use [`docs\sre-response-plan-automation.md`](docs/sre-response-plan-automation.md).
+- **Build, verify, park, wake or remove the SRE layer:** follow the [setup path at a glance](docs/sre-response-plan-automation.md#setup-path-at-a-glance) in `docs\sre-response-plan-automation.md`. Dated rehearsal evidence is kept in that document's appendix, away from the setup steps.
 - **Do not use every doc as a presenter script.** Several files under `docs\` are engineering evidence or historical runbooks.
 
 ## What it deploys
@@ -34,12 +34,27 @@ infra/
   modules/sre-identity.bicep # retained SRE-only user-assigned identity
   modules/sre-agent.bicep    # disposable parent and App Insights, referencing retained identity
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
+config/
+  demo-skin.json             # fictional default skin (also dummy-customer.demo-skin.json); schema in demo-skin.schema.json
+  sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
 samples/
   lob-arc-app/               # Local T11 app; optional operator-supplied repository context
 scripts/
-  Deploy-SreAgent.ps1        # discovers arc-demo IDs and deploys this layer
+  Deploy-SreAgent.ps1        # builds the parent (and, with -ConfigurationBackupPath, its configuration)
+  Initialize-SreConfiguration.ps1 # renders, inspects and applies handler/response-plan configuration
+  Test-SreReadiness.ps1      # read-only readiness for -DesiredState Active, Hibernated or Removed
+  Hibernate-SreAgent.ps1     # parks the paid parent, retains identity and grants
+  Remove-SreAgent.ps1        # separately approved full removal
+  Grant-SreAzureMonitorAlertAccess.ps1 # the one subscription Monitoring Contributor grant
+  Invoke-SreDemoRoute.ps1    # Prepare/Restore a demo alert rule around a live fault
+  New-PresenterRunsheet.ps1  # renders .local/presenter-runsheet.md; no Azure calls
+  Invoke-NativeContainerAppFault.ps1 # T09 fault toggle
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
   New-LobArcAppMonitorAlert.ps1 # creates or prints the T11 log alert signal
+  Invoke-T10ArcFault.ps1     # historical T10 experiment fault helper, kept for its ledger
+  lib/                       # shared modules for the scripts above
+tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
+docs/                        # start at docs/README.md
 ```
 
 ## Prerequisites
@@ -48,7 +63,7 @@ scripts/
    workload when presenting T09.
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
    ambient subscription selection.
-3. Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
+3. PowerShell 7.4+ (every script requires it), Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
 
 Default arc-demo names discovered by the script:
@@ -147,17 +162,30 @@ Deploy:
 Creation starts the AAU meter and requires explicit `-ApproveParentCreation`.
 An existing parent is refused before IaC, including WhatIf: use configuration-only
 Inspect/Apply for handler and plan changes instead of overwriting live settings.
+The complete build creates the parent, then applies and read-back-verifies the
+handler and response plans. It needs `-ConfigurationBackupPath`: a **new** file in
+an existing directory outside the repository, kept as the reference export.
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -ParentOnly `
+  -SkinPath .\config\demo-skin.json `
   -ApproveParentCreation `
-  -SkinPath .\config\demo-skin.json
+  -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
 
-If your arc-demo names differ, pass explicit IDs/names instead of relying on discovery:
+Add `-GrantAzureMonitorAlertAccess` only after IAM approval (see
+[How it consumes arc-demo](#how-it-consumes-arc-demo)); without that grant,
+required readiness fails on `azure-monitor-alert-access` unless the retained
+identity already holds it. `-ParentOnly` replaces `-ConfigurationBackupPath` to
+stop after the control plane; that result is **not Ready**. Finish with
+`Test-SreReadiness.ps1 -DesiredState Active` (below).
+
+If your arc-demo names differ from the skin, pass explicit IDs/names instead of
+relying on discovery. A complete build requires the skin's own names, so custom
+overrides are `-ParentOnly` and the skin must be reskinned to match before the
+configuration step ([reskin guide](docs/reskin-guide.md)):
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
@@ -280,18 +308,20 @@ cost state, not that the whole group or combined lab is cost-free.
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 
 # Before the next demo — rebuild the parent using the retained identity
-# First reactivate and verify Arc through its own repo.
+# First reactivate and verify Arc through its own repo, then preview with -WhatIf.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -ParentOnly `
+  -SkinPath .\config\demo-skin.json `
   -ApproveParentCreation `
-  -SkinPath .\config\demo-skin.json
+  -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
 
 Verify SRE hibernation before parking Arc; wake Arc before reconstructing SRE.
-Reactivation also requires modern handler/v3-plan ensure and verification above,
-with a new external backup path and approval for actual changes.
+Reactivation is the same complete build as a first deployment: it reuses the
+retained identity and grants, recreates and verifies the handler and v3 plans,
+and needs a new external backup path and approval for actual changes. Follow it
+with `Test-SreReadiness.ps1 -DesiredState Active`.
 After successful AI-led combined activation/SRE reactivation, the SRE assistant
 must [ask once whether you want a T09 incident](docs/ai-deploy-handbook.md#post-activation-incident-offer).
 If you agree, it runs the existing procedure and guides your human Review
@@ -313,8 +343,9 @@ separate full deletion. The parent keeps its validated combined identity shape:
 its system-assigned principal still changes when the parent is recreated and is
 not granted these external workload roles. Never reactivate retired legacy v2 handlers.
 Versioned filters explicitly restore enabled three-hour cooldown and Review/Sev2.
-A fresh retained-identity park/wake round trip has not been live-tested by the
-T09 rehearsal. Residual Arc/storage/monitoring
+Hibernate was proven live on 2026-11-04. Reactivation after it and a from-zero
+Deploy have not been run live, so treat them as unproven until a separately
+authorized run. Residual Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
@@ -375,7 +406,7 @@ the presenter path.
 - `docs\sre-sales-rollout-guidance.md` - Internal sales, PoC and rollout guidance for SRE Agent conversations.
 - `docs\clean-room-shareability-test-2026-10-12.md` - No-cost clean-room preview result across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
-- `docs\sre-response-plan-automation.md` - Decision record for automating custom agents and response plans.
+- `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance". Dated rehearsal evidence is in its appendix.
 - `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
 - `docs\t11-hybrid-diagnostics-wow.md` - Customer-facing hybrid diagnostics wow scene for LOB-on-Arc.
 - `docs\t11-lob-app-on-arc-bridge.md` - Engineering evidence ledger for the LOB app running on an Arc server; not the current presenter source-of-truth.

@@ -123,7 +123,8 @@ $targetArcId = az connectedmachine show `
   --output tsv
 ```
 
-Deploy or update the SRE Agent with the target Arc machine in scope:
+Deploy the SRE Agent with the target Arc machine in scope (first creation; an
+existing parent is refused):
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
@@ -131,6 +132,7 @@ Deploy or update the SRE Agent with the target Arc machine in scope:
   -TenantId $tenantId `
   -SkinPath .\config\demo-skin.json `
   -ParentOnly `
+  -ApproveParentCreation `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($targetArcId)
 ```

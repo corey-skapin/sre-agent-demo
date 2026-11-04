@@ -54,6 +54,12 @@ try {
             return ConvertTo-Json -InputObject @($state.resources) -Depth 30
         }
         if ($command -like 'identity show*') { return $state.identity | ConvertTo-Json }
+        if ($command -like 'role assignment list*') {
+            $listScope = $args[[Array]::IndexOf($args, '--scope') + 1]
+            return ConvertTo-Json -InputObject @($state.assignments | Where-Object { $_.properties.scope -eq $listScope } | ForEach-Object {
+                @{ id = $_.id; principalId = $_.properties.principalId; roleDefinitionId = $_.properties.roleDefinitionId; scope = $_.properties.scope }
+            }) -Depth 10
+        }
         if ($command -like 'resource show*') { return @{ id = $agent } | ConvertTo-Json }
         if ($command -like 'rest --method get*') {
             if ($state.denyRead) { $global:LASTEXITCODE = 13; return '' }
@@ -279,6 +285,11 @@ try {
     & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
     $excessParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated
     Check ($excessParked.status -eq 'pass' -and @($excessParked.checks | Where-Object { $_.id -eq 'retained-workload-grants' -and $_.status -eq 'fail' -and -not $_.required }).Count -eq 1) 'Legacy broad standing grant is reported as wake failure but not a cost-parking failure'
+    Reset-Fixture
+    & $hibernate -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
+    $wake = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
+    Check ($wake.status -eq 'fail' -and $wake.checks[0].id -eq 'parent' -and @($wake.checks | Where-Object id -EQ 'inspection-error').Count -eq 0) 'Active readiness on a parked estate reports the absent parent, not an inspection crash'
+    Check (@($wake.checks | Where-Object { $_.id -match '^rbac-' -and $_.status -eq 'pass' }).Count -eq 2) 'Active readiness on a parked estate still verifies the retained workload grants'
     Write-Host "$count lifecycle assertions passed. All cloud calls mocked."
 } finally {
     Remove-Variable -Scope Global -Name LifecycleState -ErrorAction SilentlyContinue

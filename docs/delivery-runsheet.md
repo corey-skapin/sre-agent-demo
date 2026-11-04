@@ -4,6 +4,72 @@ Follow this guide from top to bottom. Setup fills the names and links into
 `.local/presenter-runsheet.md`; open that local copy for the presentation.
 Context recorded: **{{recordedAtUtc}}**. These saved links do not certify current health.
 
+## This afternoon: verified existing investigations
+
+Before presenting, the operator opens [{{agentName}}]({{agentUrl}}) read-only and
+checks which investigations already exist: SQL, LOB and Container App, each with its
+actual title, ID and creation time. Use only those as the dated threads in steps 1, 4
+and 5, and say each one's real date when you open it. If a scenario has none, say so
+and explain the same flow from the configured plan; do not send a chat message or
+create an incident to fill the gap. Regenerating this guide overwrites the local copy,
+so add the verified list last.
+
+## Live faults
+
+Read this before Arc chapter 7. The AI runs every command here. The presenter says
+**GO**, watches, and approves only the current Review card in step 6. Each fault
+needs its own approval, and none runs during a navigation-only rehearsal.
+
+### Sequence
+
+1. Say **GO** only after Arc chapter 7 has shown the alert rules. The AI runs
+   `Invoke-SreDemoRoute.ps1 -Action Prepare` for each configured route (SQL, LOB and
+   the Container App, which is T09). It disables the original rule and enables a
+   fresh copy, so a new alert starts a new investigation instead of merging into an
+   old thread.
+2. Fire **SQL**, wait for its alert, thread and report, and verify its cleanup. Then
+   fire **LOB** the same way. One at a time, never together.
+3. Fire **T09** about 10 minutes before the Review beat in step 6.
+4. When the user says **done** and the investigations have finished, the AI runs
+   `-Action Restore` for every prepared route: the copies are deleted and the
+   originals are enabled again. Azure Monitor can replay an old alert or email on
+   restore; see [the reset procedure]({{lifecycleGuideUrl}}#reset-between-demo-runs).
+
+### Observed timings
+
+Minutes after the fault is fired, as observed in rehearsal: typical, not a promise.
+
+| Scenario | Alert | Thread | Report or card |
+| --- | --- | --- | --- |
+| SQL | about 2 | about 2.5 | report about 4.5 |
+| LOB | about 6 | about 6.5 | report about 8.5 |
+| T09 | about 5 to 7 | about 6 to 8 | Review card about 7 to 10 |
+
+- Prepare takes 1 to 2 minutes. Prepare, SQL, LOB and T09 one after another take
+  about 25 minutes.
+- Alerts auto-resolve about 21 to 31 minutes after firing. Read the Monitor
+  condition separately from the thread and workflow status.
+- No approval-card expiry is documented; waits of about 7 minutes worked.
+- One run per scenario per three hours. The plan cooldown stays enabled.
+
+### Running the live faults inside a 30-minute slot
+
+About 25 minutes of faults do not fit after Arc chapter 7 in a 30-minute slot.
+Instead, the AI runs Prepare, SQL and LOB, one at a time with cleanup verified
+between, before the Arc half or early in it, so the SRE half opens
+already-finished investigations. This is the one exception to the GO rule above.
+If the original rules already read as disabled when you show them, say the copies
+are the same rules, temporary, and leave the originals alone. Fire T09 about 10
+minutes before its Review beat so the card is waiting. Restore after the last
+investigation has finished.
+
+### Approval provenance
+
+Say "a person approved it", never "the audit proves it". In both rehearsals the
+agent's result showed no approver record (`approveScope` none) even though the user
+clicked **Approve**. The person who clicked is the evidence; do not present
+telemetry or the agent's result as proof of who approved.
+
 ## 1. Pick up from Arc
 
 **Say:** "Everything you've seen so far told us what's true. Now something goes wrong. The same alert rules you saw start an investigation by themselves: the agent gathers the evidence, proposes an action and stops at a person for anything that changes Azure. We'll watch that happen three times: the orders database, the application worker, and a container app."
@@ -15,6 +81,8 @@ story. With dated threads, describe the earlier incident rather than a new live 
 Say **GO** to prepare the live-fault copies only **after Arc chapter 7 has shown
 the alert rules**; the best moment is its audience question. Prepare disables the
 original rules while their copies exist, so do not run it before showing those rules.
+**Live faults** above has the order, the observed timings and the one 30-minute-slot
+exception to this rule.
 
 This section takes about 15 minutes. Navigation stays read-only. Sending the
 investigation or incidents in step 5 and triggering a fault in step 6 need
@@ -48,8 +116,15 @@ Inspect these existing entries without editing:
 | {{lobResponsePlan}} | {{lobAlertTitleContains}} | On, Azure Monitor, Sev2, Review, three-hour cooldown |
 | {{sqlPlanRow}} | {{sqlPlanSignal}} | {{sqlPlanCheck}} |
 
-These plans use **{{agentName}}** as the handling agent. Open that agent's instructions
-to show the narrow app reset and the operator-led Arc recovery boundary.
+These plans use **{{agentName}}** as the handling agent. To show its instructions,
+which hold the narrow app reset and the operator-led Arc recovery boundary, open
+[{{agentName}}]({{agentUrl}}), then **Builder** > **Agent Canvas**, and click the
+**{{agentName}}** subagent node. The **Instructions** box in the right panel holds
+the text; scroll to its **Governance** section and its **Separate Container App
+recovery policy** section. Look only; do not edit or save. That is the path observed
+in the portal. [Learn](https://learn.microsoft.com/azure/sre-agent/create-subagent#edit-a-subagent)
+names the menu both ways (**Builder** and **Build + setup** > **Workflows**) and
+describes selecting the node, then **Edit**, so use the Agent Canvas you can see.
 
 **Say:** "The response plan selects the alert and handling agent. Review asks a
 human to approve Azure infrastructure operations. Resource permissions still
@@ -275,7 +350,10 @@ Skip this step unless the user has explicitly approved one Container App fault,
 an observation deadline and the narrow reset fallback. The AI runs the
 [existing T09 procedure]({{operatorGuideUrl}}); the presenter does not choose scripts.
 The signed-in human approves only the current run's exact reset card.
-Never approve a stale card after operator recovery.
+Never approve a stale card after operator recovery. The card appears about 7 to 10
+minutes after the fault, so fire it about 10 minutes before this beat. Say that a
+person approved it, never that the audit proves it (see **Approval provenance**
+under **Live faults**).
 
 After execution, verify the false fault flag, serving revision and HTTP 200.
 Check the alert's Monitor condition separately from its workflow status.
