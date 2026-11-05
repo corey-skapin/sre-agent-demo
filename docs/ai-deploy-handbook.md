@@ -258,6 +258,17 @@ can pair `AgentToolExecution` ToolStart/ToolEnd by thread and CallId. Inspect
 actual ToolOutput for truncation: a completed event with a shortened result is
 execution and partial-result evidence, not full raw output. Preserve those limits
 instead of substituting the final narrative or rerunning the fault.
+A pending Review card is visible in the thread messages, not in the approvals
+endpoint. On the rebuilt agent the proposed write was a thread message whose
+`azCliExecution.status` was `Pending` (not started, not completed), and the audit
+table showed `ToolStart` for `RunAzCliWriteCommands` with no `ToolEnd`, while
+`GET /api/v1/approvals/{threadId}` returned nothing and every message's `approval`
+field was null. Detect a pending card from the messages; an empty approvals
+response does not mean there is no card. No `ApprovalDecision` event appeared
+either, but the Azure CLI execution record for the approved command
+(`AgentAzCliExecution` in Learn's event list) carried a `User` that matched the
+portal user, so that field attributes the approver. Still say "a person approved
+it": it shows who clicked, not that the card was current.
 The documented [GenAI content table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/appgenaicontent)
 also exposes tool-result fields, but their existence does not mean this agent
 populates them. An exact-trace read for the first SQL run returned assistant
@@ -375,7 +386,14 @@ unchanged; any required failed/pending check blocks the offer. The optional
 unevaluated rehearsal item is not incident proof and needs no special exception.
 
 Use the confirmed private target and an agreed observation deadline in the
-conversation. For example: **"Activation is complete. Would you like me to
+conversation. Also confirm that the approver is signed in to the agent at its
+Incidents view and ready to click ([click path](t09-native-containerapp-closed-loop.md#7-approve-the-governed-fix)),
+and agree how they will signal the AI: a message sent while the AI is inside a
+long wait may be seen only after that wait returns. In the first rebuilt run the
+card appeared about 7 minutes after the fault, so a 20-minute deadline counted from
+the fault left about 13 minutes to approve it. If the approver cannot be at the
+screen for that window, say so before the fault.
+For example: **"Activation is complete. Would you like me to
 trigger one T09 Container App incident now? It temporarily faults the demo app,
 can send configured alert notifications and incurs SRE usage costs. I'll run
 the existing demo procedure, monitor until our agreed deadline, use the narrow
@@ -404,6 +422,10 @@ Follow the runbook's existing recovery-owner/deadline and operator fallback
 procedure if approval or SRE repair is unavailable. The helper has no automatic
 watchdog or hard cancellation guarantee; do not promise otherwise. Surface
 reset/health failures immediately and never approve a stale card after fallback.
+The card stays Pending and approvable after the operator fallback (in the first
+rebuilt run it was approved 21 minutes later and the agent's write ran as a no-op),
+so agree before the fault that the signed-in administrator may Deny it at once;
+otherwise tell them not to click it.
 Record actual alert, investigation and finding evidence where observed; report
 missing or uncertain evidence as pending, not as a successful loop. Verify the
 false flag, serving revision and HTTP 200, and report actual Monitor condition
