@@ -126,7 +126,8 @@ Sev2 and Review. First deployment creates the UAMI through the same IaC; normal
 park/wake retains its principal and deterministic grant IDs. The system-assigned
 parent principal still changes on parent recreation. A missing UAMI fails normal
 Hibernated readiness; do not mistake historical whole-group deletion for retention.
-Hibernate was proven live on 2026-11-04; reactivation after it is not yet proven.
+Hibernate and wake from the retained identity were proven live on 2026-11-05
+([evidence and limits](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
 `Active` is the public desired state; `Ready` remains the compatible readiness
 alias/default. Old UAMI-only Hibernated states remain accepted; authorized wake
 recreates missing diagnostics and adopts retained grants. Requested profile,

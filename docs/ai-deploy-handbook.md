@@ -524,8 +524,9 @@ step is required. Read back the selection and grant separately. The existing
 unset/non-AzMonitor selection emits an advisory warning, not a new required gate.
 Only if that check shows the platform is not configured, use the separately
 authorized [portal fallback](sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Fresh-agent intake through IaC plus the grant remains unproven until the rebuild
-and separately authorized alert-delivery verification. Never infer this state
+Fresh-agent intake through IaC plus the grant worked on the 2026-11-05 from-zero
+rebuild for T09 only ([evidence and limits](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05));
+SQL and LOB delivery need their own authorized runs. Never infer this state
 from optional connector files. Deployment adopts
 existing direct assignment names and does not query Graph display names.
 Retained AppInsights must match the requested workspace/location; wake does not
@@ -536,6 +537,9 @@ pagination; unexpected SRE resources or scoped grants block its destructive path
 
 Local checks cover parser/schema/rendering/mocked failures and safety behavior.
 They do not prove Azure data-plane create reliability, destructive lifecycle
-rebuild, live guest execution or a new T09 alert-to-recovery run.
+rebuild, live guest execution or a new T09 alert-to-recovery run. The separate
+2026-11-05 live session exercised the build, Hibernate and wake paths and one T09
+alert-to-card chain; its limits, including the still-unproven clean in-window
+repair, are in the [evidence boundaries](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05).
 See the [historical engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
 for dated run outcomes and their evidence limits.

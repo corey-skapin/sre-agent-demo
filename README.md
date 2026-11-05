@@ -237,9 +237,9 @@ the separately approved role grant. A portal connection click is **not a require
 rebuild step**. Readiness reports the ARM selection as `incident-platform`, not
 scanner health or alert-delivery proof. If it reports an unset/non-AzMonitor
 platform, use the separately authorized [portal fallback](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus
-the scripted grant remains **unproven until the rebuild and authorized delivery
-verification**.
+Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus the
+scripted grant worked on the 2026-11-05 from-zero rebuild, for T09 only
+([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
 
 ### Complete Ready state
 
@@ -368,9 +368,12 @@ separate full deletion. The parent keeps its validated combined identity shape:
 its system-assigned principal still changes when the parent is recreated and is
 not granted these external workload roles. Never reactivate retired legacy v2 handlers.
 Versioned filters explicitly restore enabled three-hour cooldown and Review/Sev2.
-Hibernate was proven live on 2026-11-04. Reactivation after it and a from-zero
-Deploy have not been run live, so treat them as unproven until a separately
-authorized run. Residual Arc/storage/monitoring
+Hibernate (151 to 180 s) and a wake from the retained identity (289 s) were proven
+live on 2026-11-05 with the same principal and grant IDs. What survives, what is
+lost and the limits of that evidence are in
+[the live lifecycle proof](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05);
+a clean in-window T09 repair on a rebuilt agent is still unproven. Residual
+Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).

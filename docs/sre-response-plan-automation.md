@@ -529,8 +529,10 @@ optional readiness warning to review the portal fallback. That configuration
 warning does not invalidate retained access or establish scanner health or
 incident readiness. When AzMonitor is selected, missing subscription scanner
 access is a required failure, not a reason to grant it silently.
-This grant survived the live Hibernate of 2026-11-04 (read-only readiness
-confirms it); waking with it is not yet proven.
+This grant survived the live Hibernates of 2026-11-04 and 2026-11-05 (read-only
+readiness confirms it), and on 2026-11-05 it alone satisfied the wake's required
+`azure-monitor-alert-access` check, with no `-GrantAzureMonitorAlertAccess` switch
+([evidence boundaries](#live-lifecycle-proof-2026-11-05)).
 Reconciliation requires separate scope approval, not implicit revocation.
 Otherwise, wake adopts existing direct grant names,
 creates missing grants and avoids unnecessary Graph principal-name lookups.
@@ -616,8 +618,10 @@ read-only GET of the running existing parent returned `type: AzMonitor`, with
 says Azure Monitor needs no supplied credentials; neither that guide nor the ARM
 schema specifies an additional required connector resource for this integration.
 This existing-parent evidence does not establish how a fresh instance initializes.
-**Fresh-agent intake from IaC plus the script remains unproven until the rebuild
-and separately authorized delivery verification.**
+**Fresh-agent intake from IaC plus the script worked on the 2026-11-05 from-zero
+rebuild:** the T09 alert fired and the agent's thread appeared 17 seconds later,
+with no portal connect click. That covers T09 only; SQL and LOB delivery on a
+rebuilt agent stay unverified until each is separately authorized and exercised.
 
 ### Explicit Azure Monitor access grant
 
@@ -678,9 +682,10 @@ modern v3 filters explicitly restore enabled three-hour cooldown and Review/Sev2
 Do not replay an old full export as a PUT payload: it is reference
 evidence, not a supported restore input. Optional repository authentication needs
 explicit reauthorization. Hibernate with the retained identity was proven live
-on 2026-11-04, but an in-place T09 repair proves neither a fresh bootstrap nor a
-wake: reactivation after Hibernate and a from-zero Deploy remain unproven until
-a separately authorized live run.
+on 2026-11-04 and again on 2026-11-05, together with a from-zero Deploy and a
+wake from the retained identity ([what that established](#live-lifecycle-proof-2026-11-05)).
+An in-place T09 repair proves none of these, and a proven wake does not certify a
+later instance: repeat the readiness checks after every wake.
 
 After AI-led combined activation/SRE reactivation completes, the SRE-owning
 assistant must [offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer),
@@ -757,6 +762,48 @@ service reliability, a destructive lifecycle or a new incident. Preserve actual
 approval/executor evidence separately; never treat narration as approval, use
 unrestricted approval to bridge a missing capability, or delete the parent as a
 configuration-repair shortcut. Historical results do not certify today's instance.
+
+### Live lifecycle proof, 2026-11-05
+
+One live session that used only these docs ran a from-zero build, one T09
+incident, then Hibernate, wake and Hibernate again. It established the following
+and nothing beyond it.
+
+- **Build.** Deploy took 326 s and `Test-SreReadiness.ps1 -DesiredState Active`
+  passed 21 of 21 required checks.
+- **Hibernate** took 180 s the first time and 151 s the second. Each run ended with
+  `-DesiredState Hibernated` readiness passing (7 checks, including the 2 required
+  ones) using the saved principal. The first execute attempt without
+  `-Confirm:$false` stopped after 7 s with "NonInteractive mode" and changed
+  nothing: a non-interactive host must pass `-Confirm:$false` to Hibernate and Remove.
+- **Wake.** The `-WhatIf` preview took 90 s and showed the counts in
+  [what to expect](#what-to-expect-previews-and-durations). Deploy took 289 s and
+  Active readiness passed 21 of 21 required checks. No `-GrantAzureMonitorAlertAccess`
+  was given: the retained subscription-scope Monitoring Contributor grant alone
+  satisfied `azure-monitor-alert-access`.
+- **Identity.** The UAMI principal and all seven of its role-assignment IDs were
+  identical before, between and after the cycles, with no duplicates, so the
+  deterministic IDs held. The deployer's parent-scoped administrator assignment was
+  recreated with the new parent, and the parent's system principal changed.
+- **Survives Hibernate:** the SRE group, the UAMI, its seven grants (six workload,
+  one subscription-scope Monitoring Contributor), workspace Application Insights with
+  the first run's audit telemetry in the Arc workspace, the Smart Detection action
+  group, and the private exports and backups.
+- **Lost:** the parent, its handler and three response plans (the wake rebuilds them
+  from the versioned assets), every thread and message, memory notes and the approval
+  card history. A woken agent starts with no threads.
+- **First T09 run, with its caveat.** The alert fired 5.2 minutes after the fault
+  command finished, the agent's thread appeared 17 seconds later, and the Review card
+  was pending about 7 minutes after the fault. No Approve arrived before the agreed
+  20-minute deadline, so the operator fallback repaired the app. The Approve registered
+  about 21 minutes after the deadline, on the by-then stale card; the agent's own write
+  then ran under its managed identity as a no-op, and its RCA said a person had fixed
+  the app first. Alert, thread, card and executor each worked, but **a clean in-window
+  repair, approved before the deadline and executed by the agent without the fallback,
+  is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt agent
+  were not run.
+- **Not covered:** the destructive Removed convergence, and any instance other than
+  the one tested. Repeat the readiness checks after every wake.
 
 ## Appendix: dated rehearsal evidence
 
