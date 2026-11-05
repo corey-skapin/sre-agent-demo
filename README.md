@@ -2,17 +2,15 @@
 
 This repository is the optional **Azure SRE Agent** layer for the separate `arc-demo` companion repository. It keeps concerns split: `arc-demo` builds the Arc + Azure Monitor estate and remains fully standalone; this repo attaches an SRE Agent to an already-deployed `arc-demo` environment without redeploying or modifying it.
 
-**Present from `.local/presenter-runsheet.md`.** Setup generates this local SRE
-guide with the actual resource names, portal links and scoped queries. Follow it
-top to bottom after the Arc section in the companion repo. No presenter input
-card or customization step is required.
+**To present, open `.local/presenter-runsheet.md`.** Setup generates this local SRE
+guide with your actual resource names, portal links and scoped queries. Follow it
+top to bottom after the Arc section in the companion repo.
 
 ## Start here
 
-- **AI coding assistants:** read [`AGENTS.md`](AGENTS.md) first.
-- **Presenter:** open `.local/presenter-runsheet.md`. If it is missing, the setup assistant follows [local guide generation](docs/ai-deploy-handbook.md#local-presenter-guide). The [docs index](docs/README.md) keeps operator/history references outside the presenter path.
-- **Build, verify, park, wake or remove the SRE layer:** follow the [setup path at a glance](docs/sre-response-plan-automation.md#setup-path-at-a-glance) in `docs\sre-response-plan-automation.md`. Dated rehearsal evidence is kept in that document's appendix, away from the setup steps.
-- **Do not use every doc as a presenter script.** Several files under `docs\` are engineering evidence or historical runbooks.
+- **Working through an AI tool:** point it at [`AGENTS.md`](AGENTS.md); it carries the commands and the rules.
+- **Present:** open `.local/presenter-runsheet.md`. If it is missing, [generate it](docs/ai-deploy-handbook.md#your-presenter-guide) from your saved context. The [docs index](docs/README.md) lists every page.
+- **Build, verify, park, wake or remove the SRE layer:** follow the [setup path at a glance](docs/sre-response-plan-automation.md#setup-path-at-a-glance) in `docs\sre-response-plan-automation.md`.
 
 ## What it deploys
 
@@ -29,8 +27,8 @@ The Bicep uses the published [Microsoft.App/agents schema](https://learn.microso
 ## What you get
 
 These screenshots come from the first from-zero run of this layer on a demo estate
-(fictional Contoso names, identifiers masked). In that run an operator repaired the
-app before the agent's approved change landed, so the report says a person fixed it
+(fictional Contoso names, identifiers masked). In that run the app was repaired by
+hand before the agent's approved change landed, so the report says a person fixed it
 first: the images show what the agent presents, not a clean in-window repair
 ([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
 
@@ -76,13 +74,13 @@ config/
   demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
 samples/
-  lob-arc-app/               # Local T11 app; optional operator-supplied repository context
+  lob-arc-app/               # Local T11 app; optional repository context you supply
 scripts/
   Deploy-SreAgent.ps1        # builds the parent (and, with -ConfigurationBackupPath, its configuration)
   Initialize-SreConfiguration.ps1 # renders, inspects and applies handler/response-plan configuration
   Test-SreReadiness.ps1      # read-only readiness for -DesiredState Active, Hibernated or Removed
   Hibernate-SreAgent.ps1     # parks the paid parent, retains identity and grants
-  Remove-SreAgent.ps1        # separately approved full removal
+  Remove-SreAgent.ps1        # full removal (Hibernate keeps the identity; Remove deletes it)
   Grant-SreAzureMonitorAlertAccess.ps1 # the one subscription Monitoring Contributor grant
   Invoke-SreDemoRoute.ps1    # Prepare/Restore a demo alert rule around a live fault
   New-PresenterRunsheet.ps1  # renders .local/presenter-runsheet.md; no Azure calls
@@ -121,22 +119,22 @@ customer's defaults. Subscription and tenant GUIDs are required on cloud helpers
 requests pass explicit subscription context without changing the global CLI account.
 Names are validated rather than silently sanitized when explicitly supplied.
 
-## Handoff safety
+## Keep private values out of git
 
-Keep tracked examples fictional and real skins/evidence outside the checkout.
-Optional source URL/revision must be supplied together; a local-sample demo
-requires neither a repository connection nor a fabricated source URL.
-`tests\Invoke-Tests.ps1` includes handoff checks for non-example UUIDs, contact
-emails, workstation checkout/home paths and unreviewed repository-owner links. Public Azure
-role IDs and synthetic test IDs are deliberately retained.
+Keep tracked examples fictional and your real skin, backups and evidence outside
+the checkout. An optional source URL and revision must be supplied together; a
+local-sample demo needs neither a repository connection nor a made-up source URL.
+`tests\Invoke-Tests.ps1` includes checks for non-example UUIDs, contact emails,
+workstation checkout/home paths and unreviewed repository links. Public Azure
+role IDs and synthetic test IDs are deliberately allowed.
 
 CI also runs PowerShell static analysis, offline Bicep compilation and Markdown
 linting. The Markdown config preserves existing long lines and table styles;
 other rules stay enabled. These checks do not perform a live smoke test.
 These checks are not a complete detector of customer context or secrets.
-Review all tracked changes and perform a bounded secret check before sharing.
-Current-tree cleanup does not rewrite Git history, author metadata, hosting
-ownership or prior PR content; those remain separate from the sanitized files.
+Review all tracked changes and perform a bounded secret check before you share
+the repo. Cleaning the current tree does not rewrite Git history, author
+metadata, hosting ownership or prior PR content.
 
 ## Validate locally
 
@@ -166,7 +164,7 @@ Use the same validated private skin for every SRE script, passed as an absolute
 `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`; every example below uses that
 placeholder, never the tracked `config\demo-skin.json`. The companion wrapper resolves its
 `build.json` relative `sre.skinPath` against that one private lab folder, not the
-current directory. Keep it outside git, worktrees and assistant session folders.
+current directory. Keep it outside git, worktrees and AI-tool session folders.
 Store one new configuration backup per deployment under `sre-backups\`.
 
 Start the private skin as a copy of `config\demo-skin.json` and change only what
@@ -175,26 +173,26 @@ Validate it offline before any cloud call: `Initialize-SreConfiguration.ps1` wit
 only the target and `-SkinPath` checks it against the schema and renders the
 desired configuration.
 
-The Arc owner must first deploy/verify the shared workspace, collection, Action
-Group and hosts. With `T09`, its Arc skin must enable Container Apps and provide
-the healthy fault app plus restart alert. With `T11`, separately authorize
+Deploy and verify the Arc estate first (in the Arc repo): the shared workspace,
+collection, Action Group and hosts. With `T09`, its Arc skin must enable Container
+Apps and provide the healthy fault app plus restart alert. With `T11`, run
 `New-LobArcAppMonitorAlert.ps1 -Action Create` and
-`Invoke-LobArcAppOnArc.ps1 -Action Deploy` using the same target/skin before SRE
-readiness. The latter is a guest Run Command write, not a read-only prerequisite
-check. `Connected` alone does not prove that the LOB app or its Event/Perf data
-exists. SQL is optional and off in both tracked skins. After the Arc owner's
-SQL/collection/alert readiness handoff, enable it in the private skin by adding
+`Invoke-LobArcAppOnArc.ps1 -Action Deploy` (same target and skin) before SRE
+readiness. The latter is a guest Run Command write, not a read-only check.
+`Connected` alone does not prove that the LOB app or its Event/Perf data
+exists. SQL is optional and off in both tracked skins. Once the Arc estate's SQL
+engine, collection and alert are ready, enable it in the private skin by adding
 `"SQL"` to `sre.requiredScenarios`; the tracked skins already carry the dormant
 `sre.sqlTargetArcMachine` and `labels.sql*` values it needs
 ([Optional SQL scenario](docs/sre-response-plan-automation.md#optional-sql-scenario)).
 
 Install Azure CLI and its `containerapp` and `connectedmachine` extensions
-before deployment (extension installation needs its own setup authorization).
+before deployment.
 On Windows, keep the CLI installation's bundled Python runtime: the shared
 wrapper uses native `python.exe -IBm azure.cli`, not a shell command string or
 an unrelated Python installation. It fails explicitly if that runtime is missing.
-Keep SRE registration/region availability and caller role-assignment rights
-separate from these client prerequisites.
+SRE registration, region availability and your role-assignment rights are separate
+from these client prerequisites.
 
 Readiness isolates a missing, denied or malformed scenario resource/alert into
 its own failed check and still evaluates later handler, routing and IAM checks.
@@ -213,12 +211,13 @@ Preview first:
 A complete first-build preview ends with "What-if complete. No resources were
 deployed.", lists five resources to create, and reports six `Unsupported`
 workload role assignments whose IDs depend on the not-yet-created identity
-principal. Anything beyond that is outside the docs
+principal. Anything beyond that isn't expected, so stop and check it
 ([what to expect, with measured durations](docs/sre-response-plan-automation.md#what-to-expect-previews-and-durations)).
 
 Deploy:
 
-Creation starts the AAU meter and requires explicit `-ApproveParentCreation`.
+Creating the parent starts the AAU meter, so pass `-ApproveParentCreation` to
+confirm you want that.
 An existing parent is refused before IaC, including WhatIf: use configuration-only
 Inspect/Apply for handler and plan changes instead of overwriting live settings.
 The complete build creates the parent, then applies and read-back-verifies the
@@ -236,9 +235,10 @@ an existing directory outside the repository, kept as the reference export.
 
 The complete build took about 5.5 minutes live. If it is interrupted after the
 parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
--Inspect`, then an approved `-Apply -BackupPath <NEW_PATH>`.
+-Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 
-Add `-GrantAzureMonitorAlertAccess` only after IAM approval (see
+Add `-GrantAzureMonitorAlertAccess` to create the one subscription-level role grant
+the agent needs to read alerts (you need permission to assign roles there; see
 [How it consumes arc-demo](#how-it-consumes-arc-demo)); without that grant,
 required readiness fails on `azure-monitor-alert-access` unless the retained
 identity already holds it. `-ParentOnly` replaces `-ConfigurationBackupPath` to
@@ -271,14 +271,14 @@ No companion Arc files or workloads are changed by this repo.
 
 Azure Monitor intake also requires exactly one subscription-scoped Monitoring
 Contributor assignment on the live UAMI. Opt in with
-`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` only after IAM approval, or
-preview and approve the [standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess`, or preview and run the
+[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
 Without it, selected-AzMonitor readiness fails rather than silently granting access.
 IaC sets `incidentManagementConfiguration.type = AzMonitor`; the script supplies
-the separately approved role grant. A portal connection click is **not a required
+the role grant when you pass the switch. A portal connection click is **not a required
 rebuild step**. Readiness reports the ARM selection as `incident-platform`, not
 scanner health or alert-delivery proof. If it reports an unset/non-AzMonitor
-platform, use the separately authorized [portal fallback](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
+platform, use the [portal fallback](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
 Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus the
 scripted grant worked on the 2026-11-05 from-zero rebuild, for T09 only
 ([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
@@ -288,8 +288,7 @@ scripted grant worked on the 2026-11-05 from-zero rebuild, for T09 only
 `-ParentOnly` explicitly acknowledges that Bicep deploys only the control plane.
 For complete parent-plus-configuration deployment supply a new
 `-ConfigurationBackupPath` outside git. For an already running parent, use
-`Initialize-SreConfiguration.ps1 -Inspect`, then separately authorized `-Apply
--BackupPath <NEW_PATH>`.
+`Initialize-SreConfiguration.ps1 -Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 The [current-schema procedure](docs/sre-response-plan-automation.md) uses pinned
 Microsoft IaC template protocols for full reads, named upserts and verification.
 Do not use the legacy MCP `severity: high` recipe: it creates invalid AzMonitor
@@ -297,7 +296,7 @@ P1/P2 and response-level settings. Current plans use exact Sev2, explicit Review
 and instructions/tools on the handling custom agent. Fresh bootstrap creates one
 handler and two filters, or three when the optional SQL scenario is enabled;
 modern updates preserve the same objects/history.
-SQL uses the Arc-owned real lock-timeout signal for investigation and operator
+SQL uses the Arc estate's real lock-timeout signal for investigation and
 recommendations only. Its exact setup and retained-identity wake behavior are in
 the [configuration reference](docs/sre-response-plan-automation.md#exact-desired-demo-configuration).
 Legacy migration/cutover is not supported; legacy settings or enabled unowned
@@ -313,14 +312,14 @@ priorities or legacy settings fail explicitly. The command does not ingest
 external rehearsal evidence: `telemetry-and-alerts` is optional
 (`required=false`), skipped/not evaluated, with no observed proof.
 Active/Ready exits 0 when required checks pass; required fail/pending checks
-still produce exits 1/2. Record authorized incident evidence separately.
+still produce exits 1/2. Record incident evidence separately.
 Parent success is never a routing-readiness certificate.
 
 Required scenarios come from `sre.requiredScenarios` (default T09/T11). Deployment
 adds their explicit Container App/Arc IDs to managed resources. Bicep role names
 include the identity principal; existing same-principal names are adopted.
 Incremental deployments cannot revoke permissions: a Low downgrade with an
-existing incompatible write grant fails until a separately approved cleanup.
+existing incompatible write grant fails until you clean that grant up yourself.
 Legacy Monitoring Contributor or other excessive/inherited grants are retained
 while parked but require explicit reconciliation before Active.
 Low uses the actual Log Analytics Reader ID;
@@ -349,26 +348,25 @@ cost state, not that the whole group or combined lab is cost-free.
 | Removed | Verified owned grants/resources and empty dedicated group removed; shared Arc/Monitor resources and private exports preserved. |
 
 ```powershell
-# Only after approved parent removal; export configuration/evidence and
-# save the live identity principal first. See the complete lifecycle procedure:
+# Before parking, export the configuration/evidence and save the live identity
+# principal. See the complete lifecycle procedure:
 # docs\sre-response-plan-automation.md
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
-# Execute only the approved preview. Hibernate and Remove are high-impact, so a
-# non-interactive host (an AI tool, CI) must add -Confirm:$false or the run stops
-# with "NonInteractive mode" before changing anything; the approval is the
-# reviewed preview above, not a prompt.
+# Run it for real after reading the preview. Hibernate and Remove are high-impact,
+# so a non-interactive host (an AI tool, CI) must add -Confirm:$false or the run
+# stops with "NonInteractive mode" before changing anything.
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -Confirm:$false
 
-# Submission is asynchronous; repeat this read-only check within a bounded
-# observation window until pass, or report pending/failure without resubmitting.
+# Deletion is asynchronous; repeat this read-only check for a few minutes until it
+# passes. If it is still pending or failed, don't resubmit the deletion.
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Hibernated `
@@ -387,13 +385,11 @@ cost state, not that the whole group or combined lab is cost-free.
 Verify SRE hibernation before parking Arc; wake Arc before reconstructing SRE.
 Reactivation is the same complete build as a first deployment: it reuses the
 retained identity and grants, recreates and verifies the handler and v3 plans,
-and needs a new external backup path and approval for actual changes. Follow it
+and needs a new external backup path. Follow it
 with `Test-SreReadiness.ps1 -DesiredState Active`.
-After successful AI-led combined activation/SRE reactivation, the SRE assistant
-must [ask once whether you want a T09 incident](docs/ai-deploy-handbook.md#post-activation-incident-offer).
-If you agree, it runs the existing procedure and guides your human Review
-approval; you do not need to remember or run scripts. Declining leaves Active
-unchanged. This offer does not run after parent-only or Arc-only deployment.
+To see the closed loop once setup is done, run
+[one T09 incident](docs/t09-native-containerapp-closed-loop.md): ask your AI tool,
+or follow the runbook yourself.
 Deletion loses custom agents, response plans, thread/incident history, memory and
 connector state. Code-repository authorization is optional and must be explicitly
 re-established; a URL in the skin is not authentication. Save the retained identity
@@ -426,7 +422,7 @@ excessive/inherited grants need explicit reconciliation, never automatic revocat
 Incremental IaC adopts existing assignment names and creates only missing grants.
 The separate identity module owns it in the same SRE group, so first creation and
 future reuse follow identical IaC without an extra identity group or manual identity.
-Full removal requires separate explicit approval and `Remove-SreAgent.ps1`:
+Full removal uses `Remove-SreAgent.ps1`:
 
 Its live read-only preview has been rehearsed: seven UAMI assignments, one parent
 administrator, four resources and the dedicated group; no mutation occurred.
@@ -440,8 +436,8 @@ not a blanket role exemption.
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
-# Execute without -WhatIf (add -Confirm:$false in a non-interactive host) only
-# after approving the exact resources/grants.
+# Run it without -WhatIf (add -Confirm:$false in a non-interactive host) after
+# reading the exact resources and grants the preview lists.
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Removed `
@@ -450,11 +446,11 @@ not a blanket role exemption.
 
 Removed deletes only known SRE resources, known identity-owned grants, verified
 parent grants and the dedicated group **after it is empty**. Unknown resources
-or scoped assignments block removal for ownership review. Save the principal
+or scoped assignments block removal until you have checked what they are. Save the principal
 before removal: without it, external-grant verification is pending, not passed.
 Already absent/partial state converges without deploying anything. Private
 exports and shared Arc/Monitor resources remain untouched. Old UAMI-only parked
-states remain Hibernated; authorized wake recreates their missing diagnostics.
+states remain Hibernated; a wake recreates their missing diagnostics.
 
 SRE Agent's [always-on charge](https://learn.microsoft.com/azure/sre-agent/pricing-billing)
 is **4 Azure Agent Units per agent-hour while the parent exists**, including when
@@ -462,21 +458,19 @@ it is Stopped. Stopping is not the repo's deletion-based hibernation and does no
 remove that baseline charge. `High`/`Low` are permission profiles, not pricing tiers.
 See `docs\sre-cost-and-demo-fidelity.md` for billing assumptions, remaining Monitor
 costs and why a cheaper-looking model, retention setting or cap is not a safe
-automatic demo downgrade. Keep a requested running demo running.
+automatic demo downgrade. Leave a demo you are still using running.
 
 ## Scenario runbooks
 
-The complete audience/status map is [`docs\README.md`](docs/README.md).
-Open `.local/presenter-runsheet.md` for the SRE presentation. The Arc repo owns
-its own section. The files below are operator/engineering references, outside
-the presenter path.
+[`docs\README.md`](docs/README.md) lists every page. Open
+`.local/presenter-runsheet.md` to present; the Arc repo has its own section.
 
 - `docs\delivery-runsheet.md` - Source for the generated SRE-only presenter guide.
 - `docs\sre-cost-and-demo-fidelity.md` - SRE cost levers, parking tradeoffs and demo-preserving boundaries.
-- `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
-- `docs\sre-sales-rollout-guidance.md` - Internal sales, PoC and rollout guidance for SRE Agent conversations.
+- `docs\ai-deploy-handbook.md` - Your presenter guide, the LOB and SQL scenarios, and the steps your AI tool follows to build, park and remove.
+- `docs\sre-sales-rollout-guidance.md` - Workshop and PoC planning guidance for SRE Agent conversations.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
-- `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance". Dated rehearsal evidence is in its appendix.
+- `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance".
 - `docs\t11-lob-app-on-arc-bridge.md` - How to deploy the LOB app on an Arc server, create its alert and break it.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
@@ -487,4 +481,4 @@ instance; record current readiness and incident evidence separately.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
-- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and operator Arc Run Command recovery. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.
+- **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and Arc Run Command recovery that you run yourself. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.
