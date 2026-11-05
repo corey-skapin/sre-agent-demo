@@ -53,7 +53,7 @@ try {
         $instructions.Contains('evidence itself uses them. Preserve exact resource and event identifiers')) 'Unsupported historical terminology is not introduced while real evidence identifiers remain intact'
     Check ($instructions.Contains('tool not found in available discovery from a service capability') -and
         $instructions.Contains('not universal absence')) 'Limited tool discovery does not prove a service capability is absent'
-    Check ($desired.handler.properties.handoffDescription -notmatch 'demo|T09|T10|T11|wow') 'Handoff description does not inject rehearsal framing'
+    Check ($desired.handler.properties.handoffDescription -notmatch 'demo|T09|T10|T11|wow') 'handoffDescription does not inject rehearsal framing'
     $lobAlertSource = Get-Content -LiteralPath (Join-Path $root 'scripts\New-LobArcAppMonitorAlert.ps1') -Raw
     Check ($lobAlertSource.Contains('description = "The application on $MachineName reported a degraded dependency (event 4200).') -and
         $lobAlertSource -notmatch 'description\s*=\s*"T11') 'LOB rebuild description is operational rather than scenario narration'

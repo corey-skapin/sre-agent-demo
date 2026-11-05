@@ -35,7 +35,7 @@ try {
     Reject { & $helper @target } 'ApproveWarningWindow'
     Reject { & $helper @target -WarningSeconds 181 -GuestScriptOutputPath $guestPath } 'greater than|range|ValidateRange'
     & $helper @target -GuestScriptOutputPath $guestPath | Out-Null
-    Check ($global:AzCalls.Count -eq $callsBefore) 'Offline generation needs no execution approval or Azure access'
+    Check ($global:AzCalls.Count -eq $callsBefore) 'Offline generation needs neither -ApproveWarningWindow nor Azure access'
     $guest = Get-Content -LiteralPath $guestPath -Raw
     $tokens = $null; $errors = $null
     [Management.Automation.Language.Parser]::ParseInput($guest, [ref]$tokens, [ref]$errors) | Out-Null
@@ -54,7 +54,7 @@ try {
     }
     function Get-ScheduledTask {
         [CmdletBinding()] param([string]$TaskName, [string]$TaskPath)
-        Check ($TaskName -eq 'DemoTask' -and $TaskPath -eq '\') 'Only the approved root task is inspected'
+        Check ($TaskName -eq 'DemoTask' -and $TaskPath -eq '\') 'Only the expected root task is inspected'
         for ($i = 0; $i -lt $script:taskCount; $i++) { [pscustomobject]@{ State = $script:taskState } }
     }
     function Get-CimInstance {
@@ -96,7 +96,7 @@ try {
     }
     Reset-Fixture; $script:mode = 'concurrent'
     Reject { & $run } 'cleanup unverified.*Concurrent config change'
-    Check ((Get-Content -LiteralPath $configPath -Raw).Contains('other-owner')) 'Cleanup preserves concurrent operator changes'
+    Check ((Get-Content -LiteralPath $configPath -Raw).Contains('other-owner')) 'Cleanup preserves concurrent config changes'
     foreach ($case in @('unhealthy', 'wrong-source', 'slow-loop', 'wrong-process', 'stopped', 'ambiguous-task')) {
         Reset-Fixture
         switch ($case) {
@@ -139,13 +139,13 @@ try {
     Check ($global:AzCalls.Count -eq $before + 1) 'Wrong caller target fails before Run Command'
     $state.callerMismatch = $false
     $result = & $helper @target -ApproveWarningWindow
-    Check ($result.Action -eq 'WarnForDuration' -and $result.Result.instanceView.exitCode -eq 0) 'Approved wrapper requires actual mocked guest completion'
+    Check ($result.Action -eq 'WarnForDuration' -and $result.Result.instanceView.exitCode -eq 0) 'With -ApproveWarningWindow the wrapper requires actual mocked guest completion'
     Check ($result.GuestExitCode -eq 0 -and $result.GuestOutput -eq 'synthetic guest output') 'Wrapper result shows the guest exit code and output without expanding Result'
     $state.guestOutput = $null
     $quiet = & $helper @target -ApproveWarningWindow
     Check ($quiet.GuestExitCode -eq 0 -and $null -eq $quiet.GuestOutput) 'Wrapper result tolerates a guest that returned no output'
     $state.guestOutput = 'synthetic guest output'
-    Check ($state.submitted.Contains('Set-ScenarioConfig') -and $state.createCommand.Contains('--timeout-in-seconds 300')) 'Approved create uses guarded script and bounded Arc timeout'
+    Check ($state.submitted.Contains('Set-ScenarioConfig') -and $state.createCommand.Contains('--timeout-in-seconds 300')) 'With -ApproveWarningWindow the create uses guarded script and bounded Arc timeout'
     $state.guestExitCode = 9
     Reject { & $helper @target -ApproveWarningWindow } 'execution failed'
     $state.createFailure = $true

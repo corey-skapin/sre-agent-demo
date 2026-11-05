@@ -272,7 +272,7 @@ foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
             if (Test-SreAzMonitorPlatformGrant $assignment $SubscriptionId $principalId) { continue }
             $roleId = ($assignment.roleDefinitionId -split '/')[-1]
             if ($roleId -notin $allowedRoles -or $assignment.scope -ine $scope) {
-                throw "$AccessLevel profile requested but existing incompatible or inherited grant $roleId remains at $($assignment.scope). Obtain scoped approval to reconcile it before Active; incremental deployment does not revoke grants."
+                throw "$AccessLevel profile requested but existing incompatible or inherited grant $roleId remains at $($assignment.scope). Reconcile it explicitly before Active; incremental deployment does not revoke grants."
             }
             if ($names.ContainsKey($roleId)) { throw "Duplicate role grants for $principalId at $scope; reconcile explicitly before deployment." }
             $names[$roleId] = $assignment.name
@@ -282,7 +282,7 @@ foreach ($scope in @($arcResourceGroupId, $infraResourceGroupId)) {
 }
 
 if (-not $WhatIf -and -not $ApproveParentCreation) {
-    throw 'Creating the paid SRE parent starts the AAU meter. Preview first, then explicitly approve -ApproveParentCreation; no deployment attempted.'
+    throw 'Creating the paid SRE parent starts the AAU meter. Preview first with -WhatIf, then pass -ApproveParentCreation to confirm you want to create it; no deployment attempted.'
 }
 $parentSettings = Get-Content -LiteralPath (Join-Path $repoRoot 'config\sre-parent-settings.json') -Raw | ConvertFrom-Json -AsHashtable -Depth 50
 Write-Host 'Building Bicep template...'
@@ -380,9 +380,9 @@ foreach ($id in @($outputs.managedResourceIds.value)) {
     Write-Host "    - $id"
 }
 if ($ParentOnly) {
-    Write-Host 'Next: Initialize-SreConfiguration.ps1 -Inspect, then approved -Apply with -BackupPath; run Test-SreReadiness.ps1. Do not induce faults before routing is verified.'
+    Write-Host 'Next: Initialize-SreConfiguration.ps1 -Inspect, then -Apply with -BackupPath once the preview matches the docs; run Test-SreReadiness.ps1. Do not induce faults before routing is verified.'
 } else {
     & (Join-Path $PSScriptRoot 'Initialize-SreConfiguration.ps1') -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath `
         -Apply -BackupPath $ConfigurationBackupPath -TimeoutSeconds $ConfigurationTimeoutSeconds
-    Write-Host 'Current-schema handler/plans verified. Run Test-SreReadiness.ps1; fresh incident/recovery evidence is a separate authorized rehearsal gate.'
+    Write-Host 'Current-schema handler/plans verified. Run Test-SreReadiness.ps1; fresh incident/recovery evidence needs a separate incident run.'
 }

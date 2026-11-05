@@ -4,7 +4,7 @@
 Ensures the one subscription Monitoring Contributor grant needed for alert intake.
 .DESCRIPTION
 Verifies the exact live UAMI principal before inspecting or granting access.
-WhatIf is read-only. Creating a missing assignment requires the explicit opt-in.
+WhatIf is read-only. Creating a missing assignment needs -GrantAzureMonitorAlertAccess to confirm you want the grant.
 Existing exact assignments are adopted without changing their name.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -38,7 +38,7 @@ function Assert-LiveIdentity {
     $identity = Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments @('identity', 'show', '--ids', $identityId, '-o', 'json') |
         ConvertFrom-Json
     if ($identity.id -ine $identityId -or $identity.principalId -ine $PrincipalId) {
-        throw 'Live UAMI does not match the explicitly approved principal and target; no grant attempted.'
+        throw 'Live UAMI does not match the principal and target you passed; no grant attempted.'
     }
 }
 function Read-PlatformGrant {
@@ -64,7 +64,7 @@ if ($existing.Count) {
     return [pscustomobject]$result
 }
 if (-not $WhatIfPreference -and -not $GrantAzureMonitorAlertAccess) {
-    throw 'Missing subscription Monitoring Contributor. Preview with -WhatIf, then explicitly approve -GrantAzureMonitorAlertAccess for this exact UAMI principal.'
+    throw 'Missing subscription Monitoring Contributor. Preview with -WhatIf, then pass -GrantAzureMonitorAlertAccess to confirm you want to grant it to this exact UAMI principal.'
 }
 if (-not $PSCmdlet.ShouldProcess(($result | ConvertTo-Json -Compress), 'Create exactly one Monitoring Contributor assignment')) {
     return [pscustomobject]$result

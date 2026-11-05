@@ -1,130 +1,81 @@
-# AI operating instructions - optional SRE layer
+# Instructions for AI tools
 
-## Scope and reading order
+This repo adds an Azure SRE Agent to the companion `arc-demo` Arc estate. You're
+working for the person who cloned it. When they ask you to build, wake, park,
+remove or run an incident, that request is the go-ahead: preview it, then do it.
+Don't ask for approval again at each step.
 
-- Attach SRE to the companion `arc-demo`; never deploy or edit its estate here.
-- Present from `.local/presenter-runsheet.md`; use [the docs map](docs/README.md)
-  for operator references and keep the Arc presentation in its own repo.
-- Use companion Arc `docs/runsheet.md#present-the-arcmonitor-demo` for Arc UI detail.
-- Use [the AI handbook](docs/ai-deploy-handbook.md) for activation and handoff.
-- Use [response-plan automation](docs/sre-response-plan-automation.md) as the
-  single protocol-pin, setup, failure and lifecycle reference.
-- Consult T09 only for an authorized incident; do not run it as a second talk.
-- Treat T10/T11 engineering ledgers as historical evidence, not presenter scripts.
-- Keep old-instance proof separate from current resource/configuration/run proof.
-- Ground portal directions in current Learn and observed controls; do not invent
-  menu paths, approval buttons or unobserved deep links.
+## Before you start
 
-## Targets and safe changes
+- Confirm the tenant and subscription with the user once, at the start of the
+  session. Pass them to every script (`-SubscriptionId`, `-TenantId`). Never take
+  them from the ambient `az` login, and never run `az login`, `az logout` or
+  `az account set` to switch accounts or subscriptions.
+- Keep private values in one folder outside git, for example
+  `<PRIVATE_LAB_FOLDER>`: the skin (a copy of `config\demo-skin.json` saved as
+  `sre-skin.json`), the saved presenter context, configuration backups, exports
+  and evidence. Pass the skin as `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`.
+  The tracked skins are fictional examples.
+- The Arc estate must be Active first. This repo never deploys, changes or
+  removes it.
+- Read [README.md](README.md), then the
+  [setup path](docs/sre-response-plan-automation.md#setup-path-at-a-glance).
+  [docs/README.md](docs/README.md) lists everything else.
 
-- Require explicit subscription, tenant, private skin and desired state.
-- Keep Active (`Ready` alias), Hibernated and Removed distinct.
-- Validate skin/schema/names; never infer a target from ambient Azure login.
-- Keep customer/account context, live IDs, credentials and private paths out of git.
-- Keep fictional defaults; supply source repository URL and commit together only
-  when needed. A URL is not connector authentication.
-- Run local tests and a bounded secret/identifier scan before every push.
-- Preview authorized writes; keep `-WhatIf` read-only, including local side effects.
-- Fail closed for deployment, activation and removal on unknown ownership,
-  wrong target, identity mismatch, denial or ambiguous inspection.
-- Warn about unrelated retained free-resource/IAM drift during normal Hibernate;
-  do not strand the known paid parent or delete extra resources to hide drift.
-- Reconcile excessive/inherited/duplicate IAM explicitly before Active.
-- Preserve the exact subscription Monitoring Contributor grant on the UAMI,
-  including while the parent is absent or disconnected; it is
-  a [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-  Create only with explicit `-GrantAzureMonitorAlertAccess`; reject other grants/duplicates.
-- Fresh/wake IaC explicitly selects AzMonitor. Read back incident connectivity
-  and required scanner access; a disconnected-platform warning is not alert readiness.
-- Do not switch global accounts, bypass denial or silently grant permissions.
-- Preserve fault flags, workload resources, retained disks and the HDD guard.
-- Do not change autonomy, model, telemetry, cooldown or connectors without scope.
-- Keep Review everywhere; never switch plans to Autonomous for this demo.
-- Do not treat High/Low access as pricing or a Stopped parent as cost-free.
-- Use [the cost reference](docs/sre-cost-and-demo-fidelity.md) without inventing prices.
+## Commands
 
-## Activation and configuration
+Run these from the repo root, each with the three inputs above.
 
-- Activate/verify Arc first; use its owner's fresh readiness handoff.
-- Render `Initialize-SreConfiguration.ps1` locally: it is the preview on a fresh
-  parent. Authorize `-Inspect` only against an existing parent.
-- Approve the full preview before `-Apply -BackupPath <NEW_EXTERNAL_FILE>`.
-- Create with `Deploy-SreAgent.ps1 -ApproveParentCreation -ConfigurationBackupPath`
-  or explicit `-ParentOnly`; existing parents refuse Deploy. Parent-only is not Active.
-- Follow the canonical protocol pin; do not invent endpoints or replay legacy
-  MCP `severity: high`, invalid P1/P2 or response-level instruction payloads.
-- Keep instructions/tools on the handling agent and exact Sev2 on AzMonitor plans.
-- Keep enabled three-hour cooldown; check actual settings before a repeat.
-- Azure Monitor also merges same-rule firings across seven days. Closing a
-  thread/alert is not a documented reset; use the separately authorized reset
-  procedure and verify restoration, never silently bypass cooldown.
-- Quote actual query-header row counts and distinguish summary rows from source
-  samples. Never infer incident connectivity from optional connector files.
-- Stop on unsupported legacy settings or enabled unowned/quickstart routing;
-  never migrate, disable, delete or rebuild automatically.
-- Preserve current objects/history and external backups during ordinary updates.
-- Configuration PUTs run once; poll read-only with backoff before reporting
-  unverified state. Never replay a PUT; stop on denial or concurrent changes.
-- Report failed/partial setup explicitly; never claim zero-touch or successful
-  configuration through an unverified manual fallback.
-- Run `Test-SreReadiness.ps1` with the same explicit target/skin.
-- Require all required checks to pass; do not rewrite JSON or ignore failures.
-- Treat optional `telemetry-and-alerts` as skipped/not evaluated, not loop proof.
-- Record a separately authorized incident before claiming new closed-loop success.
-- After successful setup, refresh the ignored local context and run
-  `New-PresenterRunsheet.ps1` per the handbook; use saved nonsecret inputs only.
-- Keep presenter IDs/URLs in `.local`, never tokens or tracked files; do not make
-  cloud calls merely to render the guide or present saved health as current.
+- **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
+  -ApproveParentCreation -ConfigurationBackupPath <NEW_FILE_OUTSIDE_REPO.json>`.
+  It creates the paid parent (4 AAUs per hour until you delete it), then applies
+  and checks the configuration (about 5.5 minutes). Add
+  `-GrantAzureMonitorAlertAccess` to create the one subscription Monitoring
+  Contributor grant the agent needs to read alerts, unless its identity already
+  has it.
+- **Check:** `Test-SreReadiness.ps1 -DesiredState Active`. Every required check
+  must pass. After parking or removing, use `Hibernated` or `Removed` with
+  `-PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>`.
+- **Park:** save the UAMI principal ID, run `Hibernate-SreAgent.ps1 -WhatIf` and
+  show the preview, then run it with `-Confirm:$false`. It deletes only the paid
+  parent. Park SRE before Arc.
+- **Wake:** wake Arc first, then run the Build commands again. The identity and
+  its grants are reused.
+- **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with
+  `-Confirm:$false`.
+- **Incident:** follow [the T09 runbook](docs/t09-native-containerapp-closed-loop.md).
+  It breaks the demo Container App on purpose, waits for the alert and the
+  agent's proposed fix, then checks recovery.
+- **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
+  from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
+  The Arc half is in the Arc repo (`docs/runsheet.md#present-the-arcmonitor-demo`).
+- **Tests:** `.\tests\Invoke-Tests.ps1` (offline, about a minute).
 
-## Post-activation incident offer
+## Safety
 
-- After successful requested combined activation/SRE reactivation, the SRE-owning
-  assistant MUST ask once in conversation whether to trigger one T09 incident.
-- Follow [the canonical consent procedure](docs/ai-deploy-handbook.md#post-activation-incident-offer).
-- Require fresh Arc readiness, passing required SRE checks and a healthy endpoint.
-- Own the single offer across both repos; do not ask on Arc-only, ParentOnly,
-  incomplete activation or a read-only navigation rehearsal.
-- On no/no affirmative answer, skip and leave the requested Active demo running.
-- On yes, have the AI execute the existing T09 runbook; never make the user
-  choose scripts or run commands.
-- Agree the exact app, observation deadline and narrow operator reset fallback.
-- Treat consent as one fault, not a retry, permission change or SRE tool approval.
-- Guide the human to the current exact Review card; never auto-approve or treat
-  narration/chat consent as an independently audited approval.
-- Inspect ambiguous delivery instead of repeating a consumed fault authorization.
-- Report actual alert, RCA, executor/tool completion and health evidence separately.
-- Distinguish SRE repair from operator fallback; do not infer repair from prose.
-- Read MonitorCondition separately from alert workflow state or thread closure.
-- Verify false flag, healthy serving revision and HTTP 200; surface recovery errors.
-- Never approve a stale card after fallback or promise a watchdog/hard cancellation.
-- Present T09 as the primary Review closed loop; keep T10/T11 recovery operator-led.
-- Do not claim autonomous Arc repair or reliable T11 RCA.
-- SQL uses the Arc owner's real lock-timeout signal and verified cleanup handoff.
-  Keep SQL investigation read-only; never execute SQL, kill sessions or restart
-  SQL/Arc. Release SQL and LOB rehearsal windows separately and sequentially.
+- Preview removals and other destructive steps with `-WhatIf` and show the user
+  the preview before you run them. If a preview includes anything you didn't
+  expect, stop and tell the user.
+- Never delete or change resources the scripts don't own: the Arc estate, shared
+  Arc and Monitor resources, other people's role assignments, and anything a
+  script refuses or reports as unknown.
+- Keep secrets, tenant and subscription IDs, emails and private paths out of git.
+  Run the tests and scan your diff for them before every commit.
+- Keep every response plan in Review mode. Don't switch the agent to Autonomous.
+- If a configuration write times out, read the state back
+  (`Initialize-SreConfiguration.ps1 -Inspect`) before trying again. Never resend
+  it blindly.
+- Describe portal steps only from current Microsoft Learn or controls you have
+  seen. Don't invent menu paths or buttons.
+- Don't invent prices; see [the cost reference](docs/sre-cost-and-demo-fidelity.md).
 
-## Hibernation, removal and reactivation
+## The step that stays with the user: Approve
 
-- Obtain explicit hibernation authorization; never park a requested Active demo.
-- Export needed config/evidence outside git and save the live UAMI principal first.
-- Preview normal `Hibernate-SreAgent.ps1 -WhatIf`, then execute approved scope;
-  non-interactive hosts need `-Confirm:$false` (ConfirmImpact High) to proceed.
-- Delete only the paid parent; retain dedicated group/UAMI, existing workload
-  grants, workspace AppInsights and owned existing Action Group.
-- Do not revoke standing grants, delete the UAMI/group or create missing
-  diagnostics during normal Hibernate; report wake diagnostics and free drift.
-- Verify `Test-SreReadiness.ps1 -DesiredState Hibernated` with saved principal;
-  require parent absence and retained identity, not merely a submitted deletion.
-- Finish SRE parking before the Arc owner parks the estate.
-- Report failed/pending deletion honestly; observe boundedly, never blindly retry.
-- Resume Arc first, then rebuild parent/handler/plans using retained identity and
-  versioned assets; preserve deterministic workload grant IDs.
-- Preserve the combined system/user identity shape; do not add external grants
-  to the system principal that rotates with parent recreation.
-- Treat exports as reference, not native history/memory/connector restoration.
-- Reauthorize optional repository connections separately.
-- Use separately authorized `Remove-SreAgent.ps1 -WhatIf` for full removal;
-  refuse unknown resources/grants and remove the dedicated group only when empty.
-- Preserve shared Arc/Monitor resources and private exports during Removed.
-- Verify Removed with the saved principal; do not claim grant absence without it.
-- Do not mistake mocked tests or an incident repair for a live lifecycle test.
+In Review mode the SRE agent investigates, proposes a change, then waits for the
+user to click **Approve** in the SRE portal. You can't click it for them, and no
+chat message approves it. During an incident, tell the user when the card is
+waiting and where to find it
+([click path](docs/t09-native-containerapp-closed-loop.md#7-approve-the-governed-fix)).
+If they would rather not wait, reset the app yourself with
+`Invoke-NativeContainerAppFault.ps1 -State Repair` and tell them the old card is
+stale.

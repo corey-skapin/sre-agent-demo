@@ -13,7 +13,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $outputDirectory = Join-Path $root '.local'
 $outputPath = Join-Path $outputDirectory 'presenter-runsheet.md'
 if (-not (Test-Path -LiteralPath $ContextPath -PathType Leaf)) {
-    throw 'Missing local demo context. Setup must save approved nonsecret inputs to .local/demo-context.json; see docs/ai-deploy-handbook.md#local-presenter-guide.'
+    throw 'Missing local demo context. Save your nonsecret setup inputs to .local/demo-context.json; see docs/ai-deploy-handbook.md#your-presenter-guide.'
 }
 $context = Get-Content -LiteralPath $ContextPath -Raw | ConvertFrom-Json -AsHashtable
 $required = @(
@@ -30,7 +30,7 @@ foreach ($key in $context.Keys) {
 }
 foreach ($key in $required) {
     if (-not $context.Contains($key) -or $null -eq $context[$key] -or "$($context[$key])".Trim() -eq '') {
-        throw "Missing context field '$key'. Refresh context from approved setup inputs."
+        throw "Missing context field '$key'. Refresh the context from your setup inputs."
     }
     if ($key -notin @('schemaVersion', 'resourceGroups', 'recordedAtUtc') -and $context[$key] -isnot [string]) {
         throw "Invalid $key; expected one string."
@@ -126,7 +126,7 @@ foreach ($key in $resources.Keys) {
     $values[$key + 'Url'] = 'https://portal.azure.com/#resource' + $context[$key]
     $values[$key + 'Name'] = ($context[$key] -split '/')[-1]
 }
-$values.arcStep = 'The Arc section is separate. If the companion Arc guide is absent, skip that section and continue here only after the Arc owner confirms readiness.'
+$values.arcStep = 'The Arc section is separate. If the companion Arc guide is absent, skip that section and continue here only once Arc readiness is confirmed.'
 if ($context.Contains('companionArcRunsheetPath')) {
     $companion = $context.companionArcRunsheetPath
     if ($companion -isnot [string] -or -not [IO.Path]::IsPathFullyQualified($companion)) {
@@ -136,7 +136,7 @@ if ($context.Contains('companionArcRunsheetPath')) {
         $values.arcStep = 'Complete [the Arc section](' + (Get-RelativeLink $companion) + ') first, then continue here.'
     }
 }
-$values.operatorGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t09-native-containerapp-closed-loop.md')
+$values.incidentGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t09-native-containerapp-closed-loop.md')
 $values.lifecycleGuideUrl = Get-RelativeLink (Join-Path $root 'docs\sre-response-plan-automation.md')
 $template = Get-Content -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Raw
 $values.sqlPlanRow = ''

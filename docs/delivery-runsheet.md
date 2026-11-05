@@ -6,8 +6,8 @@ Context recorded: **{{recordedAtUtc}}**. These saved links do not certify curren
 
 ## This afternoon: verified existing investigations
 
-Before presenting, the operator opens [{{agentName}}]({{agentUrl}}) read-only and
-checks which investigations already exist: SQL, LOB and Container App, each with its
+Before presenting, open [{{agentName}}]({{agentUrl}}) read-only and
+check which investigations already exist: SQL, LOB and Container App, each with its
 actual title, ID and creation time. Use only those as the dated threads in steps 1, 4
 and 5, and say each one's real date when you open it. If a scenario has none, say so
 and explain the same flow from the configured plan; do not send a chat message or
@@ -15,8 +15,8 @@ create an incident to fill the gap. Regenerating this guide overwrites the local
 so add the verified list last.
 
 A rebuilt or newly woken agent has no investigations: deleting the parent discards
-its threads, memory and history, so every list is empty until incidents are
-separately authorized. That is expected, not a failure. Open the agent once well
+its threads, memory and history, so every list is empty until you run incidents.
+That is expected, not a failure. Open the agent once well
 before the audience arrives and before arming any fault, and let its welcome thread
 finish: the first visit to a fresh agent is not read-only. It starts a welcome thread
 that spends agent usage and runs beside any incident thread, which can then overwrite
@@ -24,13 +24,13 @@ memory notes.
 
 ## Live faults
 
-Read this before Arc chapter 7. The AI runs every command here. The presenter says
-**GO**, watches, and approves only the current Review card in step 6. Each fault
-needs its own approval, and none runs during a navigation-only rehearsal.
+Read this before Arc chapter 7. Your AI tool can run every command here for you.
+You watch, and you approve only the current Review card in step 6. A
+navigation-only rehearsal runs none of them.
 
 ### Sequence
 
-1. Say **GO** only after Arc chapter 7 has shown the alert rules. The AI runs
+1. Start only after Arc chapter 7 has shown the alert rules. Run
    `Invoke-SreDemoRoute.ps1 -Action Prepare` for each configured route (SQL, LOB and
    the Container App, which is T09). It disables the original rule and enables a
    fresh copy, so a new alert starts a new investigation instead of merging into an
@@ -38,7 +38,7 @@ needs its own approval, and none runs during a navigation-only rehearsal.
 2. Fire **SQL**, wait for its alert, thread and report, and verify its cleanup. Then
    fire **LOB** the same way. One at a time, never together.
 3. Fire **T09** about 10 minutes before the Review beat in step 6.
-4. When the user says **done** and the investigations have finished, the AI runs
+4. When you are done and the investigations have finished, run
    `-Action Restore` for every prepared route: the copies are deleted and the
    originals are enabled again. Azure Monitor can replay an old alert or email on
    restore; see [the reset procedure]({{lifecycleGuideUrl}}#reset-between-demo-runs).
@@ -63,9 +63,10 @@ Minutes after the fault is fired, as observed in rehearsal: typical, not a promi
 ### Running the live faults inside a 30-minute slot
 
 About 25 minutes of faults do not fit after Arc chapter 7 in a 30-minute slot.
-Instead, the AI runs Prepare, SQL and LOB, one at a time with cleanup verified
+Instead, run Prepare, SQL and LOB, one at a time with cleanup verified
 between, before the Arc half or early in it, so the SRE half opens
-already-finished investigations. This is the one exception to the GO rule above.
+already-finished investigations. This is the one exception to starting after Arc
+chapter 7.
 If the original rules already read as disabled when you show them, say the copies
 are the same rules, temporary, and leave the originals alone. Fire T09 about 10
 minutes before its Review beat so the card is waiting. Restore after the last
@@ -74,8 +75,8 @@ investigation has finished.
 ### Approval provenance
 
 Say "a person approved it", never "the audit proves it". In both rehearsals the
-agent's result showed no approver record (`approveScope` none) even though the user
-clicked **Approve**. On the rebuilt agent the audit table also had no
+agent's result showed no approver record (`approveScope` none) even though
+**Approve** was clicked. On the rebuilt agent the audit table also had no
 `ApprovalDecision` event, but the Azure CLI execution record of the approved command
 carried a `User` that matched the portal user, so the clicker is attributable there.
 The person who clicked is the evidence; do not present telemetry or the agent's
@@ -89,22 +90,22 @@ result as proof of who approved.
 
 The first live fault is **SQL**, then LOB, then T09, continuing Arc's orders-database
 story. With dated threads, describe the earlier incident rather than a new live fault.
-Say **GO** to prepare the live-fault copies only **after Arc chapter 7 has shown
+Prepare the live-fault copies only **after Arc chapter 7 has shown
 the alert rules**; the best moment is its audience question. Prepare disables the
 original rules while their copies exist, so do not run it before showing those rules.
 **Live faults** above has the order, the observed timings and the one 30-minute-slot
 exception to this rule.
 
-This section takes about 15 minutes. Navigation stays read-only. Sending the
-investigation or incidents in step 5 and triggering a fault in step 6 need
-separate approval.
+This section takes about 15 minutes. Navigation stays read-only; sending the
+investigation in step 5 and triggering a fault in step 6 are the parts that use the
+agent or change anything.
 
 ## 2. Show the healthy Container App
 
 Open [{{containerAppResourceIdName}}]({{containerAppResourceIdUrl}}), then open
 [the application]({{applicationUrl}}). Show the page loading. In the resource,
 check the serving revision and replicas in **Revisions and replicas**.
-If the page is unhealthy, stop the live-ready claim and notify the operator.
+If the page is unhealthy, don't claim the demo is live-ready; fix the app first.
 
 **Say:** "This Azure Container App is the repair demonstration. The application
 can simulate a crash, and the proposed repair resets that one flag."
@@ -128,7 +129,8 @@ Inspect these existing entries without editing:
 | {{sqlPlanRow}} | {{sqlPlanSignal}} | {{sqlPlanCheck}} |
 
 These plans use **{{agentName}}** as the handling agent. To show its instructions,
-which hold the narrow app reset and the operator-led Arc recovery boundary, open
+which hold the narrow app reset and the boundary that Arc recovery is yours to run,
+not the agent's, open
 [{{agentName}}]({{agentUrl}}), then **Builder** > **Agent Canvas**, and click the
 **{{agentName}}** subagent node. The **Instructions** box in the right panel holds
 the text; scroll to its **Governance** section and its **Separate Container App
@@ -138,7 +140,7 @@ names the menu both ways (**Builder** and **Build + setup** > **Workflows**) and
 describes selecting the node, then **Edit**, so use the Agent Canvas you can see.
 
 **Say:** "The response plan selects the alert and handling agent. Review asks a
-human to approve Azure infrastructure operations. Resource permissions still
+person to approve Azure infrastructure operations. Resource permissions still
 limit what the agent can access."
 
 [Review applies to Azure infrastructure actions](https://learn.microsoft.com/azure/sre-agent/run-modes).
@@ -148,7 +150,7 @@ card during this walkthrough or accept a request for additional permissions.
 ## 4. Walk through an existing investigation
 
 For a navigation-only rehearsal, prefer the existing SQL and LOB investigations
-whose IDs and creation times the operator has freshly verified. Open the original
+whose IDs and creation times you have freshly verified. Open the original
 completed investigation report, not only the later generated Session Insights:
 those summaries can repeat overconfident claims that the report qualified.
 Then open an existing Container App incident if available. Check each title and
@@ -165,8 +167,8 @@ fill this view. Label any previous-run evidence with its actual date.
 ## 5. Investigate the LOB app, then SQL
 
 The sample on **{{arcMachineResourceIdName}}** can be investigated while healthy.
-With fresh approval for **one read-only SRE investigation of app events and host
-performance logs, including its usage costs**, open
+This sends **one read-only SRE investigation of app events and host
+performance logs** and spends agent usage. Open
 [{{agentName}}]({{agentUrl}}), select **New thread**, and send this whole block.
 This is the supported [chat investigation path](https://learn.microsoft.com/azure/sre-agent/first-investigation).
 Do not send it as part of a navigation-only rehearsal.
@@ -214,7 +216,7 @@ Application telemetry contract, not an observation of current guest state:
 4100 = fatal processing error; 4101 = invalid configuration;
 4200 = dependency warning. Derive current process availability from evidence.
 Return a short evidence table with actual UTC timestamps and resource identity,
-then separate observed facts, hypotheses and suggested operator steps.
+then separate observed facts, hypotheses and suggested next checks.
 These host counters are configured at 60-second sampling in the Arc core DCR.
 CPU is total host processor time, memory is committed percent and available MB,
 disk is total free-space percent, not disk latency or IOPS. Use actual samples
@@ -235,9 +237,9 @@ dependency relationship are actually established; otherwise report that gap.
 With only healthy events, report healthy telemetry; do not invent a fault or
 suggest resetting a healthy app. No events means a telemetry visibility gap,
 not proof that the app is down. Logs alone do not prove current task/config state.
-If fault events exist, explain the evidence and suggest an operator inspect the
-sample config and scheduled task. Any reset/restart requires separate approval;
-suggest the existing operator ResetFault procedure only for a confirmed fault.
+If fault events exist, explain the evidence and suggest inspecting the
+sample config and scheduled task. Any reset or restart is a separate request;
+suggest the existing ResetFault procedure only for a confirmed fault.
 Stop after this query and the optional metadata lookup. Do not retry on denied
 or empty results. Report the exact access/tool/data gap if investigation stalls.
 No guest/Run Command, writes, alert changes, notifications, new tools/connectors,
@@ -250,27 +252,27 @@ and suggested steps. [Built-in Azure observability](https://learn.microsoft.com/
 supports workspace resource IDs without a new connector. Do not accept an
 additional-access banner or create a connector to make the walkthrough work.
 
-**Say:** "SRE is reading the LOB app's evidence and explaining what an operator
-should check. The Container App remains the SRE repair demonstration."
+**Say:** "SRE is reading the LOB app's evidence and explaining what to check.
+The Container App remains the SRE repair demonstration."
 
 If the query is denied, empty or stalls, show the reported gap and stop the
 agent demonstration. Open [{{logAnalyticsWorkspaceIdName}}]({{logAnalyticsWorkspaceIdUrl}})
-and run the same KQL in **Logs** if an independent check is authorized.
-Label it operator evidence. A manual query or scripted explanation does not
+and run the same KQL in **Logs** as an independent check.
+Label it as your own query. A manual query or scripted explanation does not
 establish that SRE completed the investigation. Historical automatic T11 RCA
 stalled; this manual path needs its own live completion evidence.
 
-For an optional LOB incident, the assistant can prepare a separately approved
-two-minute **Degraded warning**, with guarded restoration and no task restart or
-generated load. The existing alert counts any 4100/4101/4200 event over ten
-minutes and evaluates every five minutes. Check its current resolved state,
-Action Group recipients and the LOB plan's three-hour cooldown before approval.
+For an optional LOB incident, you can run a two-minute **Degraded warning**
+(`Invoke-LobArcAppOnArc.ps1 -Action WarnForDuration`), with guarded restoration
+and no task restart or generated load. The existing alert counts any 4100/4101/4200
+event over ten minutes and evaluates every five minutes. Check its current resolved
+state, Action Group recipients and the LOB plan's three-hour cooldown first.
 Wait for actual Event 4200, a new alert and a new SRE incident, then correlate
 host metrics across the recorded warning window. Do not promise incident
-delivery, automatic RCA or SRE Arc repair. The prior read-only request grants no
-permission to trigger this warning or run the expanded query.
+delivery, automatic RCA or SRE Arc repair. The read-only request above does not
+trigger this warning.
 
-The [earlier 2026-11-02 rehearsal]({{lifecycleGuideUrl}}#observed-lob-warning-and-reporting-limits)
+The [earlier 2026-11-02 rehearsal]({{lifecycleGuideUrl}}#earlier-sql-and-lob-rehearsals)
 captured a completed automatic investigation, but its stale-evidence
 ongoing-warning inference and overconfident host-pressure exclusion were wrong.
 See the [representative-instruction follow-up]({{lifecycleGuideUrl}}#representative-investigation-instructions)
@@ -282,20 +284,21 @@ status. Do not present source setup as reliable RCA or SRE repair.
 
 Open [the SQL host]({{sqlMachineResourceIdUrl}}) and
 [its existing alert]({{sqlAlertResourceIdUrl}}). Continue only after the Arc
-owner verifies the engine, normal Orders worker, rollback/cleanup and telemetry.
-The SQL and LOB warnings run **sequentially**, each with its own approved window
-and verified cleanup. Do not trigger either during a navigation-only rehearsal.
+repo's checks for the engine, normal Orders worker, rollback/cleanup and
+telemetry pass.
+The SQL and LOB warnings run **sequentially**, each in its own window
+with cleanup verified. Do not trigger either during a navigation-only rehearsal.
 
-With the exact SQL window released, the AI runs the Arc-owned incident helper.
+Run the Arc repo's SQL incident helper (or ask your AI tool to).
 It creates a real blocker/victim on one owned checkpoint row in
 `ARCDEMO` / `ArcDemoOrders`, not the retired probe table.
 The victim has a five-second lock timeout;
-the blocker rolls back within the approved bounded window. Normal Orders work is preserved.
+the blocker rolls back within the bounded window. Normal Orders work is preserved.
 No service stop, artificial host load, corruption or SQL repair is part of it.
 
 **Say:** "This is a real SQL lock timeout. The controlled transaction has already
 rolled back by the time the alert may arrive. SRE investigates the recorded
-SQL evidence and recommends operator checks."
+SQL evidence and recommends checks."
 
 Watch the Application signal from **{{sqlEventSource}}**:
 **6201** records actual SQL error **1222** and blocking-session/wait evidence.
@@ -306,12 +309,12 @@ event IDs. A lock timeout is [different from a deadlock](https://learn.microsoft
 The existing SQL alert evaluates each minute across a fifteen-minute window.
 It matches the exact host/source and detected SQL-error JSON, then sends through
 the existing Action Group. Existing receivers may get fired/resolved messages;
-ingestion, query and SRE usage can be incurred. Confirm those recipients and the
-SQL rule's current firing/cooldown state before the approved run. Never disable
+ingestion, query and SRE usage can be incurred. Check those recipients and the
+SQL rule's current firing/cooldown state before you run it. Never disable
 cooldown to force a new thread.
 The scanner also merges same-rule firings across seven days, independently of
 the three-hour filter cooldown. Use an existing investigation for a walkthrough,
-or obtain separate approval for the
+or use the
 [fresh-run/reset procedure]({{lifecycleGuideUrl}}#reset-between-demo-runs).
 Closing an alert/thread alone is not a documented reset.
 
@@ -324,7 +327,7 @@ gaps. Do not infer a current blocker, resource pressure, completion or a new
 incident from a title or narrative alone.
 
 **Say:** "The evidence identifies lock contention and its observed recovery.
-SRE can recommend checking transaction duration and contention. An operator owns
+SRE can recommend checking transaction duration and contention. Your team owns
 any further SQL or Arc action."
 
 If delivery stalls, the platform groups into an existing thread, a query fails
@@ -335,7 +338,7 @@ condition separately from workflow/thread closure. Source setup does not prove
 the automatic SQL investigation or fix the historical T11 RCA stall.
 <!-- SQL:END -->
 
-For the approved investigation or an existing SRE execution, open
+For the investigation you ran or an existing SRE execution, open
 [{{applicationInsightsResourceIdName}}]({{applicationInsightsResourceIdUrl}}),
 select **Logs**, and run:
 
@@ -355,30 +358,30 @@ ToolStart alone does not establish completion; missing approval telemetry leaves
 an audit limit. See [the audit reference](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions).
 Keep raw context and payloads off the projected screen.
 
-## 6. Optional: one approved live incident
+## 6. Optional: one live incident
 
-Skip this step unless the user has explicitly approved one Container App fault,
-an observation deadline and the narrow reset fallback. The AI runs the
-[existing T09 procedure]({{operatorGuideUrl}}); the presenter does not choose scripts.
-The signed-in human approves only the current run's exact reset card; the
-[click path to that card]({{operatorGuideUrl}}#7-approve-the-governed-fix) is in the
-operator guide.
-Never approve a stale card after operator recovery: agree beforehand that the human
-may Deny it if the operator fallback runs. The card appears about 7 to 10
+Skip this step unless you want to run one live Container App incident. Your AI
+tool can run the [existing T09 procedure]({{incidentGuideUrl}}) for you.
+You approve only the current run's exact reset card; the
+[click path to that card]({{incidentGuideUrl}}#7-approve-the-governed-fix) is in the
+incident runbook.
+If you reset the app yourself instead, don't approve the old card afterwards (deny
+it or leave it alone). The card appears about 7 to 10
 minutes after the fault, so fire it about 10 minutes before this beat. Say that a
 person approved it, never that the audit proves it (see **Approval provenance**
 under **Live faults**).
 
 After execution, verify the false fault flag, serving revision and HTTP 200.
 Check the alert's Monitor condition separately from its workflow status.
-Describe operator fallback as operator-assisted recovery if it was needed.
+Describe a manual reset as a manual reset, not agent repair, if you needed one.
 
 ## 7. Close
 
 Return to [the application]({{applicationUrl}}).
 
-Leave the requested Active demo running. Parking is a separately approved
-[operator task]({{lifecycleGuideUrl}}), with SRE parked before Arc.
+Leave the demo running if you will present again. To park it, see
+[hibernation and reactivation]({{lifecycleGuideUrl}}#hibernation-and-later-reactivation):
+park SRE before Arc.
 
 Deliver this closing after the SRE half, whether using live incidents or dated threads:
 

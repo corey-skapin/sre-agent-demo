@@ -9,9 +9,10 @@
     its fault mode, and collect Application-log/text-log evidence. Use
     -GuestScriptOutputPath to generate the guest script for a manual fallback
     without invoking Azure.
-    WarnForDuration needs an approved warning window. It temporarily selects
-    Degraded without restarting the healthy worker and attempts guarded config
-    restoration; process termination or concurrent changes need operator review.
+    WarnForDuration needs -ApproveWarningWindow to confirm you want to degrade the
+    app for the chosen window. It temporarily selects Degraded without restarting
+    the healthy worker and attempts guarded config restoration; if the process is
+    terminated or the config changes concurrently, inspect the app yourself.
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
@@ -370,7 +371,7 @@ $appPath = Join-Path $AppRoot 'LobArcBridgeApp.ps1'
 $original = [IO.File]::ReadAllText($configPath)
 $config = $original | ConvertFrom-Json
 if ($config.FaultMode -ne 'Healthy' -or $config.EventSource -cne $EventSource) {
-    throw 'Warning baseline requires Healthy mode and the exact approved event source.'
+    throw 'Warning baseline requires Healthy mode and the exact configured event source.'
 }
 if ([string]$config.LoopSeconds -notmatch '^\d+$' -or [int]$config.LoopSeconds -lt 5 -or [int]$config.LoopSeconds -gt 60) {
     throw 'Warning baseline requires a known loop interval of 5 to 60 seconds.'
@@ -379,7 +380,7 @@ if ($WarningSeconds -lt 2 * [int]$config.LoopSeconds) {
     throw 'Warning window must cover at least two app cycles.'
 }
 $tasks = @(Get-ScheduledTask -TaskName $TaskName -TaskPath '\' -ErrorAction Stop)
-if ($tasks.Count -ne 1) { throw 'Warning baseline requires exactly one approved root scheduled task.' }
+if ($tasks.Count -ne 1) { throw 'Warning baseline requires exactly one root scheduled task with the app task name.' }
 $task = $tasks[0]
 $pidText = [IO.File]::ReadAllText($pidPath).Trim()
 if ($task.State -ne 'Running' -or $pidText -notmatch '^[1-9]\d*$') {
@@ -387,7 +388,7 @@ if ($task.State -ne 'Running' -or $pidText -notmatch '^[1-9]\d*$') {
 }
 $worker = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $pidText" -ErrorAction Stop
 if (-not $worker -or $worker.ProcessId -ne [int]$pidText -or $worker.CommandLine -notmatch [regex]::Escape($appPath) -or $worker.CommandLine -notmatch [regex]::Escape($configPath)) {
-    throw 'Worker PID does not belong to the approved LOB script/configuration.'
+    throw 'Worker PID does not belong to the LOB script/configuration.'
 }
 $workerCreated = $worker.CreationDate
 if (-not $workerCreated) { throw 'Worker creation time is unavailable; refusing an ambiguous process baseline.' }
@@ -395,11 +396,11 @@ function Set-ScenarioConfig([string]$Expected, [string]$Replacement) {
     $temporary = Join-Path $AppRoot ('.lob-warning-' + [guid]::NewGuid().ToString('N') + '.tmp')
     try {
         if ([IO.File]::ReadAllText($configPath) -cne $Expected) {
-            throw 'Concurrent config change; refusing to overwrite it. Operator inspection required.'
+            throw 'Concurrent config change; refusing to overwrite it. Inspect the config yourself.'
         }
         [IO.File]::WriteAllText($temporary, $Replacement, [Text.UTF8Encoding]::new($false))
         if ([IO.File]::ReadAllText($configPath) -cne $Expected) {
-            throw 'Concurrent config change; refusing to overwrite it. Operator inspection required.'
+            throw 'Concurrent config change; refusing to overwrite it. Inspect the config yourself.'
         }
         [IO.File]::Replace($temporary, $configPath, [System.Management.Automation.Language.NullString]::Value)
     } finally {
@@ -430,20 +431,20 @@ try {
         try {
             Set-ScenarioConfig -Expected $warning -Replacement $original
         } catch {
-            throw "Warning cleanup unverified. Inspect the exact config and use separately approved operator ResetFault only if appropriate. Operation: $operationError Cleanup: $_"
+            throw "Warning cleanup unverified. Inspect the exact config and run -Action ResetFault only if appropriate. Operation: $operationError Cleanup: $_"
         }
     }
 }
 if ($operationError) { throw $operationError }
 $tasks = @(Get-ScheduledTask -TaskName $TaskName -TaskPath '\' -ErrorAction Stop)
-if ($tasks.Count -ne 1) { throw 'Config restored, but the approved root task is ambiguous. Operator inspection required.' }
+if ($tasks.Count -ne 1) { throw 'Config restored, but the root task is ambiguous. Inspect it yourself.' }
 $task = $tasks[0]
 $worker = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $pidText" -ErrorAction Stop
 if ($task.State -ne 'Running' -or -not $worker -or $worker.ProcessId -ne [int]$pidText -or $worker.CreationDate -ne $workerCreated -or [IO.File]::ReadAllText($pidPath).Trim() -ne $pidText) {
-    throw 'Config restored, but the original worker/task is not verified running. Operator inspection required.'
+    throw 'Config restored, but the original worker/task is not verified running. Inspect it yourself.'
 }
 if ([IO.File]::ReadAllText($configPath) -cne $original) {
-    throw 'Config restoration readback differs from baseline. Operator inspection required.'
+    throw 'Config restoration readback differs from baseline. Inspect the config yourself.'
 }
 [pscustomobject]@{
     Action = 'WarnForDuration'; RunId = $runId
@@ -572,7 +573,7 @@ Assert-SreName -Value $TaskName -Description 'task name' -Pattern '^[A-Za-z][A-Z
 if ($FaultMode -notin @('CrashOnProcessing', 'Degraded')) { throw 'Invalid LOB fault mode in skin.' }
 Assert-SreContextIds -SubscriptionId $SubscriptionId -TenantId $TenantId
 if ($Action -eq 'WarnForDuration' -and -not $ApproveWarningWindow -and -not $WhatIfPreference -and -not $GuestScriptOutputPath) {
-    throw 'WarnForDuration requires -ApproveWarningWindow after explicit approval of the host, duration, alert/notification effects and operator cleanup boundary.'
+    throw 'WarnForDuration requires -ApproveWarningWindow to confirm you want to degrade the app on this host for the chosen duration. It can fire the alert and its notifications; if cleanup fails, reset the app with -Action ResetFault.'
 }
 
 $guestScript = "`$ErrorActionPreference = 'Stop'`n$(Get-GuestScript)"

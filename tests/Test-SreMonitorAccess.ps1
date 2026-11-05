@@ -56,15 +56,15 @@ try {
     $first = & $grantScript @parameters -WhatIf
     $second = & $grantScript @parameters -WhatIf
     Check ($first.status -eq 'preview' -and $first.assignmentId -eq $second.assignmentId) 'WhatIf returns one deterministic assignment'
-    Check ($first.principalId -eq $principal -and $first.scope -eq $scope -and $first.roleDefinitionId.EndsWith("/$role")) 'Preview contains exactly the approved principal, role and subscription'
+    Check ($first.principalId -eq $principal -and $first.scope -eq $scope -and $first.roleDefinitionId.EndsWith("/$role")) 'Preview contains exactly the requested principal, role and subscription'
     Check (@($global:AzCalls | Where-Object { $_ -match ' create| delete|account set|get-access-token' }).Count -eq 0) 'Preview is read-only without token, Graph or account-switch calls'
-    Throws { & $grantScript @parameters } 'explicitly approve'
+    Throws { & $grantScript @parameters } 'pass -GrantAzureMonitorAlertAccess to confirm'
     $created = & $grantScript @parameters -GrantAzureMonitorAlertAccess
     Check ($created.status -eq 'created' -and $created.assignmentId -eq $first.assignmentId) 'Single create is independently read back'
     $writes = @($global:AzCalls | Where-Object { $_ -like 'role assignment create*' })
     Check ($writes.Count -eq 1 -and $writes[0] -match '--assignee-principal-type ServicePrincipal') 'Creates once for a managed identity, without directory lookup'
     $existing = & $grantScript @parameters
-    Check ($existing.status -eq 'existing' -and $existing.assignmentId -eq $created.assignmentId) 'Repeated invocation is idempotent and needs no new approval'
+    Check ($existing.status -eq 'existing' -and $existing.assignmentId -eq $created.assignmentId) 'Repeated invocation is idempotent and needs no -GrantAzureMonitorAlertAccess'
     Check (@($global:AzCalls | Where-Object { $_ -like 'role assignment create*' }).Count -eq 1) 'No duplicate create'
     $global:MonitorAccessState.assignments[0].id = "$scope/providers/Microsoft.Authorization/roleAssignments/portal-existing"
     $adopted = & $grantScript @parameters -GrantAzureMonitorAlertAccess
