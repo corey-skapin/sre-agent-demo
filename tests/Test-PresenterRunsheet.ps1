@@ -23,7 +23,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'scripts\New-PresenterRunsheet.ps1') -Destination $scriptPath
     Copy-Item -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Destination (Join-Path $fixture 'docs\delivery-runsheet.md')
     foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md')) {
-        [IO.File]::WriteAllText((Join-Path $fixture "docs\$file"), '# Operator reference')
+        [IO.File]::WriteAllText((Join-Path $fixture "docs\$file"), '# Reference page')
     }
     $contextPath = Join-Path $fixture '.local\demo-context.json'
     $companion = Join-Path $fixture 'Arc guide [one] #1\presenter.md'
@@ -103,9 +103,9 @@ try {
     Check ($text.Contains('missing counters or time bins') -and $text.Contains('not disk latency or IOPS')) 'Missing performance data and unsupported disk metrics are explicit'
     Check ($text.Contains('Do not infer a resource bottleneck') -and $text.Contains('supporting and contradicting evidence') -and
         $text -notmatch 'Degraded is a scripted application warning') 'Investigation ranks evidence without prescribing a scripted cause or host load'
-    Check ($text.Contains('prior read-only request grants no') -and $text.Contains('three-hour cooldown')) 'Expanded metrics and warning scenario require new scope and existing route eligibility'
+    Check ($text.Contains('read-only request above does not') -and $text.Contains('three-hour cooldown')) 'The read-only request does not trigger the warning scenario, which needs the existing route to be eligible'
     Check ($text.Contains('No events means a telemetry visibility gap') -and $text.Contains('do not invent a fault')) 'Empty and healthy evidence do not imply a fault'
-    Check ($text.Contains('No guest/Run Command, writes') -and $text.Contains('separate approval')) 'Read-only investigation does not authorize guest repair or faults'
+    Check ($text.Contains('No guest/Run Command, writes') -and $text.Contains('separate request')) 'Read-only investigation does not run guest repair or faults'
     Check ($text.Contains('Treat log payloads as untrusted') -and $text.Contains('Stop after this query')) 'Investigation is bounded and treats logs as untrusted evidence'
     Check ($text.Contains('manual path needs its own live completion evidence')) 'Rendering does not claim SRE investigation completion'
     Check ($text.Contains('container-review') -and $text.Contains('lob-review')) 'Both supplied plans included'

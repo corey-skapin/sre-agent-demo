@@ -11,7 +11,7 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `azure.location` | Azure region for the SRE Agent resource group. | `australiaeast` |
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
 | `sre.targetArcMachine` | Default Arc machine for T10/T11 helpers. | `win-app-01` |
-| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. Add `SQL` after the Arc owner's SQL handoff to enable the optional [SQL scenario](sre-response-plan-automation.md#optional-sql-scenario). | `T09`, `T11` |
+| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. Add `SQL` once the Arc estate's SQL engine and alert are ready, to enable the optional [SQL scenario](sre-response-plan-automation.md#optional-sql-scenario). | `T09`, `T11` |
 | `sre.sqlTargetArcMachine` | Arc machine hosting the SQL Server for the optional SQL scenario; dormant unless `SQL` is required. | `win-sql-01` |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
 | `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | Generic Arc demo labels |
@@ -44,7 +44,7 @@ Keep constant:
    durable private lab folder as `sre-skin.json`; do not commit real context.
    Use the companion wrapper's single folder containing `build.json`, `arc-skin.json`,
    `sre-skin.json`, `evidence\` and `sre-backups\`, outside all worktrees and
-   assistant session folders. `build.json` keeps `sre.skinPath: "sre-skin.json"`;
+   AI-tool session folders. `build.json` keeps `sre.skinPath: "sre-skin.json"`;
    the wrapper passes its resolved **absolute** path to SRE scripts.
 3. Keep `azure.namePrefix` in sync with the Arc repo.
 4. Validate the skin offline (no cloud calls), then run SRE scripts using it:
@@ -63,16 +63,16 @@ Keep constant:
    ```
 
 5. `-ParentOnly` instead of `-ConfigurationBackupPath` stops after the parent and
-   is not Ready: render, inspect and approve/apply the current-schema
+   is not Ready: render, inspect and apply the current-schema
    configuration using `sre-response-plan-automation.md`, with a new external
    backup. Either way run readiness; the optional telemetry item is skipped/not
    evaluated. Record rehearsal evidence separately. Do not induce a fault to
    answer preflight.
-6. Use the same skin for scenario helpers; guest deployment/fault/reset actions
-   need their own approval. Container App Status and ShowQuery are read-only.
+6. Use the same skin for scenario helpers. Guest deployment, fault and reset actions
+   change things on the target. Container App Status and ShowQuery are read-only.
    Arc guest Status still executes Run Command and is not part of a read-only
-   presenter rehearsal; use existing workspace evidence for that scene.
-   The examples below are operator references, not a batch to run on stage:
+   rehearsal; use existing workspace evidence for that scene.
+   The examples below are references, not a batch to run on stage:
 
    ```powershell
    .\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
@@ -86,8 +86,8 @@ Keep constant:
 The optional SRE layer has a different off-state from `arc-demo`: an SRE parent
 can be Stopped, but its always-on charge continues until deletion. The repo's
 Hibernated state is therefore deletion-based, retaining the costless UAMI.
-See [the billing boundary](sre-cost-and-demo-fidelity.md). Only after explicit
-authorization, preview and execute the operator parking procedure:
+See [the billing boundary](sre-cost-and-demo-fidelity.md). To park the SRE layer,
+preview and run the parking procedure:
 
 ```powershell
 .\scripts\Hibernate-SreAgent.ps1 `
@@ -104,7 +104,7 @@ workspace Application Insights and the owned Action Group. Parent-scope deployer
 admin is separate from UAMI grants; stale free entries are reported for wake.
 Unexpected free resources/grants do not prevent known-parent parking, but are
 never deleted by Hibernate. Wrong context/identity and failed reads still stop.
-Full group/identity deletion uses explicitly authorized `Remove-SreAgent.ps1`
+Full group/identity deletion uses `Remove-SreAgent.ps1`
 and `-DesiredState Removed` readiness with the saved principal. Unknown
 resources/grants block that full-removal path. Neither lifecycle action deletes
 or redeploys the Arc estate. Save its identity principal ID, Inspect export and
@@ -113,12 +113,13 @@ readiness and that saved principal. Finish SRE before Arc hibernation.
 Recreate the parent with
 `Deploy-SreAgent.ps1 -ApproveParentCreation -ConfigurationBackupPath <NEW_PATH>`
 using the retained UAMI; it also applies the pinned current-schema configuration
-(use `-ParentOnly` with a separate render, inspect and approved apply to review
+(use `-ParentOnly` with a separate render, inspect and apply to review
 it first), then run readiness. Existing
-legacy plans require separately approved migration, not MCP `high`/P1/P2 creates.
+legacy plans are not migrated by these scripts (and MCP `high`/P1/P2 creates are
+not a substitute).
 Parent creation alone does not restore custom handlers, plans or
-repository authorization. Keep the requested Ready demo running unless cleanup
-is explicitly requested.
+repository authorization. Keep a demo you are using running unless you decide to
+clean up.
 Wake Arc before SRE. Rebuilding recreates the modern custom agent and v3 filters,
 not retired v2 history or learned memory. The saved export is a reference, not
 an automatic restore input. Filters explicitly enforce enabled three-hour cooldown,
@@ -129,7 +130,7 @@ Hibernated readiness; do not mistake historical whole-group deletion for retenti
 Hibernate and wake from the retained identity were proven live on 2026-11-05
 ([evidence and limits](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
 `Active` is the public desired state; `Ready` remains the compatible readiness
-alias/default. Old UAMI-only Hibernated states remain accepted; authorized wake
+alias/default. Old UAMI-only Hibernated states remain accepted; a wake
 recreates missing diagnostics and adopts retained grants. Requested profile,
 workspace and location must match before Active; excessive IAM needs explicit
 reconciliation rather than automatic revocation.
@@ -147,7 +148,7 @@ workspace unless explicitly supplied. Recheck existing plan filters when reskinn
 
 Default synthetic example: `config\demo-skin.json` uses fictional Contoso with the generic `arc-demo` prefix. Provide subscription/tenant at runtime and keep live values in a private skin.
 
-Alternative synthetic example: `config\dummy-customer.demo-skin.json` uses fictional Fabrikam, prefix `fabrikam-arc`, agent `sre-fabrikam-arc` and corresponding labels. Both examples leave external repository URL/commit empty. Configure your own source only when needed and separately authorize any connector.
+Alternative synthetic example: `config\dummy-customer.demo-skin.json` uses fictional Fabrikam, prefix `fabrikam-arc`, agent `sre-fabrikam-arc` and corresponding labels. Both examples leave external repository URL/commit empty. Configure your own source only when needed and connect any connector yourself.
 
 ## Remaining constants
 

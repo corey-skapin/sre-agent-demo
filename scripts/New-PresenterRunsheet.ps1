@@ -136,7 +136,7 @@ if ($context.Contains('companionArcRunsheetPath')) {
         $values.arcStep = 'Complete [the Arc section](' + (Get-RelativeLink $companion) + ') first, then continue here.'
     }
 }
-$values.operatorGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t09-native-containerapp-closed-loop.md')
+$values.incidentGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t09-native-containerapp-closed-loop.md')
 $values.lifecycleGuideUrl = Get-RelativeLink (Join-Path $root 'docs\sre-response-plan-automation.md')
 $template = Get-Content -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Raw
 $values.sqlPlanRow = ''

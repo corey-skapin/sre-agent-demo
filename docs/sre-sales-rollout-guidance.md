@@ -6,7 +6,7 @@ account, territory, internal-chat, pipeline or consumption dataset.
 Confirm current product prerequisites, capabilities and commercial terms before
 using this in a proposal. This is not a customer-specific eligibility assessment,
 pricing offer or a zero-cost hibernation claim.
-This is optional workshop planning, not a portal runsheet; presenters start with
+This is optional workshop planning, not a portal runsheet; to present, start with
 [the docs map](README.md), then open the generated `.local/presenter-runsheet.md`.
 
 ## Positioning
@@ -102,14 +102,14 @@ A strong PoC closeout proves:
 
 1. SRE Agent deployed and scoped to at least one workload.
 2. Azure Monitor alert investigated end to end.
-3. Proposed mitigation reviewed by a human before execution.
+3. Proposed mitigation reviewed by a person before execution.
 4. At least one extension point configured.
 5. Governance model documented: roles, run mode, tool access, audit and next
    expansion scope.
 
 ## Account planning and rollout signals
 
-If separately authorized account evidence is available, use it privately to
+If you have account evidence available, use it privately to
 qualify the conversation. Do not copy account metrics or source workbooks into
 this reusable repo. The following qualitative segments are illustrative only:
 
@@ -135,10 +135,10 @@ For the Arc + Monitor + SRE demo, the suggested path is:
 
 1. Use the Arc + Monitor demo to earn the operations-plane conversation.
 2. Use Defender for Cloud recommendations as the security co-sell.
-3. Use T09 as live closed-loop SRE proof only after a separately authorized
+3. Use T09 as live closed-loop SRE proof only after you have run a
    current-instance rehearsal; otherwise label historical evidence or show the
    configured healthy workload without claiming a new completed loop.
-4. Use T11 as the hybrid evidence and operator recovery proof.
+4. Use T11 as the hybrid evidence and Arc Run Command recovery proof.
 5. Close on a two-day PoC or workshop, not on broad autonomous remediation.
 
 ## How to attach this to the demo
@@ -159,7 +159,7 @@ Then position hybrid Arc scenarios as the next trust-building step:
 
 - Arc and Monitor bring on-prem-shaped signals into Azure.
 - SRE Agent can create incident threads and propose actions.
-- Operators approve or perform Arc Run Command remediation.
+- The customer's engineers approve or perform Arc Run Command remediation.
 - Autonomous Arc repair is future hardening, not the current demo claim.
 
 ## Seller-safe talk tracks

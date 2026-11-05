@@ -12,8 +12,8 @@ Insights and one retained user-assigned identity. The service can also create th
 Smart Detection Action Group covered by the lifecycle scripts. There are no
 SRE-owned VMs, managed disks or SSD/HDD settings to downgrade.
 
-Keep T09's real Monitor -> investigation -> human Review -> repair -> recovery
-story. T10/T11 remain hybrid evidence plus operator Arc Run Command recovery, not
+Keep T09's real Monitor -> investigation -> Review approval -> repair -> recovery
+story. T10/T11 remain hybrid evidence plus Arc Run Command recovery that you run, not
 autonomous Arc repair or reliably demonstrated T11 RCA. Preserve scoped Sev2
 routes, enabled three-hour cooldown, Review and the stable-identity lifecycle.
 `High` is the action identity's permission profile, **not a billable service tier**;
@@ -31,7 +31,7 @@ deletion, plus variable active-flow AAUs for model processing.
 | Stopped parent | Still 4 AAUs per hour | Active work stops; this does not stop the baseline bill. |
 | Verified repo Hibernated | No parent, so no SRE always-on or active-flow charge | Parent/configuration must be rebuilt before the next demo. Other services can still incur charges. |
 
-Use the approved export, `Hibernate-SreAgent.ps1 -WhatIf`, actual parking and
+Use the export, `Hibernate-SreAgent.ps1 -WhatIf`, actual parking and
 verification sequence in `docs\sre-response-plan-automation.md`. Retain the
 dedicated group/UAMI, existing free workload grants, workspace Application Insights
 and owned Action Group. Standing access persists until explicitly reconciled or
@@ -44,7 +44,7 @@ Never automatically park a running demo during a cost review.
 Deletion is an intentional **demo** tradeoff, not a recommendation to delete a
 customer's continuously operating SRE service. It loses threads, incident history,
 memory and connector state; exports do not restore those. Rebuilding takes time,
-requires the approved grants and can consume active-flow AAUs. The retained
+needs the grants in place and can consume active-flow AAUs. The retained
 identity avoids principal churn, not these other losses. Local tests do not prove
 a complete live retained-identity park/wake cycle.
 
@@ -91,7 +91,7 @@ This repo does not own the shared workspace's plan, retention or collection rule
   lower it immediately before a rehearsal or present it as a total-cost cap.
 - **Telemetry volume/retention:** first measure contribution and prove alert,
   query, RCA and recovery evidence survives any proposed reduction.
-- **Scheduling:** choose explicit Ready/Hibernated windows with the operator;
+- **Scheduling:** choose explicit Ready/Hibernated windows yourself;
   don't add an unattended deletion schedule or silently stop a walkthrough.
 
 The reviewed design already has one parent, narrow response routes, cooldown and
