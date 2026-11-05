@@ -28,10 +28,12 @@ none of it, and none of it certifies the current instance.
 - The scenario prerequisites, each approved separately because they write to the
   Arc estate: the T09 Container App and restart alert (Arc owner); for T11,
   `New-LobArcAppMonitorAlert.ps1 -Action Create` and
-  `Invoke-LobArcAppOnArc.ps1 -Action Deploy` (preview each with `-WhatIf`); for the
+  `Invoke-LobArcAppOnArc.ps1 -Action Deploy` (same explicit target and private skin;
+  preview each with `-WhatIf`); for the
   optional SQL route, the Arc owner's SQL handoff and `SQL` in the private skin
-  ([enable SQL](#optional-sql-scenario)). A missing one surfaces only later as a
-  failed `T11-alert` or `SQL-alert` readiness check, after the paid parent exists.
+  ([enable SQL](#optional-sql-scenario)). A missing alert surfaces only later as a
+  failed `T11-alert` or `SQL-alert` readiness check, after the paid parent exists,
+  and readiness does not check that the LOB app itself is installed.
 
 | Step | Do this | Details |
 | --- | --- | --- |
@@ -481,7 +483,8 @@ Measured live on 2026-11-05 (the first from-zero build): offline tests 48 s,
 configuration apply included), `Test-SreReadiness.ps1 -DesiredState Active` 73 to
 133 s, `New-LobArcAppMonitorAlert.ps1 -Action Create` 20 s,
 `Invoke-LobArcAppOnArc.ps1 -Action Deploy` about 3 minutes (the guest part took
-16 s; its result lists `GuestExitCode` and `GuestOutput` directly) and `Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
+16 s; its result lists `GuestExitCode` and `GuestOutput` directly) and
+`Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
 least 600 s. If a Deploy is interrupted after the parent exists, do not rerun it:
 Deploy refuses an existing parent, even in `-WhatIf`. Run
 `Initialize-SreConfiguration.ps1 -Inspect`, review it, then an approved
