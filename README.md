@@ -89,7 +89,7 @@ scripts/
   Invoke-NativeContainerAppFault.ps1 # T09 fault toggle
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
   New-LobArcAppMonitorAlert.ps1 # creates or prints the T11 log alert signal
-  Invoke-T10ArcFault.ps1     # historical T10 experiment fault helper, kept for its ledger
+  Invoke-T10ArcFault.ps1     # Arc-server fault helper (heartbeat, service, disk, CPU, event) with Induce/Reset/Status
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
 docs/                        # start at docs/README.md; images/ holds the README screenshots
@@ -475,20 +475,15 @@ the presenter path.
 - `docs\sre-cost-and-demo-fidelity.md` - SRE cost levers, parking tradeoffs and demo-preserving boundaries.
 - `docs\ai-deploy-handbook.md` - Prompt and checklist for AI-assisted deployment by another SE.
 - `docs\sre-sales-rollout-guidance.md` - Internal sales, PoC and rollout guidance for SRE Agent conversations.
-- `docs\clean-room-shareability-test-2026-10-12.md` - No-cost clean-room preview result across both repos.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance". Dated rehearsal evidence is in its appendix.
-- `docs\t10-sre-on-arc-experiment.md` - Arc-server assisted diagnostics and operator remediation experiment.
-- `docs\t11-hybrid-diagnostics-wow.md` - Customer-facing hybrid diagnostics wow scene for LOB-on-Arc.
-- `docs\t11-lob-app-on-arc-bridge.md` - Engineering evidence ledger for the LOB app running on an Arc server; not the current presenter source-of-truth.
+- `docs\t11-lob-app-on-arc-bridge.md` - How to deploy the LOB app on an Arc server, create its alert and break it.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
 
-See the [dated non-presenter engineering ledger](docs/t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
-for earlier cutover/T09 evidence and approval/audit limits. Those results do not
-certify a newly reconstructed instance; current readiness and incident evidence
-must be recorded separately.
+These results come from earlier runs. They do not certify a newly reconstructed
+instance; record current readiness and incident evidence separately.
 
 - **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.

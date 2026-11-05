@@ -541,5 +541,3 @@ rebuild, live guest execution or a new T09 alert-to-recovery run. The separate
 2026-11-05 live session exercised the build, Hibernate and wake paths and one T09
 alert-to-card chain; its limits, including the still-unproven clean in-window
 repair, are in the [evidence boundaries](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05).
-See the [historical engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
-for dated run outcomes and their evidence limits.

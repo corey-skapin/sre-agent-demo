@@ -362,8 +362,7 @@ than partially rewritten. The v1 read guard remains because service-created or
 reused handlers cannot safely be assumed absent. Existing same-principal RBAC
 adoption also remains necessary for retained-identity wake, not just old routing.
 
-Use the fallback above for unsupported existing state. Historical cutover and
-T09 evidence is in the [non-presenter engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence).
+Use the fallback above for unsupported existing state.
 
 ## Deployment, readiness and lifecycle
 
