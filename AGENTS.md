@@ -48,7 +48,7 @@ Run these from the repo root, each with the three inputs above.
   agent's proposed fix, then checks recovery.
 - **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
   from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
-  The Arc half is in the Arc repo (`docs/runsheet.md#present-the-arcmonitor-demo`).
+  The Arc half is in the Arc repo (`docs/runsheet.md`).
 - **Tests:** `.\tests\Invoke-Tests.ps1` (offline, about a minute).
 
 ## Safety
