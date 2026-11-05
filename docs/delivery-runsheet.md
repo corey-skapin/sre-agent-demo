@@ -270,7 +270,7 @@ host metrics across the recorded warning window. Do not promise incident
 delivery, automatic RCA or SRE Arc repair. The prior read-only request grants no
 permission to trigger this warning or run the expanded query.
 
-The [earlier 2026-11-02 rehearsal]({{lifecycleGuideUrl}}#observed-lob-warning-and-reporting-limits)
+The [earlier 2026-11-02 rehearsal]({{lifecycleGuideUrl}}#earlier-sql-and-lob-rehearsals)
 captured a completed automatic investigation, but its stale-evidence
 ongoing-warning inference and overconfident host-pressure exclusion were wrong.
 See the [representative-instruction follow-up]({{lifecycleGuideUrl}}#representative-investigation-instructions)

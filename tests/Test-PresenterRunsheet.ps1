@@ -134,7 +134,7 @@ try {
     Check ($sqlText.Contains($context.sql.machineResourceId) -and $sqlText.Contains($context.sql.alertResourceId)) 'SQL scene uses explicit host/alert resource links'
     Check ($sqlText.Contains('actual automatically created') -and $sqlText.Contains('sequentially') -and $sqlText.Contains('6001')) 'SQL scene requires automatic delivery, recovery evidence and sequential faults'
     Check ($sqlText.Contains('normal Orders') -or $sqlText.Contains('Normal Orders')) 'SQL scene preserves the normal worker'
-    Check ($sqlText.Contains('../docs/sre-response-plan-automation.md#observed-lob-warning-and-reporting-limits') -and
+    Check ($sqlText.Contains('../docs/sre-response-plan-automation.md#earlier-sql-and-lob-rehearsals') -and
         $sqlText.Contains('../docs/sre-response-plan-automation.md#reset-between-demo-runs')) 'Rehearsal and reset links resolve from the generated guide, preserving section fragments'
     Check ($sqlText -notmatch '\{\{|\}\}|SQL:START|SQL:END') 'Optional SQL section has no unresolved markers'
     Check (Test-ArcSpliceShape $sqlText) 'The SQL render keeps the same Arc splice headings'

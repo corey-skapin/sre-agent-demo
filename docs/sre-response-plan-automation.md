@@ -1,16 +1,14 @@
 # Reconstructing current-schema SRE handler and Review response plans
 
-**Deployment/lifecycle operator reference.** For an already provisioned demo,
-present from the generated `.local/presenter-runsheet.md`, using
-[the SRE guide source](delivery-runsheet.md), not the setup
-commands below. [The docs map](README.md) explains the minimum reading path.
+**Deployment and lifecycle reference.** To present a demo that is already set up,
+open the generated `.local/presenter-runsheet.md` (built from
+[the SRE guide source](delivery-runsheet.md)); you don't need the setup commands
+below. [The docs map](README.md) has the reading order.
 
 ## Setup path at a glance
 
-Build, verify, present, park, wake and remove in this order. Each row links to
-the section holding its commands and rules. Narrative about past live runs is
-collected in the [appendix](#appendix-dated-rehearsal-evidence); building needs
-none of it, and none of it certifies the current instance.
+Build, verify, present, park, wake and remove, in that order. Each row links to
+the section holding its commands and rules.
 
 **Before you start.** Every input is explicit; nothing comes from the ambient
 `az` login.
@@ -24,35 +22,34 @@ none of it, and none of it certifies the current instance.
   skin offline: `Initialize-SreConfiguration.ps1` with only the target and
   `-SkinPath` checks it against the schema and renders the desired configuration
   without any cloud request.
-- The companion Arc estate is Active and its readiness handoff is current.
-- The scenario prerequisites, each approved separately because they write to the
-  Arc estate: the T09 Container App and restart alert (Arc owner); for T11,
-  `New-LobArcAppMonitorAlert.ps1 -Action Create` and
-  `Invoke-LobArcAppOnArc.ps1 -Action Deploy` (same explicit target and private skin;
-  preview each with `-WhatIf`); for the
-  optional SQL route, the Arc owner's SQL handoff and `SQL` in the private skin
-  ([enable SQL](#optional-sql-scenario)). A missing alert surfaces only later as a
-  failed `T11-alert` or `SQL-alert` readiness check, after the paid parent exists,
-  and readiness does not check that the LOB app itself is installed.
+- The companion Arc estate is Active and its readiness check passes.
+- The scenario prerequisites. They write to the Arc estate, so preview each with
+  `-WhatIf` where it has one: the T09 Container App and restart alert (from the
+  Arc repo); for T11, `New-LobArcAppMonitorAlert.ps1 -Action Create` and
+  `Invoke-LobArcAppOnArc.ps1 -Action Deploy` (same explicit target and private
+  skin); for the optional SQL route, the Arc estate's SQL engine and alert plus
+  `SQL` in the private skin ([enable SQL](#optional-sql-scenario)). A missing alert
+  surfaces only later as a failed `T11-alert` or `SQL-alert` readiness check,
+  after the paid parent exists, and readiness does not check that the LOB app
+  itself is installed.
 
 | Step | Do this | Details |
 | --- | --- | --- |
-| Build | Review the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. With IAM approval add `-GrantAzureMonitorAlertAccess`; it creates the one required subscription grant unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
+| Build | Read the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. Add `-GrantAzureMonitorAlertAccess` to create the one required subscription grant, unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
 | Verify | `Test-SreReadiness.ps1 ... -DesiredState Active`; every required check must pass | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle) |
-| Present | Generate `.local/presenter-runsheet.md` ([handbook](ai-deploy-handbook.md#local-presenter-guide)). Before a fresh live fault run `Invoke-SreDemoRoute.ps1 -Scenario <SQL\|LOB\|ContainerApp> -Action Prepare`, afterwards `-Action Restore` | [Reset between demo runs](#reset-between-demo-runs) |
-| Park | `Hibernate-SreAgent.ps1 ... -WhatIf`, then execute, then `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Approved hibernation and later reactivation](#approved-hibernation-and-later-reactivation) |
-| Wake | Wake Arc first, then repeat Build and Verify; the retained identity and its grants are reused | [Approved hibernation and later reactivation](#approved-hibernation-and-later-reactivation) |
-| Remove | Separate approval: `Remove-SreAgent.ps1 ... -WhatIf`, then execute, then `Test-SreReadiness.ps1 -DesiredState Removed -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Explicit Removed convergence](#explicit-removed-convergence) |
+| Present | Generate `.local/presenter-runsheet.md` ([handbook](ai-deploy-handbook.md#your-presenter-guide)). Before a fresh live fault run `Invoke-SreDemoRoute.ps1 -Scenario <SQL\|LOB\|ContainerApp> -Action Prepare`, afterwards `-Action Restore` | [Reset between demo runs](#reset-between-demo-runs) |
+| Park | `Hibernate-SreAgent.ps1 ... -WhatIf`, then run it, then `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Hibernation and later reactivation](#hibernation-and-later-reactivation) |
+| Wake | Wake Arc first, then repeat Build and Verify; the retained identity and its grants are reused | [Hibernation and later reactivation](#hibernation-and-later-reactivation) |
+| Remove | `Remove-SreAgent.ps1 ... -WhatIf`, then run it, then `Test-SreReadiness.ps1 -DesiredState Removed -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Explicit Removed convergence](#explicit-removed-convergence) |
 
 Change only configuration on a running parent with
-`Initialize-SreConfiguration.ps1` (render, `-Inspect`, approved
+`Initialize-SreConfiguration.ps1` (render, `-Inspect`, then
 `-Apply -BackupPath <NEW_PATH>`); Deploy refuses an existing parent. See
-[Render, inspect, approve, apply](#render-inspect-approve-apply). After a
-successful combined activation the SRE-owning assistant makes the one optional
-T09 incident offer
-([handbook](ai-deploy-handbook.md#post-activation-incident-offer)).
+[Render, inspect and apply](#render-inspect-and-apply). To see the closed loop after
+setup, run one T09 incident
+([handbook](ai-deploy-handbook.md#run-one-incident-after-setup-optional)).
 
-On any denial, failed read or ambiguous write, stop and report. A configuration
+On any denial, failed read or ambiguous write, stop and report it. A configuration
 PUT is sent once and verified by read-only polling, never replayed
 ([troubleshooting](#post-write-visibility-and-troubleshooting)). Re-pin the
 upstream protocol only through
@@ -103,8 +100,8 @@ To re-pin, compare the selected upstream revision's `Apply-Extras.ps1`,
 `Export-Agent.ps1` and AzMonitor recipe with the adapter and fixtures. Review
 routes, envelopes, casing, token audience and the parent schema before changing
 `TemplateRevision`; update this reference and mocked success/failure tests in the
-same PR. Run local tests and Bicep compilation. Propose any live validation
-separately; a pin update or mocked pass does not authorize a service call.
+same PR. Run local tests and Bicep compilation. A pin update or a mocked pass
+doesn't prove the live service accepts it, so test live separately.
 Do not download/execute upstream scripts or silently follow a movable branch.
 
 On authentication/denial, malformed/empty/paginated reads, unsupported legacy
@@ -121,8 +118,8 @@ Configuration apply sends each PUT **once**, then polls the supported read-only
 collections with 2, 4, 8, 16 and capped 20-second backoff. Per-object and final
 whole-configuration verification use the same pattern, for up to five minutes
 without extending the existing overall `-TimeoutSeconds` deadline (default
-180 seconds, maximum 600). Use an explicitly reviewed timeout when a longer
-verification budget is needed; no background verification continues after exit.
+180 seconds, maximum 600). Use an explicitly longer timeout when you need a longer
+verification budget; no background verification continues after exit.
 
 A timeout or transport error after PUT is an ambiguous outcome, not permission
 to replay it. Read-only polling can establish that the write committed.
@@ -131,7 +128,7 @@ foreign edits and partial target changes stop rather than being overwritten.
 If the deadline expires, report **unverified**, retain the external backup and
 Inspect again before reviewing any new apply. Do not retry the PUT to cure a
 stale read. After fresh readback proves a completed step, resume only genuinely
-unperformed operations within the approved scope.
+unperformed operations within the same scope.
 
 This delay occurred during both the one-time SQL cooldown reduction and its
 restoration. Fresh reads proved the writes committed; neither PUT was repeated.
@@ -147,15 +144,14 @@ before PUT. The successful cooldown write was not replayed.
 If the contract changes, use the supported SRE portal following current
 [subagent guidance](https://learn.microsoft.com/azure/sre-agent/create-subagent)
 and [response-plan guidance](https://learn.microsoft.com/azure/sre-agent/response-plan).
-Configure only the approved rendered handler and Review plans; require a signed-in
-browser capability and inspect actual visible controls rather than inventing
-clicks. If that capability is unavailable, report the requirement and stop.
+Configure only the rendered handler and Review plans. You need a signed-in browser,
+and your AI tool should inspect the actual visible controls rather than inventing
+clicks. If that isn't available, say what is needed and stop.
 Manual setup is not a verified automated bootstrap: report the remaining
 read-back blocker until supported inspection works. Rebuilding a legacy parent
-requires separate deletion authorization and evidence export; it is never a
-failure fallback.
+means deleting it and exporting its evidence first, and is never a failure fallback.
 
-## Render, inspect, approve, apply
+## Render, inspect and apply
 
 ```powershell
 # Local deterministic render: no cloud requests. Also validates the skin.
@@ -168,13 +164,13 @@ failure fallback.
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Inspect
 
-# Only after approving that exact change scope:
+# Once you have read that exact change scope:
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Apply `
   -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json> -WhatIf
 
-# Remove -WhatIf only when the full proposed scope is authorized.
+# Remove -WhatIf to apply it for real once you have read the proposed scope.
 ```
 
 `<PRIVATE_LAB_FOLDER>\sre-skin.json` is your private skin, kept outside git. The
@@ -182,7 +178,7 @@ tracked `config\demo-skin.json` is only the fictional starting point and test
 fixture: running an example with it silently applies its defaults (SQL off).
 On a fresh parent the render is the full preview, because it is exactly what the
 first `-Apply` creates; `-Inspect` needs an existing parent, so the complete
-Deploy path reviews the render before creation and applies right after it.
+Deploy path reads the render before creation and applies right after it.
 
 `schemaVersion: 2` desired configuration is not the old MCP request format.
 Keep exports/previews outside git; they contain runtime IDs and full instructions.
@@ -190,7 +186,7 @@ Keep exports/previews outside git; they contain runtime IDs and full instruction
 filename in an existing directory outside the repo. It refuses to overwrite a
 backup. An already-correct repeat run performs no PUT.
 
-For clean reconstruction after an authorized parent deployment, `-Apply` creates
+For clean reconstruction after a parent deployment, `-Apply` creates
 only the verified-absent named custom agent and current filters. It does not
 create legacy response handlers. For existing modern state it updates the same
 objects, preserving unrelated fields. It does not migrate old instances.
@@ -202,7 +198,7 @@ Instructions and tools belong to the **handling custom agent**, not the response
 plan. Built-in tools are explicitly `RunAzCliReadCommands`,
 `RunAzCliWriteCommands`, `QueryLogAnalyticsByWorkspaceId`, and `SearchMemory`.
 Write capability remains governed by parent and response-plan **Review**, scoped
-RBAC and human approval. No connector or new RBAC grant is created.
+RBAC and your approval in the SRE portal. No connector or new RBAC grant is created.
 
 | Scenario | Skin plan label | Platform / priorities | Title contains | Handling agent / autonomy |
 |---|---|---|---|---|
@@ -212,37 +208,37 @@ RBAC and human approval. No connector or new RBAC grant is created.
 
 Filters are enabled. The literal title is one keyword, never an `OR` expression.
 The default impacted services remain `Azure Container Apps` and `Azure Arc`;
-verify actual incident matching in the separately authorized rehearsal.
+verify actual incident matching when you run an incident.
 The renderer explicitly sets `mergeEnabled=true` and `mergeWindowHours=3` on
 all configured modern routes, for fresh creation and reconciliation. This matches the
 validated live settings; they are no longer left to service defaults.
 Inspect actual cooldown before a repeat. Azure Monitor's scanner also
 [merges firings from the same rule with a seven-day lookback](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
 That scanner rule identity is separate from the filter's three-hour cooldown:
-shortening the latter alone does not guarantee a fresh investigation. Any
-temporary override and exact restoration need scoped approval; neither closing
-a thread nor a resolved alert is a documented fresh-thread reset.
+shortening the latter alone does not guarantee a fresh investigation. If you
+override the cooldown temporarily, restore the exact original value afterwards;
+neither closing a thread nor a resolved alert is a documented fresh-thread reset.
 The custom agent investigates T09 and proposes only the expected app repair.
-T10/T11 remain hybrid evidence plus **operator** Arc Run Command recovery.
+T10/T11 remain hybrid evidence plus Arc Run Command recovery that you run.
 Do not claim reliable T11 RCA or autonomous Arc repair.
 
 ### Representative investigation instructions
 
-The shared handler now separates environment context, an evidence-led
+The shared handler separates environment context, an evidence-led
 investigation method and governance. Context supplies exact hosts/workspace,
 Event/Perf/Heartbeat sources, event meanings and configured counter semantics.
 Business criticality, customer impact and application-to-SQL topology are
 explicitly unknown until evidence establishes them. The method builds a timeline
 and blast radius, correlates available change evidence, ranks hypotheses with
-supporting/contradicting evidence and confidence, and gives human next checks.
+supporting/contradicting evidence and confidence, and gives next checks you can run.
 Durations, sessions, affected objects, wait resources and recovery are derived
 from actual records, never prescribed by the incident-generation mechanism.
 
 SQL and Windows application investigations remain diagnostic-only. The separate
-Container App policy retains its existing flag-reset proposal, specific human
-Review approval and post-change health verification. The dated rewrite that
-produced this wording, and the SQL and LOB comparisons that motivated it, are
-kept in the [appendix](#appendix-dated-rehearsal-evidence).
+Container App policy retains its existing flag-reset proposal, your specific Review
+approval in the SRE portal and post-change health verification. The earlier SQL and
+LOB rehearsals that motivated this wording are summarized in
+[evidence boundaries](#earlier-sql-and-lob-rehearsals).
 
 ### Optional SQL scenario
 
@@ -251,19 +247,27 @@ SQL is enabled only by adding `SQL` to `sre.requiredScenarios` with an explicit
 SQL fields; the example values are dormant, not deployment or readiness proof.
 The renderer appends `config\sre-sql.instructions.txt` only when SQL is enabled.
 It binds the exact SQL host/workspace and existing Event/Perf tools to real
-`ArcSqlEngineDemo` 6201/6001 evidence and operator-only recommendations, not SQL
-execution, session termination or Arc repair. No connector or extra role is
+`ArcSqlEngineDemo` 6201/6001 evidence and recommendations for you to act on, not
+SQL execution, session termination or Arc repair. No connector or extra role is
 created. All configured plan names and title keywords must be nonoverlapping.
 
-The Arc owner supplies `al-<prefix>-sql-lock-timeout`, exact display name
+The Arc estate supplies `al-<prefix>-sql-lock-timeout`, exact display name
 `Arc SQL lock timeout - <prefix>`, existing LAW/Action Group and its canonical
 host/source/JSON query. SRE readiness compares that frozen predicate, including
 schemaVersion 2, detected state, Event6201 and actual error1222,
 plus enabled Sev2, one-minute evaluation, fifteen-minute lookback, autoMitigate
-and Count greater than zero for one of one evaluations. It checks the owner's
+and Count greater than zero for one of one evaluations. It checks the rule's
 tags and exact IDs without running KQL or SQL. Guest engine, DCR collection,
-cleanup and actual alert/SRE completion require the separate approved rehearsal.
+cleanup and actual alert/SRE completion only show up when you run the SQL incident.
 The self-recovered lock may no longer exist when the alert arrives.
+
+The SQL event JSON is schema version 2. Its fields are `schemaVersion`,
+`incidentId`, `state`, `instance`, `database`, `blockerSessionId`,
+`victimSessionId`, `waitType`, `waitResource`, `sqlErrorNumber`, `lockTimeoutMs`
+and `observedAtUtc`. The timeout setting must be observed from SQL, not inserted
+as a predetermined event value. The owned row is `dbo.OrderProcessingCheckpoint`
+(renamed from `dbo.IncidentProbe`), and `ARCDEMO` and `ArcDemoOrders` remain actual
+evidence identities. The alert description is neutral and its title is unchanged.
 
 ## Reset between demo runs
 
@@ -279,51 +283,54 @@ Choose `-Scenario SQL`, `LOB` or `ContainerApp` (T09); the script handles log an
 Run `-Action Prepare` shortly before the demo; it generates a unique name and disables the canonical.
 The copy retains the same criteria, scope, Action Group, severity and filter-matching title.
 Fire with the existing fault commands; this script does not fire, approve repairs or change cooldowns.
-When the user finishes, run the same command with `-Action Restore`; it deletes only the owned copy.
+When you finish, run the same command with `-Action Restore`; it deletes only the owned copy.
 Restore re-enables the canonical; **old evaluation windows can replay a ghost alert and email**.
 Both actions support `-WhatIf` without local files; writes are single-submit with GET-only backoff.
 On an ambiguous result, inspect the printed temporary name; never blindly repeat Prepare.
 
-The earlier authorized SQL/LOB isolation procedure and captured evidence follow:
+What the helper automates, and what to check around it:
 
-1. Save external copies of the canonical scheduled-query rule and configuration.
-   Review one distinctly named temporary rule with the same host, predicate,
-   LAW, Action Group, severity, evaluation frequency and lookback. Its title
-   must still match the selected scenario filter. No extra IAM or connector is needed.
-2. Disable only the canonical rule, create/enable only that temporary rule and
-   inspect the exact state. If separately authorized, reduce only the selected
-   filter's cooldown; retain merge enabled and Review. Label the evidence
-   **cooldown reduced for this single run (user-authorized)**. A one-hour setting
-   was used for the authorized fresh runs. Never change the
-   renderer's three-hour default or the other scenario filters.
-3. Require a zero-alert baseline for the exact temporary rule ID and fresh guest
-   readiness before the Arc owner fires one bounded incident. No manual SRE chat
-   starts the investigation. Verify actual thread source against the temporary
-   rule; do not assume that a distinct name proves successful fresh delivery.
-4. After capture, wait until the detected source event has aged out of the
-   canonical rule's entire lookback, with a margin. For its fifteen-minute
-   SQL window, use at least sixteen minutes from actual detection, not caller
+1. Before Prepare, save external copies of the canonical scheduled-query rule and
+   configuration. After Prepare, inspect the exact state: only the canonical rule
+   is disabled and only the temporary rule is enabled. The temporary rule has the
+   same host, predicate, LAW, Action
+   Group, severity, evaluation frequency and lookback, and its title still matches
+   the selected scenario filter. No extra IAM or connector is needed.
+2. Require a zero-alert baseline for the exact temporary rule ID and fresh guest
+   readiness before you fire one bounded incident. No manual SRE chat starts the
+   investigation. Verify the actual thread source against the temporary rule; a
+   distinct name doesn't prove successful fresh delivery.
+3. Before Restore, wait until the detected source event has aged out of the
+   canonical rule's entire lookback, with a margin. For the fifteen-minute SQL
+   window, use at least sixteen minutes from actual detection, not from the call
    start. For the ten-minute LOB window, use at least eleven minutes from the
-   **last** matching warning, not its first event or helper start.
-   Restore the selected filter to three hours, re-enable the unchanged canonical
-   rule, then delete only the temporary rule.
-5. Independently read back canonical enabled, temporary absent and selected filter
-   `mergeEnabled=true` / `mergeWindowHours=3`; compare all other configuration
-   against the saved baseline. On an ambiguous write, read back without replaying
-   the PUT; resume only unperformed operations after verified state inspection.
-   Report a failed or pending restore immediately; do not claim normal readiness.
+   **last** matching warning, not its first event or the helper start. Then
+   Restore re-enables the unchanged canonical rule and deletes only the temporary
+   rule.
+4. Read back that the canonical rule is enabled, the temporary rule is absent and
+   the selected filter still has `mergeEnabled=true` / `mergeWindowHours=3`, and
+   compare all other configuration against the saved baseline. On an ambiguous
+   write, read back without replaying the PUT, and resume only unperformed
+   operations after verifying state. Report a failed or pending restore
+   immediately; don't claim normal readiness.
+
+If you instead reduce one filter's cooldown for a single run by hand (the helper
+doesn't), reduce only the selected filter, retain merge enabled and Review, restore
+it to three hours afterwards, and label the evidence **cooldown reduced for this
+single run**. A one-hour setting was used for the fresh runs recorded in the
+evidence boundaries. Never change the renderer's three-hour default or the other
+scenario filters.
 
 **Backfill warning:** the source-window expiry guard does not prevent Azure
 Monitor from replaying an older evaluation after a disabled log rule is
-re-enabled. In the 2026-11-02 SQL restore, canonical was re-enabled at 00:36:24
-but fired again at 00:39:50 against the older 00:17:16-00:32:16 evaluation
-window. No new SQL detection occurred; the system resolved that alert at
-00:50:51. The existing canonical SRE thread then exposed merged count 2 and a
-last-fired timestamp matching the replay, with no new canonical thread or
-contemporaneous agent/query execution in the captured audit. Its initial
-merged-ID array omitted the replay ID; a later read included it. After the
-next canonical restoration, the same thread's merged count rose to 3 with a
-02:11:09 UTC last-fired timestamp. Treat each read's actual IDs/counts/times
+re-enabled. In the 2026-11-02 SQL restore, the canonical rule was re-enabled and
+fired again about three and a half minutes later against an older evaluation window. No new
+SQL detection occurred; the system resolved that alert about eleven minutes later.
+The existing canonical SRE thread then exposed merged count 2 and a last-fired
+timestamp matching the replay, with no new canonical thread or contemporaneous
+agent/query execution in the captured audit. Its initial merged-ID array omitted
+the replay ID; a later read included it. After the next canonical restoration, the
+same thread's merged count rose to 3. Treat each read's actual IDs/counts/times
 separately rather than assuming the array is a complete, synchronous record.
 Later `TrajectoryInsight` messages summarize the old investigation, not a new
 query run; those summaries can repeat old incorrect conclusions.
@@ -335,15 +342,14 @@ do not confuse replay with another incident or count it as a new investigation.
 No cheap, verified suppression workaround is established here. Do not silently
 mute receivers, alter predicates, change cooldown again or delete/recreate the
 canonical rule to conceal it. A read-only walkthrough of existing evidence
-avoids this routing reset altogether; no cloud change was made for this finding.
+avoids this routing reset altogether.
 
-This procedure changes routing resources and is not included in ordinary
-presentation or configuration apply. Each scenario requires its own separate
-authorization; complete SQL capture, cleanup and restoration before arming LOB.
-Resolve/close old alerts or threads only with
-their own approval and supported operation; closure alone is not a documented
-way to clear the seven-day merge history. A parent rebuild also loses history,
-but is not an acceptable reset shortcut for a running demonstration.
+This procedure changes routing resources and is not part of ordinary
+presentation or configuration apply. Finish SQL capture, cleanup and restoration
+before arming LOB. Resolve or close old alerts or threads only through a
+supported operation; closure alone is not a documented way to clear the seven-day
+merge history. A parent rebuild also loses history, but is not an acceptable reset
+shortcut for a running demonstration.
 
 ## Fresh bootstrap and existing-state boundary
 
@@ -396,7 +402,7 @@ existing parent **before** IaC preview or deployment, so neither the five settin
 nor unmodeled live properties can be stripped. There is no override switch.
 Use configuration-only
 Inspect/Apply for handler and filter updates on the Running parent. Do not treat
-these settings as harmless read-only what-if noise or approve a broad redeploy
+these settings as harmless read-only what-if noise or run a broad redeploy
 to add a redundant host ID.
 
 Fresh creation and retained-identity wake load all five values from
@@ -412,13 +418,13 @@ The [Learn API reference](https://learn.microsoft.com/azure/sre-agent/api-refere
 also documents model, limit, channel and experimental properties.
 
 Actual creation requires `-ApproveParentCreation` because it starts the AAU meter;
-WhatIf does not. The companion wrapper passes that switch only after its SRE
-creation approval. After deployment, bounded read-only ARM inspection must match
+WhatIf does not. The companion wrapper passes that switch only after you confirm
+SRE creation there. After deployment, bounded read-only ARM inspection must match
 every complete settings value before handler configuration proceeds. Failure
 leaves the parent present and reports unverified setup; it never replays the
 deployment or silently hibernates it. Review mode and the retained combined
 identity shape are unchanged. Compilation and mocked read-back are not a live
-recreation test; verify the same settings on the separately authorized rebuild.
+recreation test; verify the same settings on your rebuild.
 
 ```powershell
 .\scripts\Test-SreReadiness.ps1 `
@@ -435,7 +441,7 @@ unknown/pending. Retained disabled history is allowed. Missing/denied reads fail
 The Ready command does not ingest external rehearsal artifacts, so
 `telemetry-and-alerts` is optional (`required=false`), **skipped / not evaluated**
 with no observed proof. Active/Ready passes when all required checks pass;
-a separately authorized run supplies incident evidence, not a prerequisite to
+running an incident supplies that evidence, but it isn't a prerequisite to
 clear this advisory item. No read-only preflight certifies a new closed loop.
 
 The Arc/SRE readiness JSON contract remains schemaVersion 1; status is
@@ -464,7 +470,7 @@ Log Analytics Contributor and Contributor on each Arc group): their IDs depend o
 the UAMI principal, which does not exist yet, so Azure cannot preview them. The
 Action Group ID is passed through with the casing Azure returns, and readiness
 accepts it. Anything else, such as a delete, another role or scope, or a different
-parent setting, is outside this reference: stop and ask.
+parent setting, isn't expected: stop and look into it before you create anything.
 
 A wake `Deploy-SreAgent.ps1 -WhatIf` on the retained identity reads differently:
 2 to create (the parent and the deployer's parent-scoped administrator
@@ -474,8 +480,8 @@ role assignments the same principal already holds (what-if shows the literal
 `principalId` against a `reference(...)` expression, a display difference), and one
 is the retained Application Insights component (the template adds `Flow_Type` and
 `Request_Source` defaults). The real run kept the same six assignment IDs and
-created no duplicates. A delete, a new principal or role, or another scope is
-outside this reference: stop and ask.
+created no duplicates. A delete, a new principal or role, or another scope isn't
+expected: stop and look into it.
 
 Measured live on 2026-11-05 (the first from-zero build): offline tests 48 s,
 `-WhatIf` 75 s, complete Deploy 326 s (parent settings read-back, grant and
@@ -486,10 +492,10 @@ configuration apply included), `Test-SreReadiness.ps1 -DesiredState Active` 73 t
 `Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
 least 600 s. If a Deploy is interrupted after the parent exists, do not rerun it:
 Deploy refuses an existing parent, even in `-WhatIf`. Run
-`Initialize-SreConfiguration.ps1 -Inspect`, review it, then an approved
+`Initialize-SreConfiguration.ps1 -Inspect`, review it, then
 `-Apply -BackupPath <NEW_PATH_OUTSIDE_REPO.json>`.
 
-### Approved hibernation and later reactivation
+### Hibernation and later reactivation
 
 Normal hibernation **retains the dedicated SRE group, SRE-only UAMI, existing
 workload grants, workspace Application Insights and owned Smart Detection Action
@@ -536,7 +542,7 @@ This grant survived the live Hibernates of 2026-11-04 and 2026-11-05 (read-only
 readiness confirms it), and on 2026-11-05 it alone satisfied the wake's required
 `azure-monitor-alert-access` check, with no `-GrantAzureMonitorAlertAccess` switch
 ([evidence boundaries](#live-lifecycle-proof-2026-11-05)).
-Reconciliation requires separate scope approval, not implicit revocation.
+Reconciling extra grants is your call; nothing revokes them implicitly.
 Otherwise, wake adopts existing direct grant names,
 creates missing grants and avoids unnecessary Graph principal-name lookups.
 Retained Application Insights must match the requested workspace/location; it
@@ -566,8 +572,8 @@ az identity show --subscription <SUBSCRIPTION_ID> `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
-# Only after authorizing the exact preview. Hibernate is ConfirmImpact High, so
-# an AI tool or other non-interactive host must pass -Confirm:$false; without it
+# Run it for real once you have read the preview. Hibernate is ConfirmImpact High,
+# so an AI tool or other non-interactive host must pass -Confirm:$false; without it
 # the run stops with "NonInteractive mode" before any change (measured live).
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
@@ -590,7 +596,7 @@ UAMI/group and absent paid parent. Diagnostics, workload grants, stale parent
 grants and drift are explicit optional wake diagnostics; failures there do not
 change the cost-state result. Actual inspection denial still fails the report.
 An old UAMI-only parked state is accepted: Hibernate does not create diagnostics
-or permissions, and authorized wake rebuilds missing state through the same IaC.
+or permissions, and a wake rebuilds missing state through the same IaC.
 Principal-filtered ARM inventory includes below/above-subscription scopes and
 reports unknown scopes instead of missing them. Direct SRE-group ARM reads
 distinguish deployer parent grants from UAMI workload permissions.
@@ -608,7 +614,7 @@ This is not a handler/filter configuration step or an optional data connector.
 The opt-in grant script supplies the other half: the exact subscription Monitoring
 Contributor assignment required by the
 [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
-The normal rebuild path is **IaC platform selection plus the approved scripted
+The normal rebuild path is **IaC platform selection plus the scripted
 grant**, not a required portal connection click.
 
 The existing read-only `incident-platform` readiness check reports the ARM `type`;
@@ -624,19 +630,19 @@ This existing-parent evidence does not establish how a fresh instance initialize
 **Fresh-agent intake from IaC plus the script worked on the 2026-11-05 from-zero
 rebuild:** the T09 alert fired and the agent's thread appeared 17 seconds later,
 with no portal connect click. That covers T09 only; SQL and LOB delivery on a
-rebuilt agent stay unverified until each is separately authorized and exercised.
+rebuilt agent stay unverified until you run and check each.
 
 ### Explicit Azure Monitor access grant
 
 **Portal fallback only:** if `incident-platform` readiness shows an unset or
-non-AzMonitor platform, separately authorize the documented **Incidents > Connect
-an incident platform > Azure Monitor** flow and its access consequences. Do not
-enable a quickstart Autonomous plan. The grant switch authorizes only the exact
-subscription assignment, not this fallback. Do not disconnect another platform,
-replay guessed connection APIs, create an optional connector as a prerequisite,
-or redeploy an existing parent to hide a warning. A selected platform with no
-observed alerts needs scanner-access, rule/firing and routing diagnosis, not a
-blind connection replay.
+non-AzMonitor platform, use the documented **Incidents > Connect
+an incident platform > Azure Monitor** flow, and understand its access
+consequences first. Do not enable a quickstart Autonomous plan. The grant switch
+creates only the exact subscription assignment; it doesn't do this fallback. Do not
+disconnect another platform, replay guessed connection APIs, create an optional
+connector as a prerequisite, or redeploy an existing parent to hide a warning. A
+selected platform with no observed alerts needs scanner-access, rule/firing and
+routing diagnosis, not a blind connection replay.
 
 The subscription grant is **opt-in**, not an incidental portal side effect.
 `Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` ensures it after parent
@@ -646,7 +652,7 @@ the readiness check fails when AzMonitor is selected but its grant is missing.
 The caller needs permission to assign roles at the subscription. No account
 switch, Graph lookup, broad role reconciliation or permission bypass occurs.
 
-For a separate IAM approval, omit the deploy switch and use:
+To grant it separately from Deploy, omit the deploy switch and use:
 
 ```powershell
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
@@ -654,7 +660,7 @@ For a separate IAM approval, omit the deploy switch and use:
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -WhatIf
 
-# After approving that exact principal, role and subscription scope:
+# After reading that exact principal, role and subscription scope:
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
@@ -672,33 +678,25 @@ this grant; full Remove includes it in its exact UAMI assignment inventory.
 ARM read-back does not prove effective authorization or incident delivery.
 
 For the next demo, activate and verify Arc first. Deploy the SRE parent using the
-retained identity, then render/Inspect/approve/Apply the versioned modern custom agent and
+retained identity, then render, Inspect and Apply the versioned modern custom agent and
 v3 filters with a new external backup, or use complete deployment above.
 Keep the same SQL-enabled setup input on wake so the SQL host managed-resource
 ID, conditional instructions and third filter are restored. Dropping SQL from
 that input while its enabled filter remains is refused as unowned routing,
 not silently disabled or deleted. SRE Hibernate/Removed never deletes the Arc
-SQL host, database, probe data or Arc-owned alert; those remain the Arc owner's
-scope. No additional workload role IDs are introduced by SQL.
+SQL host, database, probe data or Arc alert; those stay with the Arc estate.
+No additional workload role IDs are introduced by SQL.
 Retired v2 objects, learned memory and deleted history are not restored. The
 modern v3 filters explicitly restore enabled three-hour cooldown and Review/Sev2.
 Do not replay an old full export as a PUT payload: it is reference
-evidence, not a supported restore input. Optional repository authentication needs
-explicit reauthorization. Hibernate with the retained identity was proven live
+evidence, not a supported restore input. Optional repository authentication has to
+be redone. Hibernate with the retained identity was proven live
 on 2026-11-04 and again on 2026-11-05, together with a from-zero Deploy and a
 wake from the retained identity ([what that established](#live-lifecycle-proof-2026-11-05)).
 An in-place T09 repair proves none of these, and a proven wake does not certify a
-later instance: repeat the readiness checks after every wake.
-
-After AI-led combined activation/SRE reactivation completes, the SRE-owning
-assistant must [offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer),
-once after the Arc readiness handoff and SRE health/configuration checks.
-Require all required checks to pass; do not rewrite the readiness report or
-bypass failures. A yes lets the AI run the existing
-T09 procedure with its agreed recovery fallback and genuine human Review
-approval; a no leaves the activated lab running. Parent-only and Arc-only
-activation do not trigger this offer. This is not automatic fault injection or
-restoration of deleted incident history.
+later instance: repeat the readiness checks after every wake. To see the closed loop
+on the woken agent, run [one T09 incident](ai-deploy-handbook.md#run-one-incident-after-setup-optional);
+it doesn't restore deleted incident history.
 
 ### Explicit Removed convergence
 
@@ -711,7 +709,7 @@ Use the same explicit subscription/tenant/skin as deployment:
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
-# Only after approving that exact preview, rerun without -WhatIf (and with
+# After reading that exact preview, rerun without -WhatIf (and with
 # -Confirm:$false in a non-interactive host: Remove is ConfirmImpact High).
 
 .\scripts\Test-SreReadiness.ps1 `
@@ -724,8 +722,8 @@ The shared lifecycle implementation deletes only inventoried known identity-owne
 grants at the known subscription/workload scopes, verified parent administrator
 grants, named parent/diagnostics and UAMI. It deletes the dedicated group only
 after resources/grants are absent. Unknown resources, IAM roles/scopes or other
-SRE-group assignments block the full-removal preview; obtain ownership reconciliation,
-not broad group deletion. Other principals' workload grants, shared Arc/Monitor
+SRE-group assignments block the full-removal preview; find out what they are
+rather than deleting the group broadly. Other principals' workload grants, shared Arc/Monitor
 resources and private exports are outside the removal boundary.
 
 For an independently verified extra UAMI grant, such as a portal-created
@@ -734,11 +732,11 @@ Monitoring Reader assignment, pass `-AdditionalOwnedRoleAssignmentIds` with its
 The principal must still match the saved/live UAMI; IDs must belong to the
 selected subscription. This Removed-only allow-list does not exempt other
 principals, parent administrators, unknown resources or duplicate platform
-grants, and does not change Active/Hibernated readiness. Inspect the printed
-ID/role/scope before approving any deletion. It is not permission to discover
+grants, and does not change Active/Hibernated readiness. Read the printed
+ID/role/scope before you delete anything. It is not permission to discover
 and auto-adopt all grants with that role.
 
-The first live read-only Removed rehearsal (2026-11-02, 03:06Z) passed with
+The first live read-only Removed preview (2026-11-02) passed with
 exactly **seven UAMI assignments** (six workload-group grants plus one exact
 subscription Monitoring Contributor), **one parent administrator entry**,
 **four resources** (parent, Application Insights, Smart Detection Action Group,
@@ -761,9 +759,9 @@ the destructive Removed convergence remains untested against the live estate.
 ## Evidence boundaries
 
 Local tests cover fresh/reused bootstrap and refusal/failure shapes, not live
-service reliability, a destructive lifecycle or a new incident. Preserve actual
-approval/executor evidence separately; never treat narration as approval, use
-unrestricted approval to bridge a missing capability, or delete the parent as a
+service reliability, a destructive lifecycle or a new incident. Keep actual
+approval and executor evidence separate; never treat narration as approval, use
+broad permissions to bridge a missing capability, or delete the parent as a
 configuration-repair shortcut. Historical results do not certify today's instance.
 
 ### Live lifecycle proof, 2026-11-05
@@ -798,329 +796,98 @@ and nothing beyond it.
 - **First T09 run, with its caveat.** The alert fired 5.2 minutes after the fault
   command finished, the agent's thread appeared 17 seconds later, and the Review card
   was pending about 7 minutes after the fault. No Approve arrived before the agreed
-  20-minute deadline, so the operator fallback repaired the app. The Approve registered
+  20-minute deadline, so the app was reset by hand. The Approve registered
   about 21 minutes after the deadline, on the by-then stale card; the agent's own write
   then ran under its managed identity as a no-op, and its RCA said a person had fixed
   the app first. Alert, thread, card and executor each worked, but **a clean in-window
-  repair, approved before the deadline and executed by the agent without the fallback,
-  is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt agent
-  were not run.
+  repair, approved before the deadline and executed by the agent without the manual
+  reset, is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt
+  agent were not run.
 - **Not covered:** the destructive Removed convergence, and any instance other than
   the one tested. Repeat the readiness checks after every wake.
 
-## Appendix: dated rehearsal evidence
+### Earlier SQL and LOB rehearsals
 
-These sections record what the live rehearsals of 2026-11-01 and 2026-11-02
-showed and why the handler instructions changed afterwards. They are evidence,
-not setup steps: skip them when building, parking or removing the layer. Phrases
-such as "not yet tested" were true when written. The presenter guide and handbook
-link to some of these headings, so the heading names are stable. Nothing here
-certifies the current instance.
+Live rehearsals on 2026-11-01 and 2026-11-02 (one SQL run, one SQL rerun and one LOB
+warning run, each on an earlier agent instance) shaped the handler instructions.
+They don't certify the current instance.
 
-### Instruction rewrite and the SQL/LOB comparisons
-
-For the separate Container App policy only its scenario narration was removed;
-neither its tools nor approval authority changed. That wording change had no
-new Container App live test until the coordinated step-7 rehearsal.
-
-The rewrite was applied config-only on **2026-11-02 at 01:01:07 UTC** with an
-external backup, repeated no-op and independent zero-operation Inspect.
-Filters, assigned tools and full ARM parent properties were unchanged. This
-configuration proof is not a new SQL or LOB investigation result; record those
-separately after the one-per-scenario coordinated reruns. Existing memory remains
-on this running agent and may influence later output; distinguish actually
-observed reuse from merely having old notes available.
-
-#### SQL comparison from the single authorized rerun
-
-The version-2 SQL incident on **2026-11-02 at 01:50:24 UTC** produced a fresh
-automatic Review investigation, completed at **01:55:03 UTC**. The Arc owner
-independently verified one matching incident, both version-2 event payloads and
-post-incident Orders/host/session health. That independent operator evidence is
-separate from what the SRE agent itself queried and concluded.
-
-| Aspect | Earlier SQL reports | New SQL report |
-|---|---|---|
-| Cause and duration | Controlled-probe narrative, preset rollback/timeout contract | Evidence-derived sessions, key wait and 7.39-second producer-reported recovery; blocker hold time unknown. |
-| Change correlation | Known incident mechanism substituted for investigation | Ranked a contemporaneous Run Command as an unproven hypothesis; same-name VM/Arc identity does not establish a call path. |
-| Impact and health | Recovery contract implied cleanup and continuing processing | Unknown business impact; producer-reported recovery is not independent session cleanup or current health. |
-| Metrics and coverage | First report confused summary rows with sample totals | Separates summary rows from source samples and qualifies 60-second host counters; two initial wrong-workspace queries failed and were disclosed. |
-| Historical memory | Reused old contract and presentation framing | Read the old notes, but rejected their cleanup assertion. Residual "probe" terminology remains unsupported by the normal commit/read event text. |
-
-This is substantially more representative, **not a clean pass on every wording
-requirement**. The old memory contained "probe" terminology and was read in this
-run; the normal 6000 records do not contain that label. Its exact causal origin
-cannot be proven, but the unsupported term persisted. The report also states
-that no Azure Monitor comment tool exists more strongly than tool discovery can
-establish. Evidence-only terminology, workspace-ID resolution before querying
-and capability-absence wording were tightened config-only at
-**02:10:27 UTC**, after SQL routing restoration and before LOB preparation.
-An external backup, repeated no-op and independent zero-operation Inspect
-verified that only handler instructions changed; filters and parent properties
-were unchanged. This refinement has no additional SQL live run.
-
-SQL routing restoration was verified at **02:07:47 UTC**: canonical enabled,
-temporary absent and normal merge-enabled three-hour routing restored. The
-expiry guard used the actual 6201 timestamp plus sixteen minutes, not alert
-delivery time; possible canonical replay remains a separate notification risk.
-
-The captured audit has 74 records and five successful KQL result headers:
-57 event rows, 2 heartbeat summaries, 12 counter summaries, 32 raw counter rows
-and 3 event summaries. Two earlier KQL attempts failed before the current
-workspace ID was resolved. Several audit outputs truncate at 1,003 characters,
-so these headers and exact KQL do not independently verify every numerical
-statement in the narrative. Detailed thread identities and raw captures stay in
-private evidence, not tracked configuration.
-
-#### LOB comparison from the single authorized rerun
-
-The one warning interval produced eight 4200 records from **02:19:23 to
-02:21:08 UTC**, followed by a 4000 healthy transaction heartbeat at
-**02:21:23 UTC**. The fresh automatic Review investigation completed at
-**02:28:43 UTC**. The operator's guarded configuration restoration and independent
-Status read both reported the original process still running; the SRE agent
-made no guest change or repair.
-
-| Aspect | Earlier LOB report | New LOB report |
-|---|---|---|
-| Cause | Instruction-supplied simulation/no-load story | Discovered a matching operator Run Command and read its actual output; ranked that change against a dependency problem and host pressure. |
-| Current state | Described warnings as ongoing despite recovery/ingestion timing | Observed resumed 4000 records, stated their age and separated application-reported health from unverified dependency health. |
-| Host metrics | Excluded pressure too confidently | "Not observed in the available counters"; only two during-interval samples, host not process metrics. |
-| Impact | Mechanism implied a harmless rehearsal | Customer impact, dependency identity and dependency health remain unknown; severity alone does not establish criticality. |
-| Memory and wording | Repeated historical simulation framing | Read the old notes, but did not repeat their unsupported cause. Operational mechanism wording is grounded in current returned Run Command fields. |
-
-This result reads as a representative investigation of an operator-associated
-configuration change. Its discovery of the warning mode is not itself a
-failure: current Run Command output actually exposes the action, duration,
-warning count and restored state. Hiding that evidence would manufacture a
-different incident. The report qualifies the output's provenance, does not
-claim the underlying dependency was independently checked and recommends human
-review of the change and dependency telemetry.
-
-All six KQL calls used the customer ID resolved from current workspace metadata
-before querying; headers were 2 event summaries, 32 raw events, 12 counter
-summaries, 33 raw counter rows, 1 combined heartbeat/change/error summary and
-1 freshness-check row. The 80-record audit and message capture also preserve
-the actual read-only Run Command results. Several KQL audit outputs still
-truncate at 1,003 characters, so not every narrative value is independently
-verified. The report explicitly notes the activity-log cap can truncate records
-before client-side host filtering. Old memory may still guide query selection;
-the captured narrative does not prove a clean-memory baseline.
-
-Exactly one rerun per scenario was used. No additional SQL, LOB or Container App
-incident was triggered to improve the write-up. SQL's residual terminology and
-the lack of a new SQL/Container App test after the final wording refinement
-remain explicit limitations, not successful live gates.
-
-LOB restoration was verified at **02:36:20 UTC**, after the actual last warning
-plus eleven minutes and the completed capture window. Both canonical rules
-are enabled, both representative temporary rules are absent, and all three
-response filters retain merge-enabled three-hour routing in Review mode.
-The running SRE agent was not stopped, rebuilt or deprived of its history.
-Any historical canonical replay remains distinct from another source incident.
-Final read-only readiness returned **pass at 02:38:43 UTC**, with all required
-checks passing. Optional incident-loop evidence and repository connection checks
-remain skipped, not certified. An Azure CLI extension `SyntaxWarning` was
-surfaced separately as an optional inspection warning; it did not alter required
-results and was not repaired as part of this scope.
-
-#### Audit of the earlier SQL and LOB investigations
-
-The saved first SQL run, SQL rerun and LOB investigation show multiple sources
-of rehearsal framing. A quoted telemetry identifier is not, by itself, invented
-analysis; do not hide those identifiers or rewrite the evidence to look real.
-
-| Demo-tied element | Source | Observed effect / change |
-|---|---|---|
-| "demo resources", T09/T10/T11, "proven ... wow", prior RCA stall | Shared instructions and handoff description | Removed presentation/history claims from operational instructions. |
-| SIMULATE_CRASH and its reset | Existing Container App recovery policy | Retained only under that incident type; not SQL/LOB diagnosis. |
-| "simulated dependency warning", "no induced host load" | Shared instructions, not the Event 4200 message | LOB narrative selected a simulation/config-switch cause and excluded pressure; removed prescribed cause. |
-| Twelve-second rollback and 5000-ms lock timeout | SQL instructions; timeout/block-limit values also appear in actual JSON | Narrative repeated controlled timing; now derive values and durations from returned records. |
-| Owned `dbo.IncidentProbe` row and preserved Orders worker | SQL instructions; object also named in narrative | Removed object/mechanism and guaranteed business-continuity claims from instructions. |
-| Recovery only after rollback, successful test query and owned-session cleanup | SQL instruction contract | Both SQL reports acknowledged relying on that contract, not separate checks in returned payload; now distinguish producer assertion from independent proof. |
-| Fifteen-minute alert window and expected late delivery | SQL instructions and actual rule metadata | Now inspect the rule's actual window instead of assuming it. |
-| "Do not call this a deadlock" | SQL instructions | Replaced outcome-directed phrasing with error-code/wait/engine-based classification. |
-| Fault/reset/helper/operator-recovery narration | Shared/SQL instructions and operator runbooks | Removed incident-generation procedures from diagnosis; retain governance without prescribing a recovery story. |
-| Controlled timeout / "probe self-recovers" | Earlier SQL alert description, supplied to both old incident threads | Neutral description now deployed by the Arc owner; historical thread input remains unchanged. |
-| T11/fault wording | Earlier LOB alert description/title; 4100 source message and config names | Neutral description now live, titles unchanged; 4100 wording changed in source only. The 4200 warning itself does not say simulation. |
-| `scenario=sql-lock-timeout`, `ARCDEMO`, `ArcDemoOrders`, `lockTimeoutMs`, `maxBlockSeconds` | Actual SQL event JSON | Preserve and quote only when relevant; no instruction supplies their values. |
-| Arc/demo/source-script/repository names and revision | Resource identities and LOB event context | Genuine provenance, not proof of cause or repository access. |
-| "controlled probe", "intended controlled test", "recovered by design" | SQL narratives, supported in part by instructions/alert text | Do not let a familiar mechanism replace ranked evidence-based investigation. |
-| "simulation switched on", no load "by design" | LOB narrative, strongly cued by instructions | Not established by Event 4200 alone; require change evidence. |
-| Prior SQL payload/rehearsal notes | Saved memory read by later SQL/LOB threads | Memory is untrusted historical context, not a current cause or timing contract; no new maintenance message authorized. |
-| Ongoing warning and host pressure "ruled out" | LOB narrative despite stale/incomplete data | Preserve evidence-age, ingestion-lag and sparse-counter guardrails. |
-
-The coordinated follow-up deployed neutral alert descriptions (titles unchanged),
-renamed `dbo.IncidentProbe` to `dbo.OrderProcessingCheckpoint`, and introduced SQL event
-schema version 2 without `scenario` or `maxBlockSeconds`. The retained fields are
-`schemaVersion`, `incidentId`, `state`, `instance`, `database`,
-`blockerSessionId`, `victimSessionId`, `waitType`, `waitResource`,
-`sqlErrorNumber`, `lockTimeoutMs` and `observedAtUtc`. The timeout setting must be
-observed from SQL, not inserted as a predetermined event value. `ARCDEMO` and
-`ArcDemoOrders` remain actual evidence identities. The Arc owner verified the emitter update without a worker restart at
-**2026-11-02 01:30:17 UTC** and the exact canonical version-2 predicate at
-**01:39:10 UTC**, before SRE cloned the temporary rule. Normal Orders commits,
-the new checkpoint and absence of owned sessions were checked separately.
-Source readiness pins version 2, exact host/source/state/error; deployment and
-a new investigation remain separate live gates. Companion source revision and
-deployment evidence stay in the private handoff rather than operator-owned
-repository defaults.
-The LOB 4100 message's source wording is also neutralized to "Fatal
-order-processing error" without changing its event ID, exit behavior or config
-controls. This source-only string change is not deployed to the running LOB
-worker; the approved warning uses the unchanged 4200 path.
-
-#### Change Tracking feasibility: assessment only
-
-[Change Tracking and Inventory](https://learn.microsoft.com/azure/automation/change-tracking/overview-monitoring-agent)
-supports Arc-enabled Windows file hashes and optional before/after content;
-change metadata goes to `ConfigurationChange`, while `ConfigurationData` is
-scheduled inventory. Tracking the LOB `appsettings.json` could provide realistic
-configuration-change evidence if its CT extension, DCR, tracked path and workspace
-coverage were verified. Content comparison additionally needs approved storage
-and data handling. No extension, DCR, tracked file, storage or permission was
-changed for this assessment; actual coverage/latency remains unverified.
-
-Current [collection limits](https://learn.microsoft.com/azure/azure-change-tracking-inventory/change-tracking-inventory-support-matrix#change-tracking-and-inventory-data-collection)
-document Windows file collection every **30 to 40 minutes**, not near-real-time
-application auditing. The same reference warns that high network traffic can
-delay records up to **six hours**. A two-minute edit restored to identical bytes
-can occur entirely between scans and leave no observed hash difference.
-Therefore CT is feasible for persistent drift/historical correlation, **not a
-reliable root-cause signal for this short warning**, and was **assessed and
-rejected for this incident**. Even an observed change
-establishes correlation, not causation by itself. A future application-level
-configuration audit event could capture short-lived changes more faithfully,
-but would be a separately approved telemetry-contract change.
-
-### Observed SQL rehearsal
-
-One authorized SQL rehearsal on **2026-11-01 UTC** produced a real 1222 detected
-event at 23:24:21 and verified recovery at 23:24:28. Azure Monitor fired at
-23:25:12, executed the existing Action Group at 23:25:13 and delivered an
-automatic Review investigation at 23:26:22. No manual SRE message, cooldown
-bypass, second fault or LOB fault was used. The existing managed Arc group
-covered the SQL host; only handler instructions and one filter were applied.
-The repeated configuration apply was no-op and the parent properties stayed
-unchanged. This is SQL-scene evidence, not full Active-estate readiness.
-
-The final thread reported investigation Complete, with its narrative at
-23:27:47. The documented message API preserved the complete report but omitted
-the built-in Event/Perf result objects. Thread-bound Application Insights audit
-paired two actual query ToolStart/ToolEnd calls and preserved their inputs and
-partial actual results. Both ToolOutput strings were truncated to 1003
-characters; **full raw query output was not obtained**. The report correctly
-distinguished historical lock timeout, self-recovery and operator-only steps.
-Its Perf claim of 62 rows disagreed with the actual aggregated result header of
-12 rows; do not confuse source samples with returned summary rows.
-
-The agent also incorrectly inferred no incident platform from empty optional
-connector configuration, despite actual AzMonitor delivery. Its connector-file
-grep exited 1, and internal memory writes were recorded. No SQL/guest repair was
-observed; the audit marked assisted true and mitigated false. Action Group
-execution did not verify email receipt. Investigation completion/Idle did not
-prove resolved MonitorCondition or a closed incident. Keep raw target-bound
-evidence private. This first run remains historical evidence, including its
-incorrect claims; do not silently rewrite it as a corrected investigation.
-
-### Reporting correction and memory limits
-
-On **2026-11-02 UTC**, a handler-only configuration update applied the reporting
-correction, with an external backup and a repeated no-op verified at 00:01:50.
-The general handler and optional SQL instructions require exact query-header
-row counts, distinguish aggregated rows from source samples, and forbid
-connector-file inspection as a test of incident-platform connectivity. Claim
-delivery via Azure Monitor only when actual alert/audit metadata establishes it.
-The three filters, parent settings and IAM were unchanged by this update.
-Whether the next investigation follows those instructions needs new evidence.
-
-One separately authorized maintenance message in a new, non-incident thread
-requested only the narrow memory correction, with no investigation or Azure/SQL
-tool use. Its raw file-edit result reported successful replacement of the false
-platform sentence. No 62-row claim was found in the two memory files it read.
-At maintenance time, independent memory search and the returned file citation
-both failed with HTTP 400. The subsequent automatic SQL investigation's actual
-read-file result contained the corrected note and not the old false sentence,
-providing persisted readback without another maintenance message.
-**Memory search remains unverified**; do not describe that read-file evidence as
-a successful independent search. Keep the instruction override.
-
-The documented memory document APIs are not a general synthesized-file editing
-interface. Do not invent a file-edit endpoint, alter the provider to bypass a
-failed search, or send an extra maintenance/investigation message without scope.
-
-### Observed SQL rerun
-
-The separately authorized **2026-11-02 UTC** rerun used one distinct temporary
-rule and one real fault, with **cooldown reduced for this single run
-(user-authorized)**. Detection at 00:17:51.9609032 and recovery at
-00:17:59.2515432 preceded the alert at 00:18:49.1672495. A different automatic
-thread was created at 00:19:26.3204117, with the exact temporary rule as its
-source. The actual AgentStart audit was 00:19:26.7549611, before the first
-Event/Perf queries at 00:19:43. Its final narrative arrived at 00:20:57.6666356; a read at 00:21:29
-reported investigation Complete and messages Idle. No manual investigation
-message was used.
-
-The two completed query audit headers were **2 Event rows and 119 Perf rows**.
-The narrative quoted both exactly and correctly described the Perf query as
-individual samples: this run used projection rather than the first run's
-aggregation, so 119 is not directly comparable with the first run's 12 summary
-rows. It did not repeat the false platform/optional-connector inference or
-inspect connector files. Those two reporting errors were corrected in this run.
-This is not a guarantee of future model behavior.
-
-The captured actions were read-only workspace/alert/rule lookups, Event/Perf
-queries, memory reads/updates and tool discovery. No approval request, SQL/guest
-execution or resource repair was observed. The Arc owner independently verified
-owned-session/probe cleanup and the healthy Orders worker. Full raw built-in
-query output remained unavailable: both audit results still truncated at 1003
-characters. Headers and partial actual results are stronger than a narrative,
-but do not independently verify every performance value in that narrative.
-The later audit snapshot recorded Review/AzMonitor, assisted true and mitigated
-false. Action Group execution was verified, but inbox receipt was not.
-The same-rule merge limitation was avoided by the distinct rule identity,
-not by closing an old thread. After the source-event expiry guard, direct reads
-at **00:36:47 UTC** verified canonical enabled, temporary absent and SQL cooldown
-restored to three hours, with Review and the other filters unchanged.
-Investigation completion alone would not have proved that restoration.
-
-### Observed LOB warning and reporting limits
-
-One separately authorized **2026-11-02 UTC** `WarnForDuration 120` ran after SQL
-capture. The existing worker remained running; no restart, kill or redeployment
-was used. The helper changed config at 00:27:32, ended the warning at 00:29:32
-and restored the original config at **00:29:34**, with exit 0 and the same PID.
-Eight real Event 4200 warnings were generated from 00:27:36 through 00:29:21;
-no 4100/4101 errors were observed. LOB routing and its three-hour cooldown were
-not changed.
-
-Azure Monitor fired at 00:28:39, executed the existing Action Group and delivered
-an automatic exact-rule investigation at 00:29:41. Five KQL calls completed;
-their actual result headers were **33, 1, 8, 7 and 1 rows**. The report correctly
-distinguished eight Perf summary rows from 91 source samples. Final narrative
-arrived at 00:31:10 and a read at 00:31:24 showed Complete/Idle. No manual SRE
-chat, approval request, guest execution or SRE repair was observed. Captured
-incident audit flags remained assisted false / mitigated false; completion
-does not imply those flags changed.
-
-The narrative incorrectly inferred ongoing warnings from older ingested events
-and too strongly excluded host pressure from sparse counters. Healthy Event
-4000 at **00:30:21** was not ingested until **00:31:00**, after the investigation
-started. Independent guest Status at 00:32:39 verified Healthy/running with the
-original PID; a LAW read at 00:36:04 confirmed post-restoration healthy events
-through 00:34:21. Ingestion lag explains why a query could miss recovery, not
-why an older warning establishes current state. A Fired/Acknowledged alert can
-also retain the warning inside its ten-minute lookback after recovery.
-This proves automatic capture and completed investigation, **not reliable
-current-state/RCA or SRE repair**.
-
-At **00:43:40 UTC**, a config-only handler refinement was applied with a new
-external backup, repeated no-op and independent zero-operation Inspect.
-Filters and ARM parent properties were unchanged. It requires evidence age
-relative to investigation time, explicit ingestion lag, and evidence newer than
-the last change before calling a fault active, ongoing or resolved. Otherwise
-say "latest evidence at HH:MM UTC, current state unconfirmed"; sparse counters
-support "not observed in the available counters", not "ruled out".
-**These refinements have not been tested by another live incident.** The
-coordinated step-7 rehearsal from merged main owns that test; no LOB rerun or
-additional cooldown bypass was authorized here.
+- **First SQL run.** A real lock timeout (1222) was detected and its recovery
+  verified seven seconds later. Azure Monitor fired about 50 seconds after
+  detection and ran the existing Action Group a second later, and an automatic
+  Review investigation arrived about two minutes after detection, with no manual
+  SRE message, cooldown bypass or second fault. The existing managed Arc group
+  covered the SQL host, so only handler instructions and one filter were applied; a
+  repeat apply was a no-op and the parent properties were unchanged. The report
+  distinguished the historical lock timeout, self-recovery and the next checks for
+  you. But it claimed 62 Perf rows where the actual aggregated result header said
+  12, and it inferred "no incident platform" from empty optional connector files
+  despite actual Azure Monitor delivery. The message API preserved the report but
+  omitted the built-in Event/Perf result objects. The audit paired two query
+  ToolStart/ToolEnd calls, but both ToolOutput strings were truncated to 1,003
+  characters, so **full raw query output was not obtained**. The audit marked the
+  incident assisted, not mitigated; no SQL or guest repair was observed. Action Group
+  execution did not verify email receipt, and Complete/Idle did not prove a resolved
+  Monitor condition or a closed incident.
+- **Reporting correction.** A handler-only update then required exact query-header
+  row counts, a distinction between aggregated rows and source samples and no
+  connector-file inspection as a test of incident-platform connectivity, and to claim
+  delivery via Azure Monitor only when actual alert/audit metadata establishes it.
+  A maintenance message in a new, non-incident thread asked the agent to correct
+  its memory note: the raw file-edit result reported success, but independent
+  memory search and the returned file citation both failed with HTTP 400, and the
+  next automatic investigation's read-file result contained the corrected note.
+  **Memory search remains unverified.** The memory document APIs are not a general
+  file-editing interface: don't invent a file-edit endpoint, alter the provider to
+  bypass a failed search, or send extra maintenance messages.
+- **SQL rerun.** One distinct temporary rule, one real fault, and a cooldown
+  reduced for that single run. Detection, recovery, the alert and a different
+  automatic thread (sourced from the exact temporary rule) followed within about two
+  minutes, and the report arrived about three minutes after detection. The completed
+  query headers were 2 Event rows and 119 Perf rows; the report quoted both exactly
+  and described the Perf rows as individual samples (a projection, so not comparable
+  with the first run's 12 summary rows). It did not repeat the platform inference. No
+  approval request, SQL/guest execution or repair was observed, and the Arc estate
+  independently verified the owned-session cleanup and a healthy Orders worker. Full
+  raw output was still truncated at 1,003 characters, so headers and partial results
+  don't independently verify every number in a narrative. The distinct rule identity
+  avoided the same-rule merge; closing an old thread did not.
+- **LOB warning.** One `WarnForDuration 120` ran on the existing worker with no
+  restart, kill or redeployment: the helper restored the original config with exit 0
+  and the same PID. Eight real Event 4200 warnings were generated and no 4100/4101
+  errors. Azure Monitor fired about a minute into the warning, an automatic
+  exact-rule investigation arrived about a minute after that, and five KQL calls
+  completed with result headers of 33, 1, 8, 7 and 1 rows (the report correctly
+  distinguished eight Perf summary rows from 91 source samples). No manual SRE chat,
+  approval request, guest execution or SRE repair was observed. But the narrative
+  wrongly inferred ongoing warnings from older ingested events and excluded host
+  pressure too strongly from sparse counters: the healthy Event 4000 after the
+  warning was not ingested until after the investigation started. Ingestion lag
+  explains why a query can miss recovery, not why an older warning establishes
+  current state, and a Fired/Acknowledged alert can retain the warning inside its
+  ten-minute lookback after recovery. A config-only handler refinement now requires
+  evidence age relative to investigation time, explicit ingestion lag and evidence
+  newer than the last change before calling a fault active, ongoing or resolved;
+  otherwise say "latest evidence at HH:MM UTC, current state unconfirmed". Sparse
+  counters support "not observed in the available counters", not "ruled out".
+  **That refinement has not been tested by another live incident.**
+- **Instruction rewrite.** After the handler was rewritten to drop incident-mechanism
+  cues and prescribed causes, a later SQL and LOB rerun was more representative: it
+  derived timings and sessions from returned records, ranked a contemporaneous Run
+  Command as an unproven change hypothesis (a same-name VM/Arc identity does not
+  establish a call path) and separated producer-reported recovery from independent
+  checks. It was still not a clean pass on every wording requirement: the old memory's
+  "probe" terminology persisted in the SQL report, and the LOB report discovered the
+  warning mode through the Run Command output, which is real evidence, not a failure.
+  Old memory is untrusted historical context, not a current cause or timing
+  contract, and it can still guide query selection. Don't hide telemetry identifiers
+  or rewrite evidence to look real.
+- **Change Tracking.** Change Tracking and Inventory was assessed as a source of
+  change evidence for the LOB config and rejected for this incident: Windows file
+  collection runs every 30 to 40 minutes (and can be delayed up to six hours), so a
+  two-minute edit restored to identical bytes can fall between scans. It suits
+  persistent drift, not a short warning, and an observed change would still show
+  correlation, not causation. An application-level configuration audit event could
+  capture short-lived changes, but that would be a telemetry-contract change. No
+  extension, DCR, tracked file, storage or permission was changed for the
+  assessment.
