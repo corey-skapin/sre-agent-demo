@@ -11,9 +11,11 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `azure.location` | Azure region for the SRE Agent resource group. | `australiaeast` |
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
 | `sre.targetArcMachine` | Default Arc machine for T10/T11 helpers. | `win-app-01` |
-| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. | `T09`, `T11` |
+| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. Add `SQL` after the Arc owner's SQL handoff to enable the optional [SQL scenario](sre-response-plan-automation.md#optional-sql-scenario). | `T09`, `T11` |
+| `sre.sqlTargetArcMachine` | Arc machine hosting the SQL Server for the optional SQL scenario; dormant unless `SQL` is required. | `win-sql-01` |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
 | `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | Generic Arc demo labels |
+| `labels.sql*` | SQL response plan, alert title keyword and event source; dormant unless `SQL` is required. | `sql-lock-timeout-review-v3`, `Arc SQL lock timeout`, `ArcSqlEngineDemo` |
 | `codeContext.*` | Optional repository URL and commit stamped into guest config/events, plus local source path. | Empty URL/commit; local sample path |
 | `tags.*` | Tags on the SRE Agent resources. | demo tags |
 
@@ -45,13 +47,17 @@ Keep constant:
    assistant session folders. `build.json` keeps `sre.skinPath: "sre-skin.json"`;
    the wrapper passes its resolved **absolute** path to SRE scripts.
 3. Keep `azure.namePrefix` in sync with the Arc repo.
-4. Run SRE scripts using the skin:
+4. Validate the skin offline (no cloud calls), then run SRE scripts using it:
 
    ```powershell
+   .\scripts\Initialize-SreConfiguration.ps1 `
+     -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
+     -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
+
    .\scripts\Deploy-SreAgent.ps1 `
      -SubscriptionId <SUBSCRIPTION_ID> `
      -TenantId <TENANT_ID> `
-     -SkinPath <ABSOLUTE_PRIVATE_LAB_FOLDER>\sre-skin.json `
+     -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
      -ApproveParentCreation `
      -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
    ```
@@ -69,10 +75,10 @@ Keep constant:
    The examples below are operator references, not a batch to run on stage:
 
    ```powershell
-   .\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
-   .\scripts\Invoke-T10ArcFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json
-   .\scripts\Invoke-LobArcAppOnArc.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action Status
-   .\scripts\New-LobArcAppMonitorAlert.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath .\config\demo-skin.json -Action ShowQuery
+   .\scripts\Invoke-NativeContainerAppFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
+   .\scripts\Invoke-T10ArcFault.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
+   .\scripts\Invoke-LobArcAppOnArc.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Action Status
+   .\scripts\New-LobArcAppMonitorAlert.ps1 -SubscriptionId <SUB> -TenantId <TENANT> -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Action ShowQuery
    ```
 
 ## Active, Hibernated and Removed
@@ -87,10 +93,12 @@ authorization, preview and execute the operator parking procedure:
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -Confirm:$false
 ```
 
-Preview with `-WhatIf` first. This retains `rg-<prefix>-sre` and `<AGENT_NAME>-uami`,
+Preview with `-WhatIf` first. `-Confirm:$false` is needed in a non-interactive host
+because Hibernate is ConfirmImpact High. This retains `rg-<prefix>-sre` and `<AGENT_NAME>-uami`,
 deletes only the paid parent, retaining existing UAMI workload assignments,
 workspace Application Insights and the owned Action Group. Parent-scope deployer
 admin is separate from UAMI grants; stale free entries are reported for wake.

@@ -45,7 +45,7 @@ This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo`
 
 Default names assume `-NamePrefix arc-demo`.
 For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
-`-SkinPath .\config\demo-skin.json`; see [`reskin-guide.md`](reskin-guide.md).
+`-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`; see [`reskin-guide.md`](reskin-guide.md).
 
 | Resource | Default name | Resource group | Purpose |
 |---|---|---|---|
@@ -119,7 +119,7 @@ $containerAlertId = az monitor metrics alert show `
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ParentOnly `
   -ApproveParentCreation `
   -AccessLevel High `
@@ -204,7 +204,7 @@ Use the helper script to create a new crashing revision:
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Break `
   -ShowMetrics
 ```
@@ -282,7 +282,7 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Repair `
   -ShowMetrics
 ```
@@ -298,7 +298,7 @@ cancels an obsolete request. Do not infer action-card status from thread narrati
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Status `
   -ShowMetrics
 

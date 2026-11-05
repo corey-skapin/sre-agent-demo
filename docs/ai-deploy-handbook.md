@@ -281,12 +281,18 @@ docs/sre-response-plan-automation.md.
 
 Inputs: explicit subscription GUID, tenant GUID, skin, and desired state
 Active (Ready compatibility alias), Hibernated or Removed. Never infer target context from an ambient Azure login.
+Use a private skin outside git (a copy of config/demo-skin.json edited for the
+live Arc estate) for every script; the tracked skin is only a fictional template.
 Keep runtime identifiers and credentials out of git.
 
-For Ready:
+For Active:
 1. Confirm the Arc estate is active using Arc readiness and actual inventory.
-2. Validate skin; run local mocked tests and Bicep compilation.
+2. Validate the skin offline: run Initialize-SreConfiguration.ps1 with only the
+   explicit target and -SkinPath (no cloud calls), then the local mocked tests and
+   Bicep compilation. Create the T11 LOB app/alert and enable SQL only as the
+   README prerequisites describe.
 3. Preview Deploy-SreAgent.ps1 -WhatIf. Review the exact diff before changes.
+   On a fresh parent the offline render is the configuration preview.
 4. Deploy with -ApproveParentCreation and a new external -ConfigurationBackupPath
    only when parent creation is authorized. It creates the parent, then applies
    and verifies the handler and plans. Use -ParentOnly (deliberately not a claim
@@ -306,7 +312,7 @@ For Ready:
    Present T10/T11 as hybrid evidence plus governed operator Arc Run Command
    recovery. T11 RCA is not reliable yet. Use the canonical guide's evidence-only
    fallback rather than treating old-instance proof as a new-instance pass.
-8. Leave a requested Ready demo running. Do not automatically hibernate.
+8. Leave a requested Active demo running. Do not automatically hibernate.
    Refresh .local/demo-context.json from approved inputs/readbacks and run
    New-PresenterRunsheet.ps1 so the presenter opens one filled-in SRE guide.
 9. After successful combined activation/SRE reactivation, follow the
@@ -318,7 +324,9 @@ For Hibernated:
 1. Obtain explicit authorization for deletion and export current Inspect output
    plus required incident/audit evidence outside git. This is not a history restore.
 2. Save the SRE user-assigned identity principal ID.
-3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
+3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval. It
+   is ConfirmImpact High: a non-interactive host must add -Confirm:$false (the
+   reviewed preview is the approval) or it stops before changing anything.
 4. Normal parking deletes only the paid parent; retains SRE group/UAMI, existing
    workload grants, workspace AppInsights and owned Action Group.
    Verify retained principal and parent absence with Test-SreReadiness.ps1
@@ -332,7 +340,8 @@ For Removed:
 1. Obtain separate full-removal authorization; preserve exports and principal.
 2. Preview Remove-SreAgent.ps1 -WhatIf with the same explicit target/skin.
 3. Unknown resources/roles/scopes require ownership reconciliation, not bypass.
-4. Execute approved preview; known grants/resources are removed before deleting
+4. Execute approved preview (-Confirm:$false in a non-interactive host); known
+   grants/resources are removed before deleting
    the empty dedicated group. Shared Arc/Monitor and private exports are untouched.
 5. Verify -DesiredState Removed with the saved principal. Without that principal,
    external-grant absence is pending even when the group is gone.
@@ -399,16 +408,17 @@ This produces new evidence, not restoration of history lost on parent deletion.
 ```powershell
 az login --tenant <TENANT_ID>
 # Scripts pass --subscription on every request and never run az account set.
+# <PRIVATE_LAB_FOLDER>\sre-skin.json is your private skin (kept outside git).
 .\tests\Invoke-Tests.ps1
 az bicep build --file .\infra\main.bicep --stdout
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -WhatIf
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -ApproveParentCreation `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 # The steps below are the manual route: -ParentOnly (not Ready) and then
@@ -416,26 +426,26 @@ az bicep build --file .\infra\main.bicep --stdout
 # running parent, which Deploy refuses.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -ParentOnly -ApproveParentCreation
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
 
 # Read full actual objects/preview before approving any writes.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Inspect
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Inspect
 
 # Only after that exact modern configuration scope is approved.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Apply `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Apply `
   -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Active -OutputFormat Json
 ```
 
 See [response-plan automation](sre-response-plan-automation.md) for supported
