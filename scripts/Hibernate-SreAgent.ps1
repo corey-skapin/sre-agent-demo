@@ -133,5 +133,5 @@ if ($removing) {
 } elseif ($before.identity) {
     Write-Host 'SRE parent absent; UAMI/group, existing diagnostics and workload grants retained. Run Test-SreReadiness.ps1 -DesiredState Hibernated with the saved principal. Review reported drift before Active.'
 } else {
-    Write-Warning 'Paid parent removed, but UAMI is absent. Hibernated readiness will fail. No identity or diagnostics were created by parking; authorized deployment can rebuild missing state.'
+    Write-Warning 'Paid parent removed, but UAMI is absent. Hibernated readiness will fail. No identity or diagnostics were created by parking; a new deployment can rebuild missing state.'
 }

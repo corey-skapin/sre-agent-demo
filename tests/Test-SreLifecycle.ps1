@@ -157,7 +157,7 @@ try {
     Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds ($extraId.Replace($subscription, $tenant)) -WhatIf } 'selected subscription'
     Throws { & $hibernate -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -WhatIf } 'only to explicit Removed'
     & $remove -SubscriptionId $subscription -TenantId $tenant -AdditionalOwnedRoleAssignmentIds $extraId -Confirm:$false
-    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Approved exact extra is removed with the owned assignments'
+    Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'The exact extra you listed is removed with the owned assignments'
     Reset-Fixture
     $groupExtraId = "$group/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000005"
     $groupExtra = @{ id = $groupExtraId; name = '00000000-0000-0000-0000-000000000005'; properties = @{ principalId = $principal; scope = $group; roleDefinitionId = '/roles/00000000-0000-0000-0000-000000000006' } }

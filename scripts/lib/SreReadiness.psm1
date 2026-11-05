@@ -102,7 +102,7 @@ function Get-SreReadinessReport {
                 Add-Check 'parent-admin-absent' $agentId $(if ($lifecycle.parentAssignments.Count) { 'fail' } else { 'pass' }) @() @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'Checks surviving direct parent grants while the group exists.'
             } else {
                 Add-Check 'parent-absent' $agentId $(if ($agent) { 'pending' } else { 'pass' }) 'Paid parent absent' $(if ($agent) { $agent.id } else { $null }) 'Stopped still bills; only parent absence establishes the normal cost-saving state.'
-                Add-Check 'retained-identity' $identityId $(if ($lifecycle.identity) { 'pass' } else { 'fail' }) 'Dedicated UAMI/group retained with saved principal, if supplied' $principalId 'Normal Hibernate preserves the identity. Old UAMI-only parking is supported; missing state is rebuilt only by authorized deployment.'
+                Add-Check 'retained-identity' $identityId $(if ($lifecycle.identity) { 'pass' } else { 'fail' }) 'Dedicated UAMI/group retained with saved principal, if supplied' $principalId 'Normal Hibernate preserves the identity. Old UAMI-only parking is supported; missing state is rebuilt only by a new deployment.'
                 $diagnosticIds = @("$sreGroupId/providers/Microsoft.Insights/components/$($skin.labels.agentName)-appi", "$sreGroupId/providers/Microsoft.Insights/actionGroups/Application Insights Smart Detection")
                 $presentIds = @($lifecycle.resources | ForEach-Object { $_.id })
                 Add-Check 'retained-diagnostics' $sreGroupId $(if (@($diagnosticIds | Where-Object { $_ -notin $presentIds }).Count) { 'pending' } else { 'pass' }) $diagnosticIds $presentIds 'Existing diagnostics are retained, not created by Hibernate. Missing legacy diagnostics are wake information, not a cost-state failure.' $false
@@ -112,7 +112,7 @@ function Get-SreReadinessReport {
                 $extra = @($observedGrantKeys | Where-Object { $_ -notin $expectedGrantKeys })
                 $missing = @($expectedGrantKeys | Where-Object { $_ -notin $observedGrantKeys })
                 $duplicate = @($observedGrantKeys | Group-Object | Where-Object Count -GT 1)
-                Add-Check 'retained-workload-grants' $identityId $(if ($extra.Count -or $duplicate.Count) { 'fail' } elseif ($missing.Count) { 'pending' } else { 'pass' }) $expectedGrantKeys $observedGrantKeys 'Existing grants are retained, not revoked. Missing grants are recreated on authorized wake; excess/duplicate standing access needs explicit reconciliation before Active.' $false
+                Add-Check 'retained-workload-grants' $identityId $(if ($extra.Count -or $duplicate.Count) { 'fail' } elseif ($missing.Count) { 'pending' } else { 'pass' }) $expectedGrantKeys $observedGrantKeys 'Existing grants are retained, not revoked. Missing grants are recreated on wake; excess/duplicate standing access needs explicit reconciliation before Active.' $false
                 Add-Check 'retained-platform-grant' $identityId $(if ($platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'At most one exact retained subscription Monitoring Contributor grant' @($platformGrants | ForEach-Object { $_.id }) 'Parent absence does not invalidate this platform prerequisite. No grant is created or revoked.' $false
                 Add-Check 'parent-scope-grants' $agentId $(if ($lifecycle.parentAssignments.Count) { 'pending' } else { 'pass' }) 'Parent-lifetime grants absent or reconciled before Active' @($lifecycle.parentAssignments | ForEach-Object { $_.id }) 'These belong to the deployer, not the stable UAMI. A stale free entry does not keep the paid parent running.' $false
             }
@@ -129,7 +129,7 @@ function Get-SreReadinessReport {
             $platformType = if ($incidentConfiguration -and $incidentConfiguration.Value) { $incidentConfiguration.Value.PSObject.Properties['type'] }
             $incidentPlatform = if ($platformType) { [string]$platformType.Value } else { '' }
             $monitorConnected = $incidentPlatform -eq 'AzMonitor'
-            $platformMessage = if ($monitorConnected) { 'ARM selects Azure Monitor. Check azure-monitor-alert-access separately; selection is not scanner health or alert-delivery proof.' } else { 'WARNING: ARM does not select Azure Monitor. Review the separately authorized portal fallback; retained access alone does not establish connectivity.' }
+            $platformMessage = if ($monitorConnected) { 'ARM selects Azure Monitor. Check azure-monitor-alert-access separately; selection is not scanner health or alert-delivery proof.' } else { 'WARNING: ARM does not select Azure Monitor. Use the documented portal fallback; retained access alone does not establish connectivity.' }
             Add-Check 'incident-platform' $agentId $(if ($monitorConnected) { 'pass' } else { 'pending' }) 'AzMonitor' $incidentPlatform $platformMessage $false
             if (-not $monitorConnected) { Write-Warning $platformMessage }
             $attachedIdentityIds = @($agent.identity.userAssignedIdentities.PSObject.Properties.Name)
@@ -244,8 +244,8 @@ function Get-SreReadinessReport {
             } finally {
                 if ($session) { $session.token = $null }
             }
-            Add-Check 'telemetry-and-alerts' $agentId 'skipped' 'Separately authorized alert-to-thread/RCA/Review/recovery evidence' $null 'Not evaluated: configuration readiness does not certify an incident loop or ingest rehearsal evidence. This read-only command never injects a fault.' $false
-            Add-Check 'code-repository-connection' $agentId 'skipped' 'Separate explicit authorization if needed' $null 'Public source context is not connector authentication.' $false
+            Add-Check 'telemetry-and-alerts' $agentId 'skipped' 'Alert-to-thread/RCA/Review/recovery evidence from an incident run' $null 'Not evaluated: configuration readiness does not certify an incident loop or ingest rehearsal evidence. This read-only command never injects a fault.' $false
+            Add-Check 'code-repository-connection' $agentId 'skipped' 'Optional; connect it separately if you want it' $null 'Public source context is not connector authentication.' $false
         }
         if ($DesiredState -in @('Active', 'Ready')) {
             if ($principalId) {
@@ -257,7 +257,7 @@ function Get-SreReadinessReport {
                     ($_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles)
                 })
                 Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count -or $platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'Requested workload-group profile plus at most one exact AzMonitor platform grant' @($excess | ForEach-Object { $_.id }) "Exact AzMonitor platform grants: $($platformGrants.Count); excess grants: $($excess.Count). Exact retained subscription Monitoring Contributor is permitted with or without a parent or connected incident platform. No role is created or revoked."
-                Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is selected' @($platformGrants | ForEach-Object { $_.id }) 'Azure Monitor scanning requires subscription Monitoring Contributor. Use -GrantAzureMonitorAlertAccess only after explicit IAM approval; IaC supplies platform selection, not this grant.' $monitorConnected
+                Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is selected' @($platformGrants | ForEach-Object { $_.id }) 'Azure Monitor scanning requires subscription Monitoring Contributor. Pass -GrantAzureMonitorAlertAccess to confirm you want that IAM grant; IaC supplies platform selection, not this grant.' $monitorConnected
             }
             foreach ($rg in $groups[1..2]) {
                 $scope = "$base/$rg"

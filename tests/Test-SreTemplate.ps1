@@ -33,7 +33,7 @@ Check (($template | ConvertTo-Json -Depth 100) -notmatch '749f88d5-cbae-40b8-bcf
 Check ($parent.properties.actionConfiguration.identity -eq $parent.properties.knowledgeGraphConfiguration.identity) 'Actions and knowledge graph bind the same retained UAMI'
 Check ($parentModule.properties.parameters.managedIdentityName.value -like '*sre-agent-identity*identityName*') 'Parent references retained identity module output'
 $expectedRoles = @('92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-Check (@(Compare-Object $expectedRoles $template.variables.highAccessRoleDefinitionIds).Count -eq 0) 'High profile remains exactly three approved RG-scoped roles'
+Check (@(Compare-Object $expectedRoles $template.variables.highAccessRoleDefinitionIds).Count -eq 0) 'High profile remains exactly three documented RG-scoped roles'
 foreach ($name in @('sre-agent-rbac-arc', 'sre-agent-rbac-infra')) {
     $module = @($template.resources | Where-Object name -EQ $name)[0]
     Check ($module.properties.parameters.principalId.value -like '*sre-agent-identity*principalId*') "$name grants only retained UAMI, never recreated system identity"

@@ -391,8 +391,8 @@ To see the closed loop once setup is done, run
 [one T09 incident](docs/t09-native-containerapp-closed-loop.md): ask your AI tool,
 or follow the runbook yourself.
 Deletion loses custom agents, response plans, thread/incident history, memory and
-connector state. Code-repository authorization is optional and must be explicitly
-re-established; a URL in the skin is not authentication. Save the retained identity
+connector state. Connecting a code repository is optional and must be done again by
+hand; a URL in the skin is not authentication. Save the retained identity
 principal and use readiness `-DesiredState Hibernated
 -PreviousIdentityPrincipalId <ID>` to verify retained identity and parent absence. Missing
 identity/partial state is safe to inspect, but an absent UAMI (including historical
@@ -479,6 +479,6 @@ automatic demo downgrade. Leave a demo you are still using running.
 These results come from earlier runs. They do not certify a newly reconstructed
 instance; record current readiness and incident evidence separately.
 
-- **T09 Container App:** live validated end to end with Azure Monitor handoff, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
+- **T09 Container App:** live validated end to end with Azure Monitor alert-to-thread routing, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and Arc Run Command recovery that you run yourself. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.

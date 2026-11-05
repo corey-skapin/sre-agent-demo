@@ -223,14 +223,14 @@ function Get-SreConfigurationPlan {
         if ($matches.Count -gt 1) { throw "Duplicate incident filter $($plan.name)." }
         $before = if ($matches.Count) { $matches[0] } else { $null }
         if ($before -and @($before.properties.priorities | Where-Object { $_ -notmatch '^Sev[0-4]$' }).Count) {
-            throw 'Legacy priorities are not migrated. No objects were written; follow docs/sre-response-plan-automation.md for supported manual setup or a separately approved rebuild.'
+            throw 'Legacy priorities are not migrated. No objects were written; follow docs/sre-response-plan-automation.md for supported manual setup or a rebuild.'
         }
         $handlers = @($Snapshot.handlers | Where-Object { $_.incidentFilterId -ceq $plan.name -and -not $_['isDeleted'] })
         if ($handlers.Count -gt 1) { throw "Multiple response handlers for $($plan.name); review before apply." }
         foreach ($handler in $handlers) {
             $hasLegacy = $handler.customInstructions -or @($handler.tools).Count -or @($handler.incidentProcessingGuide).Count
             if ($hasLegacy) {
-                throw 'Legacy response settings are not migrated. No objects were written; follow docs/sre-response-plan-automation.md for supported manual setup or a separately approved rebuild.'
+                throw 'Legacy response settings are not migrated. No objects were written; follow docs/sre-response-plan-automation.md for supported manual setup or a rebuild.'
             }
         }
         $after = if ($before) { $before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable } else { $plan | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable }
@@ -286,7 +286,7 @@ function Wait-SreConfigurationReadBack {
         Start-Sleep -Seconds ([Math]::Min($delay, [Math]::Ceiling($remaining)))
         $delay = [Math]::Min(20, $delay * 2)
     } while ([DateTime]::UtcNow -lt $readSession.deadlineUtc)
-    throw 'SRE configuration read-back deadline exceeded; desired state remains unverified. No PUT was replayed. Retain the backup and inspect before a separately reviewed apply.'
+    throw 'SRE configuration read-back deadline exceeded; desired state remains unverified. No PUT was replayed. Keep the backup and inspect before you apply again.'
 }
 
 function Set-SreConfigurationOperation {
