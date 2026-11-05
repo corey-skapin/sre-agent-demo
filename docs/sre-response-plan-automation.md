@@ -795,7 +795,7 @@ and nothing beyond it.
   card history. A woken agent starts with no threads.
 - **First T09 run, with its caveat.** The alert fired 5.2 minutes after the fault
   command finished, the agent's thread appeared 17 seconds later, and the Review card
-  was pending about 7 minutes after the fault. No Approve arrived before the agreed
+  was pending about 7 minutes after the fault. No Approve arrived before the
   20-minute deadline, so the app was reset by hand. The Approve registered
   about 21 minutes after the deadline, on the by-then stale card; the agent's own write
   then ran under its managed identity as a no-op, and its RCA said a person had fixed

@@ -191,8 +191,8 @@ The Arc repo handles SQL installation, license decisions, the normal Orders work
 the bounded incident and cleanup helper, Application collection and the optional
 `sql-incident-alert.bicep` module. Make sure its engine, worker and cleanup checks
 pass before SRE setup. This repo neither installs SQL nor accepts a license. The
-agreed signal is real lock timeout 1222 on an owned probe row, not a deadlock or
-an Orders outage. See the supported
+signal both repos use is real lock timeout 1222 on an owned probe row, not a
+deadlock or an Orders outage. See the supported
 [1222 explanation](https://learn.microsoft.com/sql/relational-databases/errors-events/mssqlserver-1222-database-engine-error).
 
 Enable the optional `SQL` scenario in your private skin:
