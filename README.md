@@ -26,6 +26,43 @@ card or customization step is required.
 
 The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
+## What you get
+
+These screenshots come from the first from-zero run of this layer on a demo estate
+(fictional Contoso names, identifiers masked). In that run an operator repaired the
+app before the agent's approved change landed, so the report says a person fixed it
+first: the images show what the agent presents, not a clean in-window repair
+([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
+
+![Incidents view listing one resolved Sev2 Azure Monitor incident and its response plan](docs/images/sre-incidents.png)
+
+**Incidents.** The Azure Monitor alert arrives as an incident and the matching Review
+response plan picks it up.
+
+![Triggers and response plans tab listing three Review-mode plans](docs/images/sre-response-plans.png)
+
+**Triggers & response plans.** The three Review-mode plans this layer configures (SQL
+lock timeout, LOB app on Arc, Container App restarts), each routed from Azure Monitor
+at Sev2.
+
+![Incident thread showing the alert details and the agent's first read-only investigation steps](docs/images/sre-thread-investigation.png)
+
+**Investigation.** The agent starts from the alert and gathers read-only evidence
+(revisions, replicas, logs, activity) in the incident thread. Read the command, not the
+card title: these read-only commands carry titles such as "Scaling Azure resource".
+
+![Incident thread showing an Updating Azure resource card with the proposed command, completed after approval](docs/images/sre-thread-approval.png)
+
+**Proposed change, awaiting approval, then applied.** A change to Azure appears as an
+"Updating Azure resource" card with the exact command. In Review mode it runs only after
+a person approves, and the agent then verifies the result. This capture was taken after
+approval, so the card shows as completed.
+
+![Incident thread showing the agent's RCA report with timeline, cause, impact and current state](docs/images/sre-thread-rca.png)
+
+**RCA report.** The agent closes with a report: timeline, cause, impact, current state
+and evidence gaps.
+
 ## Repo layout
 
 ```text
@@ -36,6 +73,7 @@ infra/
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
 config/
   demo-skin.json             # fictional default skin (also dummy-customer.demo-skin.json); schema in demo-skin.schema.json
+  demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
 samples/
   lob-arc-app/               # Local T11 app; optional operator-supplied repository context
@@ -54,7 +92,7 @@ scripts/
   Invoke-T10ArcFault.ps1     # historical T10 experiment fault helper, kept for its ledger
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
-docs/                        # start at docs/README.md
+docs/                        # start at docs/README.md; images/ holds the README screenshots
 ```
 
 ## Prerequisites
@@ -116,15 +154,26 @@ $tokens = $null; $errors = $null
 $errors
 ```
 
+A passing test run ends with `ALL OFFLINE TEST SUITES PASSED` and exit code 0. The
+`WARNING` and `What if` lines above it are expected mock output; allow up to a
+minute (34 to 50 s measured).
+
 ## Deploy against an existing arc-demo environment
 
 ### Rebuild prerequisites
 
 Use the same validated private skin for every SRE script, passed as an absolute
-`-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`. The companion wrapper resolves its
+`-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`; every example below uses that
+placeholder, never the tracked `config\demo-skin.json`. The companion wrapper resolves its
 `build.json` relative `sre.skinPath` against that one private lab folder, not the
 current directory. Keep it outside git, worktrees and assistant session folders.
 Store one new configuration backup per deployment under `sre-backups\`.
+
+Start the private skin as a copy of `config\demo-skin.json` and change only what
+differs from the live Arc estate (see the [reskin guide](docs/reskin-guide.md)).
+Validate it offline before any cloud call: `Initialize-SreConfiguration.ps1` with
+only the target and `-SkinPath` checks it against the schema and renders the
+desired configuration.
 
 The Arc owner must first deploy/verify the shared workspace, collection, Action
 Group and hosts. With `T09`, its Arc skin must enable Container Apps and provide
@@ -133,7 +182,11 @@ the healthy fault app plus restart alert. With `T11`, separately authorize
 `Invoke-LobArcAppOnArc.ps1 -Action Deploy` using the same target/skin before SRE
 readiness. The latter is a guest Run Command write, not a read-only prerequisite
 check. `Connected` alone does not prove that the LOB app or its Event/Perf data
-exists. SQL also needs the Arc owner's SQL/collection/alert readiness handoff.
+exists. SQL is optional and off in both tracked skins. After the Arc owner's
+SQL/collection/alert readiness handoff, enable it in the private skin by adding
+`"SQL"` to `sre.requiredScenarios`; the tracked skins already carry the dormant
+`sre.sqlTargetArcMachine` and `labels.sql*` values it needs
+([Optional SQL scenario](docs/sre-response-plan-automation.md#optional-sql-scenario)).
 
 Install Azure CLI and its `containerapp` and `connectedmachine` extensions
 before deployment (extension installation needs its own setup authorization).
@@ -153,9 +206,15 @@ Preview first:
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -WhatIf
 ```
+
+A complete first-build preview ends with "What-if complete. No resources were
+deployed.", lists five resources to create, and reports six `Unsupported`
+workload role assignments whose IDs depend on the not-yet-created identity
+principal. Anything beyond that is outside the docs
+([what to expect, with measured durations](docs/sre-response-plan-automation.md#what-to-expect-previews-and-durations)).
 
 Deploy:
 
@@ -170,10 +229,14 @@ an existing directory outside the repository, kept as the reference export.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
+
+The complete build took about 5.5 minutes live. If it is interrupted after the
+parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
+-Inspect`, then an approved `-Apply -BackupPath <NEW_PATH>`.
 
 Add `-GrantAzureMonitorAlertAccess` only after IAM approval (see
 [How it consumes arc-demo](#how-it-consumes-arc-demo)); without that grant,
@@ -216,9 +279,9 @@ the separately approved role grant. A portal connection click is **not a require
 rebuild step**. Readiness reports the ARM selection as `incident-platform`, not
 scanner health or alert-delivery proof. If it reports an unset/non-AzMonitor
 platform, use the separately authorized [portal fallback](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus
-the scripted grant remains **unproven until the rebuild and authorized delivery
-verification**.
+Do not enable a quickstart Autonomous plan. Fresh-agent intake from IaC plus the
+scripted grant worked on the 2026-11-05 from-zero rebuild, for T09 only
+([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
 
 ### Complete Ready state
 
@@ -241,7 +304,7 @@ Legacy migration/cutover is not supported; legacy settings or enabled unowned
 routes stop before writes. See the canonical protocol/fallback reference above.
 
 Run `Test-SreReadiness.ps1 -SubscriptionId <SUB> -TenantId <TENANT>
--SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json`.
+-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Active -OutputFormat Json`.
 It is read-only and bounded (`-TimeoutSeconds`, default 180). The common Arc/SRE
 contract uses `pass|fail|pending|skipped`, with exit 0 pass, 1 fail/error, 2 pending.
 It checks parent/Review/identity/RBAC/managed resources/scenario resource health
@@ -292,19 +355,23 @@ cost state, not that the whole group or combined lab is cost-free.
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -WhatIf
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
-# Execute only the approved preview.
+# Execute only the approved preview. Hibernate and Remove are high-impact, so a
+# non-interactive host (an AI tool, CI) must add -Confirm:$false or the run stops
+# with "NonInteractive mode" before changing anything; the approval is the
+# reviewed preview above, not a prompt.
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -Confirm:$false
 
 # Submission is asynchronous; repeat this read-only check within a bounded
 # observation window until pass, or report pending/failure without resubmitting.
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Hibernated `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 
 # Before the next demo — rebuild the parent using the retained identity
@@ -312,7 +379,7 @@ cost state, not that the whole group or combined lab is cost-free.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
   -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
@@ -343,9 +410,12 @@ separate full deletion. The parent keeps its validated combined identity shape:
 its system-assigned principal still changes when the parent is recreated and is
 not granted these external workload roles. Never reactivate retired legacy v2 handlers.
 Versioned filters explicitly restore enabled three-hour cooldown and Review/Sev2.
-Hibernate was proven live on 2026-11-04. Reactivation after it and a from-zero
-Deploy have not been run live, so treat them as unproven until a separately
-authorized run. Residual Arc/storage/monitoring
+Hibernate (151 to 180 s) and a wake from the retained identity (289 s) were proven
+live on 2026-11-05 with the same principal and grant IDs. What survives, what is
+lost and the limits of that evidence are in
+[the live lifecycle proof](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05);
+a clean in-window T09 repair on a rebuilt agent is still unproven. Residual
+Arc/storage/monitoring
 charges remain until their own lifecycle actions; this is not a zero-cost claim.
 
 The [managed identity itself has no extra cost](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview).
@@ -368,12 +438,13 @@ not a blanket role exemption.
 ```powershell
 .\scripts\Remove-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
-# Execute without -WhatIf only after approving the exact resources/grants.
+# Execute without -WhatIf (add -Confirm:$false in a non-interactive host) only
+# after approving the exact resources/grants.
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Removed `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Removed `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 ```
 

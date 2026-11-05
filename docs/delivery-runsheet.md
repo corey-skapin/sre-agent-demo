@@ -14,6 +14,14 @@ and explain the same flow from the configured plan; do not send a chat message o
 create an incident to fill the gap. Regenerating this guide overwrites the local copy,
 so add the verified list last.
 
+A rebuilt or newly woken agent has no investigations: deleting the parent discards
+its threads, memory and history, so every list is empty until incidents are
+separately authorized. That is expected, not a failure. Open the agent once well
+before the audience arrives and before arming any fault, and let its welcome thread
+finish: the first visit to a fresh agent is not read-only. It starts a welcome thread
+that spends agent usage and runs beside any incident thread, which can then overwrite
+memory notes.
+
 ## Live faults
 
 Read this before Arc chapter 7. The AI runs every command here. The presenter says
@@ -67,8 +75,11 @@ investigation has finished.
 
 Say "a person approved it", never "the audit proves it". In both rehearsals the
 agent's result showed no approver record (`approveScope` none) even though the user
-clicked **Approve**. The person who clicked is the evidence; do not present
-telemetry or the agent's result as proof of who approved.
+clicked **Approve**. On the rebuilt agent the audit table also had no
+`ApprovalDecision` event, but the Azure CLI execution record of the approved command
+carried a `User` that matched the portal user, so the clicker is attributable there.
+The person who clicked is the evidence; do not present telemetry or the agent's
+result as proof of who approved.
 
 ## 1. Pick up from Arc
 
@@ -349,8 +360,11 @@ Keep raw context and payloads off the projected screen.
 Skip this step unless the user has explicitly approved one Container App fault,
 an observation deadline and the narrow reset fallback. The AI runs the
 [existing T09 procedure]({{operatorGuideUrl}}); the presenter does not choose scripts.
-The signed-in human approves only the current run's exact reset card.
-Never approve a stale card after operator recovery. The card appears about 7 to 10
+The signed-in human approves only the current run's exact reset card; the
+[click path to that card]({{operatorGuideUrl}}#7-approve-the-governed-fix) is in the
+operator guide.
+Never approve a stale card after operator recovery: agree beforehand that the human
+may Deny it if the operator fallback runs. The card appears about 7 to 10
 minutes after the fault, so fire it about 10 minutes before this beat. Say that a
 person approved it, never that the audit proves it (see **Approval provenance**
 under **Live faults**).

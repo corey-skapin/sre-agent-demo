@@ -112,7 +112,7 @@ try {
         Check ($script:sleepCalls -eq 0 -and [IO.File]::ReadAllText($configPath) -ceq $before) "$case baseline fails without mutation"
     }
     Check (@(Get-ChildItem -LiteralPath $fixture -Filter '.lob-warning-*.tmp').Count -eq 0) 'All named temporary config files cleaned up'
-    $state = @{ callerMismatch = $false; guestExitCode = 0; createFailure = $false; target = $target; submitted = ''; createCommand = '' }
+    $state = @{ callerMismatch = $false; guestExitCode = 0; guestOutput = 'synthetic guest output'; createFailure = $false; target = $target; submitted = ''; createCommand = '' }
     $global:AzResponder = {
         $command = $args -join ' '
         if ($command -like 'account show*') {
@@ -127,7 +127,9 @@ try {
             return '{}'
         }
         if ($command -like 'connectedmachine run-command show*') {
-            return (@{provisioningState='Succeeded';instanceView=@{executionState='Succeeded';exitCode=$state.guestExitCode}} | ConvertTo-Json)
+            $view = @{executionState='Succeeded';exitCode=$state.guestExitCode}
+            if ($null -ne $state.guestOutput) { $view.output = $state.guestOutput }
+            return (@{provisioningState='Succeeded';instanceView=$view} | ConvertTo-Json)
         }
         throw "Unexpected mocked warning Azure call: $command"
     }.GetNewClosure()
@@ -138,6 +140,11 @@ try {
     $state.callerMismatch = $false
     $result = & $helper @target -ApproveWarningWindow
     Check ($result.Action -eq 'WarnForDuration' -and $result.Result.instanceView.exitCode -eq 0) 'Approved wrapper requires actual mocked guest completion'
+    Check ($result.GuestExitCode -eq 0 -and $result.GuestOutput -eq 'synthetic guest output') 'Wrapper result shows the guest exit code and output without expanding Result'
+    $state.guestOutput = $null
+    $quiet = & $helper @target -ApproveWarningWindow
+    Check ($quiet.GuestExitCode -eq 0 -and $null -eq $quiet.GuestOutput) 'Wrapper result tolerates a guest that returned no output'
+    $state.guestOutput = 'synthetic guest output'
     Check ($state.submitted.Contains('Set-ScenarioConfig') -and $state.createCommand.Contains('--timeout-in-seconds 300')) 'Approved create uses guarded script and bounded Arc timeout'
     $state.guestExitCode = 9
     Reject { & $helper @target -ApproveWarningWindow } 'execution failed'

@@ -16,6 +16,11 @@ from the approved inputs and setup readbacks in repo-root
 ```
 
 Open the returned `.local/presenter-runsheet.md` for the SRE presentation.
+The guide belongs to the checkout that generated it: `.local` is gitignored, the
+output path is fixed at `<checkout>\.local\presenter-runsheet.md`, and its link to
+the Arc guide is computed relative to that file. Generate it in the checkout the
+presenter will open, not in a temporary worktree that will be deleted, and
+regenerate it there after any move or copy (a copied guide has a broken Arc link).
 The generator is offline. It reads JSON and fills the tracked
 `docs/delivery-runsheet.md` source; plain Markdown does not interpolate JSON.
 Refresh after setup changes. Saved context timestamps describe the inputs,
@@ -26,7 +31,11 @@ the template's level-2 headings `This afternoon: verified existing investigation
 `Live faults` and steps 1 to 7 (step 7 exactly `7. Close`), so keep them when editing
 `docs/delivery-runsheet.md`; `tests/Test-PresenterRunsheet.ps1` checks this.
 
-Context schema version 1 requires these exact nonsecret fields:
+Context schema version 1 requires these exact nonsecret fields. Start from the
+fictional [`config/demo-context.example.json`](../config/demo-context.example.json):
+copy it to `.local/demo-context.json` and replace every value from the approved
+setup readbacks. The tracked presenter test renders that file, so its shape stays
+current.
 
 | Field | Saved setup source |
 | --- | --- |
@@ -34,8 +43,8 @@ Context schema version 1 requires these exact nonsecret fields:
 | `subscriptionId`, `tenantId` | Explicit approved target |
 | `recordedAtUtc` | UTC timestamp ending in `Z` for the saved context |
 | `resourceGroups` | Object with confirmed `arc`, `infra`, `sre` names |
-| `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment |
-| `applicationUrl` | Container App HTTPS endpoint |
+| `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment: the `Portal:` line `Deploy-SreAgent.ps1` prints. Save it then; it can also be rebuilt as `https://portal.azure.com/#view/Microsoft_Azure_PaasServerless/AgentFrameBlade.ReactView/id/` followed by the agent's ARM ID with each `/` written `%2F` |
+| `applicationUrl` | Container App HTTPS endpoint: `https://` plus `properties.configuration.ingress.fqdn` from `az containerapp show` |
 | `applicationInsightsResourceId` | SRE diagnostics component |
 | `logAnalyticsWorkspaceId` | Existing Arc workspace |
 | `containerAppResourceId`, `arcMachineResourceId` | Exact T09 app and T11 Arc machine |
@@ -249,6 +258,17 @@ can pair `AgentToolExecution` ToolStart/ToolEnd by thread and CallId. Inspect
 actual ToolOutput for truncation: a completed event with a shortened result is
 execution and partial-result evidence, not full raw output. Preserve those limits
 instead of substituting the final narrative or rerunning the fault.
+A pending Review card is visible in the thread messages, not in the approvals
+endpoint. On the rebuilt agent the proposed write was a thread message whose
+`azCliExecution.status` was `Pending` (not started, not completed), and the audit
+table showed `ToolStart` for `RunAzCliWriteCommands` with no `ToolEnd`, while
+`GET /api/v1/approvals/{threadId}` returned nothing and every message's `approval`
+field was null. Detect a pending card from the messages; an empty approvals
+response does not mean there is no card. No `ApprovalDecision` event appeared
+either, but the Azure CLI execution record for the approved command
+(`AgentAzCliExecution` in Learn's event list) carried a `User` that matched the
+portal user, so that field attributes the approver. Still say "a person approved
+it": it shows who clicked, not that the card was current.
 The documented [GenAI content table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/appgenaicontent)
 also exposes tool-result fields, but their existence does not mean this agent
 populates them. An exact-trace read for the first SQL run returned assistant
@@ -281,12 +301,18 @@ docs/sre-response-plan-automation.md.
 
 Inputs: explicit subscription GUID, tenant GUID, skin, and desired state
 Active (Ready compatibility alias), Hibernated or Removed. Never infer target context from an ambient Azure login.
+Use a private skin outside git (a copy of config/demo-skin.json edited for the
+live Arc estate) for every script; the tracked skin is only a fictional template.
 Keep runtime identifiers and credentials out of git.
 
-For Ready:
+For Active:
 1. Confirm the Arc estate is active using Arc readiness and actual inventory.
-2. Validate skin; run local mocked tests and Bicep compilation.
+2. Validate the skin offline: run Initialize-SreConfiguration.ps1 with only the
+   explicit target and -SkinPath (no cloud calls), then the local mocked tests and
+   Bicep compilation. Create the T11 LOB app/alert and enable SQL only as the
+   README prerequisites describe.
 3. Preview Deploy-SreAgent.ps1 -WhatIf. Review the exact diff before changes.
+   On a fresh parent the offline render is the configuration preview.
 4. Deploy with -ApproveParentCreation and a new external -ConfigurationBackupPath
    only when parent creation is authorized. It creates the parent, then applies
    and verifies the handler and plans. Use -ParentOnly (deliberately not a claim
@@ -306,7 +332,7 @@ For Ready:
    Present T10/T11 as hybrid evidence plus governed operator Arc Run Command
    recovery. T11 RCA is not reliable yet. Use the canonical guide's evidence-only
    fallback rather than treating old-instance proof as a new-instance pass.
-8. Leave a requested Ready demo running. Do not automatically hibernate.
+8. Leave a requested Active demo running. Do not automatically hibernate.
    Refresh .local/demo-context.json from approved inputs/readbacks and run
    New-PresenterRunsheet.ps1 so the presenter opens one filled-in SRE guide.
 9. After successful combined activation/SRE reactivation, follow the
@@ -318,7 +344,9 @@ For Hibernated:
 1. Obtain explicit authorization for deletion and export current Inspect output
    plus required incident/audit evidence outside git. This is not a history restore.
 2. Save the SRE user-assigned identity principal ID.
-3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval.
+3. Preview Hibernate-SreAgent.ps1 -WhatIf, then execute only after approval. It
+   is ConfirmImpact High: a non-interactive host must add -Confirm:$false (the
+   reviewed preview is the approval) or it stops before changing anything.
 4. Normal parking deletes only the paid parent; retains SRE group/UAMI, existing
    workload grants, workspace AppInsights and owned Action Group.
    Verify retained principal and parent absence with Test-SreReadiness.ps1
@@ -332,7 +360,8 @@ For Removed:
 1. Obtain separate full-removal authorization; preserve exports and principal.
 2. Preview Remove-SreAgent.ps1 -WhatIf with the same explicit target/skin.
 3. Unknown resources/roles/scopes require ownership reconciliation, not bypass.
-4. Execute approved preview; known grants/resources are removed before deleting
+4. Execute approved preview (-Confirm:$false in a non-interactive host); known
+   grants/resources are removed before deleting
    the empty dedicated group. Shared Arc/Monitor and private exports are untouched.
 5. Verify -DesiredState Removed with the saved principal. Without that principal,
    external-grant absence is pending even when the group is gone.
@@ -357,7 +386,14 @@ unchanged; any required failed/pending check blocks the offer. The optional
 unevaluated rehearsal item is not incident proof and needs no special exception.
 
 Use the confirmed private target and an agreed observation deadline in the
-conversation. For example: **"Activation is complete. Would you like me to
+conversation. Also confirm that the approver is signed in to the agent at its
+Incidents view and ready to click ([click path](t09-native-containerapp-closed-loop.md#7-approve-the-governed-fix)),
+and agree how they will signal the AI: a message sent while the AI is inside a
+long wait may be seen only after that wait returns. In the first rebuilt run the
+card appeared about 7 minutes after the fault, so a 20-minute deadline counted from
+the fault left about 13 minutes to approve it. If the approver cannot be at the
+screen for that window, say so before the fault.
+For example: **"Activation is complete. Would you like me to
 trigger one T09 Container App incident now? It temporarily faults the demo app,
 can send configured alert notifications and incurs SRE usage costs. I'll run
 the existing demo procedure, monitor until our agreed deadline, use the narrow
@@ -386,6 +422,10 @@ Follow the runbook's existing recovery-owner/deadline and operator fallback
 procedure if approval or SRE repair is unavailable. The helper has no automatic
 watchdog or hard cancellation guarantee; do not promise otherwise. Surface
 reset/health failures immediately and never approve a stale card after fallback.
+The card stays Pending and approvable after the operator fallback (in the first
+rebuilt run it was approved 21 minutes later and the agent's write ran as a no-op),
+so agree before the fault that the signed-in administrator may Deny it at once;
+otherwise tell them not to click it.
 Record actual alert, investigation and finding evidence where observed; report
 missing or uncertain evidence as pending, not as a successful loop. Verify the
 false flag, serving revision and HTTP 200, and report actual Monitor condition
@@ -399,16 +439,17 @@ This produces new evidence, not restoration of history lost on parent deletion.
 ```powershell
 az login --tenant <TENANT_ID>
 # Scripts pass --subscription on every request and never run az account set.
+# <PRIVATE_LAB_FOLDER>\sre-skin.json is your private skin (kept outside git).
 .\tests\Invoke-Tests.ps1
 az bicep build --file .\infra\main.bicep --stdout
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -WhatIf
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -ApproveParentCreation `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 # The steps below are the manual route: -ParentOnly (not Ready) and then
@@ -416,26 +457,26 @@ az bicep build --file .\infra\main.bicep --stdout
 # running parent, which Deploy refuses.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -ParentOnly -ApproveParentCreation
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
 
 # Read full actual objects/preview before approving any writes.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Inspect
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Inspect
 
 # Only after that exact modern configuration scope is approved.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Apply `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Apply `
   -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Ready -OutputFormat Json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Active -OutputFormat Json
 ```
 
 See [response-plan automation](sre-response-plan-automation.md) for supported
@@ -483,8 +524,9 @@ step is required. Read back the selection and grant separately. The existing
 unset/non-AzMonitor selection emits an advisory warning, not a new required gate.
 Only if that check shows the platform is not configured, use the separately
 authorized [portal fallback](sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Fresh-agent intake through IaC plus the grant remains unproven until the rebuild
-and separately authorized alert-delivery verification. Never infer this state
+Fresh-agent intake through IaC plus the grant worked on the 2026-11-05 from-zero
+rebuild for T09 only ([evidence and limits](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05));
+SQL and LOB delivery need their own authorized runs. Never infer this state
 from optional connector files. Deployment adopts
 existing direct assignment names and does not query Graph display names.
 Retained AppInsights must match the requested workspace/location; wake does not
@@ -495,6 +537,9 @@ pagination; unexpected SRE resources or scoped grants block its destructive path
 
 Local checks cover parser/schema/rendering/mocked failures and safety behavior.
 They do not prove Azure data-plane create reliability, destructive lifecycle
-rebuild, live guest execution or a new T09 alert-to-recovery run.
+rebuild, live guest execution or a new T09 alert-to-recovery run. The separate
+2026-11-05 live session exercised the build, Hibernate and wake paths and one T09
+alert-to-card chain; its limits, including the still-unproven clean in-window
+repair, are in the [evidence boundaries](sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05).
 See the [historical engineering ledger](t10-sre-on-arc-experiment.md#historical-sre-configuration-and-t09-evidence)
 for dated run outcomes and their evidence limits.

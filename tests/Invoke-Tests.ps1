@@ -54,6 +54,10 @@ try {
 } finally {
     Remove-Item -LiteralPath (Join-Path $cliFixture 'wbin'), $cliFixture -Force
 }
+$extensionWarning = "C:\fixture\ext\_create.py:21: SyntaxWarning: `"\s`" is an invalid escape sequence. Such sequences will not work in the future. Did you mean `"\\s`"? A raw string is also an option.`n  az monitor data-collection rule create --rule-file `"C:\samples\dcrEx1.json`"`n"
+Assert-True ((Get-SreAzWarningText -Text ($extensionWarning * 2)).Trim() -eq '') 'Known benign Azure CLI extension SyntaxWarnings are dropped'
+Assert-True ((Get-SreAzWarningText -Text "ERROR: real problem`n$extensionWarning").Trim() -eq 'ERROR: real problem') 'A real error beside the extension warning is preserved'
+Assert-True ((Get-SreAzWarningText -Text "WARNING: keep this`r`n") -eq "WARNING: keep this`r`n" -and (Get-SreAzWarningText -Text $null) -eq '') 'Unrelated stderr text and empty input are untouched'
 $skin = Get-DemoSkin -RepoRoot $root
 & (Join-Path $PSScriptRoot 'Test-HandoffDefaults.ps1')
 & (Join-Path $PSScriptRoot 'Test-PresenterRunsheet.ps1')
@@ -597,6 +601,7 @@ foreach ($Scenario in @('StopService', 'DiskPressure', 'CpuPressure', 'WriteEven
     }
 }
 Write-Host "$count assertions passed. All Azure calls were mocked; no cloud mutation occurred."
+Write-Host 'ALL OFFLINE TEST SUITES PASSED. Any WARNING or What if lines above are expected mock output.'
 } finally {
     if ($previousAz) { Set-Item Function:\global:az -Value $previousAz.ScriptBlock }
     else { Remove-Item Function:\az -ErrorAction SilentlyContinue }

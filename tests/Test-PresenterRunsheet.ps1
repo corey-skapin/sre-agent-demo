@@ -190,6 +190,10 @@ try {
     $context.recordedAtUtc = 'yesterday'
     Reject { Render } 'recordedAtUtc'
     Check ((Get-Content -LiteralPath $output -Raw).Contains('/agents/sre-demo')) 'Failed validation preserves last usable guide'
+    $examplePath = Join-Path $fixture '.local\example-context.json'
+    Copy-Item -LiteralPath (Join-Path $root 'config\demo-context.example.json') -Destination $examplePath
+    $example = Get-Content -LiteralPath (& $scriptPath -ContextPath $examplePath) -Raw
+    Check ($example -notmatch '\{\{|\}\}' -and $example.Contains('agents%2Fsre-arc-demo')) 'Shipped example context renders a guide'
     Check ((Get-Content -LiteralPath (Join-Path $root '.gitignore') -Raw) -match '(?m)^\.local/\r?$') 'Entire local context/output directory ignored'
     $source = Get-Content -LiteralPath $scriptPath -Raw
     Check ($source -notmatch '\bInvoke-(SreAz|AzCli|WebRequest|RestMethod)\b|\baz\s+(account|rest|resource|deployment)\b') 'Generator has no cloud/network operation'

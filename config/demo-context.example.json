@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "subscriptionId": "00000000-0000-0000-0000-000000000001",
+  "tenantId": "00000000-0000-0000-0000-000000000002",
+  "recordedAtUtc": "2026-01-01T00:00:00Z",
+  "resourceGroups": {
+    "arc": "rg-arc-demo",
+    "infra": "rg-arc-demo-infra",
+    "sre": "rg-arc-demo-sre"
+  },
+  "agentName": "sre-arc-demo",
+  "agentUrl": "https://portal.azure.com/#view/Microsoft_Azure_PaasServerless/AgentFrameBlade.ReactView/id/%2Fsubscriptions%2F00000000-0000-0000-0000-000000000001%2FresourceGroups%2Frg-arc-demo-sre%2Fproviders%2FMicrosoft.App%2Fagents%2Fsre-arc-demo",
+  "applicationUrl": "https://ca-arc-demo-fault.example.invalid",
+  "applicationInsightsResourceId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-arc-demo-sre/providers/Microsoft.Insights/components/sre-arc-demo-appi",
+  "logAnalyticsWorkspaceId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-arc-demo/providers/Microsoft.OperationalInsights/workspaces/law-arc-demo",
+  "containerAppResourceId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-arc-demo-infra/providers/Microsoft.App/containerApps/ca-arc-demo-fault",
+  "arcMachineResourceId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-arc-demo/providers/Microsoft.HybridCompute/machines/win-app-01",
+  "containerResponsePlan": "container-app-restart-review-v3",
+  "lobResponsePlan": "lob-arc-app-review-v3",
+  "lobAlertTitleContains": "lob-arc-app-fault",
+  "lobEventSource": "ArcLobBridgeApp"
+}

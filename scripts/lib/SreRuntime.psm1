@@ -27,6 +27,13 @@ function Get-SreAzInvocation {
     return @{ command = 'az'; prefix = @(); installer = $null }
 }
 
+function Get-SreAzWarningText {
+    param([AllowNull()][AllowEmptyString()][string]$Text)
+    if ([string]::IsNullOrEmpty($Text)) { return '' }
+    # An Azure CLI extension's help text can trigger a Python SyntaxWarning (two lines per hit) on every call; it is harmless noise.
+    return [regex]::Replace($Text, '(?m)^[^\r\n]*\.py:\d+: SyntaxWarning: [^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)?(?:\r?\n|\z)', '')
+}
+
 function Invoke-SreAz {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$Arguments, [Parameter(Mandatory)][string]$SubscriptionId)
@@ -42,7 +49,8 @@ function Invoke-SreAz {
         $exitCode = $LASTEXITCODE
         $stderrText = Get-Content -LiteralPath $stderrPath -Raw
         if ($exitCode -ne 0) { throw "az $($Arguments -join ' ') failed ($exitCode): $stderrText" }
-        if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Warning $stderrText.Trim() }
+        $warningText = Get-SreAzWarningText -Text $stderrText
+        if (-not [string]::IsNullOrWhiteSpace($warningText)) { Write-Warning $warningText.Trim() }
         return ($output | Out-String).Trim()
     } finally {
         if ($invocation.installer) { [Environment]::SetEnvironmentVariable('AZ_INSTALLER', $previousInstaller, 'Process') }

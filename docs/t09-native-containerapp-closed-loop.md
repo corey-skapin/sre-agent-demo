@@ -45,7 +45,7 @@ This runbook demonstrates the Azure-native "wow" loop on the optional `arc-demo`
 
 Default names assume `-NamePrefix arc-demo`.
 For reskinned demos, keep `azure.namePrefix` aligned across both repos and pass
-`-SkinPath .\config\demo-skin.json`; see [`reskin-guide.md`](reskin-guide.md).
+`-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`; see [`reskin-guide.md`](reskin-guide.md).
 
 | Resource | Default name | Resource group | Purpose |
 |---|---|---|---|
@@ -119,7 +119,7 @@ $containerAlertId = az monitor metrics alert show `
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ParentOnly `
   -ApproveParentCreation `
   -AccessLevel High `
@@ -204,7 +204,7 @@ Use the helper script to create a new crashing revision:
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Break `
   -ShowMetrics
 ```
@@ -251,8 +251,24 @@ See [Azure Monitor reinvestigation cooldown](https://learn.microsoft.com/azure/s
 ## 7. Approve the governed fix
 
 Before the authorized fault, sign in to `https://sre.azure.com`, select the
-configured agent and be ready to open the new incident investigation. Expand
-the actual Azure infrastructure operation card, not just the RCA prose.
+configured agent and open it once, letting its welcome thread finish: the first
+visit to a fresh agent starts that thread and spends agent usage, and it should
+not run beside the incident. Then be ready to open the new incident investigation.
+Expand the actual Azure infrastructure operation card, not just the RCA prose.
+
+Observed path on the rebuilt agent: choose **Incidents** in the left sidebar. Its
+**Incidents** tab shows **Azure Monitor is connected**, and its **Agent status**
+column and tiles summarize each incident (including **Pending user input**; that
+a waiting Review card shows there was not captured). Select the alert title link
+to open the thread, where the proposed change is an **Updating Azure resource**
+card with a risk label and the full command. From Learn, not captured before the
+click: Azure infrastructure operations show **Approve** and **Deny** to an SRE
+Agent Administrator, and the thread's **...** menu has **Copy link to thread**.
+If the live controls differ, use what is visible and do not guess.
+
+The proposed write is also visible without the portal: it is a thread message
+whose `azCliExecution.status` is `Pending`, while the approvals endpoint can stay
+empty for this card type.
 The [SRE guide's optional incident step](delivery-runsheet.md#6-optional-one-approved-live-incident)
 requires the current run's exact card and separate fault consent.
 An Azure Monitor alert state or chat message cannot approve that card.
@@ -282,15 +298,20 @@ Manual recovery fallback, only if live SRE remediation is unavailable:
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Repair `
   -ShowMetrics
 ```
 
 If this fallback is used, label the demo as "manual reset fallback"; do not claim closed-loop SRE remediation.
-After fallback, do not approve a stale pending repair card. Inspect current state
-and obtain scoped authorization before the signed-in administrator denies or
-cancels an obsolete request. Do not infer action-card status from thread narration.
+After fallback, do not approve a stale pending repair card. The card stays Pending
+and approvable: in the first rebuilt run it was approved 21 minutes after the
+fallback and the agent's write ran as a no-op on the already repaired app, but the
+same click on a non-idempotent proposal would change Azure after the operator had
+acted. Agree before the fault that the signed-in administrator may Deny the
+obsolete card at once; otherwise tell them not to click it and leave it unmodified.
+Inspect current state and obtain scoped authorization before any other
+cancellation. Do not infer action-card status from thread narration.
 
 ## 8. Verify recovery
 
@@ -298,7 +319,7 @@ cancels an obsolete request. Do not infer action-card status from thread narrati
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `
   -TenantId $tenantId `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -State Status `
   -ShowMetrics
 
@@ -356,7 +377,9 @@ customEvents
 
 `ToolStart` confirms a request and its exact input, not completed execution.
 Correlate its `CallId` with `ToolEnd`, any `ApprovalDecision`, the actual Azure
-write caller and recovery. `IncidentActivitySnapshot` records the
+write caller and recovery. On the rebuilt agent no `ApprovalDecision` appeared, but
+the Azure CLI execution record (`AgentAzCliExecution`) of the approved command
+carried a `User` matching the portal user, which attributes the approver. `IncidentActivitySnapshot` records the
 `ResponsePlanId`, mode and assisted/mitigated outcome. Absence of an event in a
 bounded query is not authoritative current approval-card state.
 See [Audit agent actions](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions).

@@ -20,12 +20,24 @@ none of it, and none of it certifies the current instance.
   install nor check extensions, so a missing one surfaces as an Azure CLI
   "not a valid command" error.
 - The subscription and tenant GUIDs and one validated private skin kept outside
-  git ([rebuild prerequisites](../README.md#rebuild-prerequisites)).
+  git ([rebuild prerequisites](../README.md#rebuild-prerequisites)). Validate the
+  skin offline: `Initialize-SreConfiguration.ps1` with only the target and
+  `-SkinPath` checks it against the schema and renders the desired configuration
+  without any cloud request.
 - The companion Arc estate is Active and its readiness handoff is current.
+- The scenario prerequisites, each approved separately because they write to the
+  Arc estate: the T09 Container App and restart alert (Arc owner); for T11,
+  `New-LobArcAppMonitorAlert.ps1 -Action Create` and
+  `Invoke-LobArcAppOnArc.ps1 -Action Deploy` (same explicit target and private skin;
+  preview each with `-WhatIf`); for the
+  optional SQL route, the Arc owner's SQL handoff and `SQL` in the private skin
+  ([enable SQL](#optional-sql-scenario)). A missing alert surfaces only later as a
+  failed `T11-alert` or `SQL-alert` readiness check, after the paid parent exists,
+  and readiness does not check that the LOB app itself is installed.
 
 | Step | Do this | Details |
 | --- | --- | --- |
-| Build | `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`. With IAM approval add `-GrantAzureMonitorAlertAccess`; it creates the one required subscription grant unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle) |
+| Build | Review the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. With IAM approval add `-GrantAzureMonitorAlertAccess`; it creates the one required subscription grant unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
 | Verify | `Test-SreReadiness.ps1 ... -DesiredState Active`; every required check must pass | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle) |
 | Present | Generate `.local/presenter-runsheet.md` ([handbook](ai-deploy-handbook.md#local-presenter-guide)). Before a fresh live fault run `Invoke-SreDemoRoute.ps1 -Scenario <SQL\|LOB\|ContainerApp> -Action Prepare`, afterwards `-Action Restore` | [Reset between demo runs](#reset-between-demo-runs) |
 | Park | `Hibernate-SreAgent.ps1 ... -WhatIf`, then execute, then `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Approved hibernation and later reactivation](#approved-hibernation-and-later-reactivation) |
@@ -146,24 +158,31 @@ failure fallback.
 ## Render, inspect, approve, apply
 
 ```powershell
-# Local deterministic render: no cloud requests.
+# Local deterministic render: no cloud requests. Also validates the skin.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json
 
 # Supported read-only export plus exact in-place change preview.
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Inspect
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Inspect
 
 # Only after approving that exact change scope:
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Apply `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Apply `
   -BackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json> -WhatIf
 
 # Remove -WhatIf only when the full proposed scope is authorized.
 ```
+
+`<PRIVATE_LAB_FOLDER>\sre-skin.json` is your private skin, kept outside git. The
+tracked `config\demo-skin.json` is only the fictional starting point and test
+fixture: running an example with it silently applies its defaults (SQL off).
+On a fresh parent the render is the full preview, because it is exactly what the
+first `-Apply` creates; `-Inspect` needs an existing parent, so the complete
+Deploy path reviews the render before creation and applies right after it.
 
 `schemaVersion: 2` desired configuration is not the old MCP request format.
 Keep exports/previews outside git; they contain runtime IDs and full instructions.
@@ -353,7 +372,7 @@ For a new/rebuilt layer, complete deployment can chain parent plus configuration
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 ```
@@ -405,7 +424,7 @@ recreation test; verify the same settings on the separately authorized rebuild.
 ```powershell
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Ready `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Active `
   -OutputFormat Json -TimeoutSeconds 180
 ```
 
@@ -428,7 +447,48 @@ not a fourth lifecycle state. Preserve required failures/pending outcomes;
 the optional rehearsal item does not affect the overall status.
 Worker warnings are captured before job remoting and included as optional
 `inspection-warnings` data, never printed ahead of the JSON document. They do not
-hide required failures or change a required check's outcome.
+hide required failures or change a required check's outcome. A pending
+`inspection-warnings` row on its own, next to an overall `pass`, is advisory. The
+scripts drop the known harmless Python `SyntaxWarning` that an installed Azure CLI
+extension can print on every call (seen with `monitor-control-service`); other
+unrelated stderr, such as another extension's warning, still surfaces in that row,
+so read its observed text before ignoring it.
+
+### What to expect: previews and durations
+
+A first-build `Deploy-SreAgent.ps1 -WhatIf` is complete when it ends with "What-if
+complete. No resources were deployed." It lists 5 resources to create: the
+dedicated SRE group, the parent, workspace Application Insights, the SRE-only UAMI
+and the deployer's parent-scoped administrator assignment. It also reports 6
+`Unsupported` diagnostics. Those are the six workload role assignments (Reader,
+Log Analytics Contributor and Contributor on each Arc group): their IDs depend on
+the UAMI principal, which does not exist yet, so Azure cannot preview them. The
+Action Group ID is passed through with the casing Azure returns, and readiness
+accepts it. Anything else, such as a delete, another role or scope, or a different
+parent setting, is outside this reference: stop and ask.
+
+A wake `Deploy-SreAgent.ps1 -WhatIf` on the retained identity reads differently:
+2 to create (the parent and the deployer's parent-scoped administrator
+assignment), 7 to modify, 2 no change and 1 ignore, with no `Unsupported` rows
+because the principal now exists. The 7 modifies are expected: six are the workload
+role assignments the same principal already holds (what-if shows the literal
+`principalId` against a `reference(...)` expression, a display difference), and one
+is the retained Application Insights component (the template adds `Flow_Type` and
+`Request_Source` defaults). The real run kept the same six assignment IDs and
+created no duplicates. A delete, a new principal or role, or another scope is
+outside this reference: stop and ask.
+
+Measured live on 2026-11-05 (the first from-zero build): offline tests 48 s,
+`-WhatIf` 75 s, complete Deploy 326 s (parent settings read-back, grant and
+configuration apply included), `Test-SreReadiness.ps1 -DesiredState Active` 73 to
+133 s, `New-LobArcAppMonitorAlert.ps1 -Action Create` 20 s,
+`Invoke-LobArcAppOnArc.ps1 -Action Deploy` about 3 minutes (the guest part took
+16 s; its result lists `GuestExitCode` and `GuestOutput` directly) and
+`Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
+least 600 s. If a Deploy is interrupted after the parent exists, do not rerun it:
+Deploy refuses an existing parent, even in `-WhatIf`. Run
+`Initialize-SreConfiguration.ps1 -Inspect`, review it, then an approved
+`-Apply -BackupPath <NEW_PATH_OUTSIDE_REPO.json>`.
 
 ### Approved hibernation and later reactivation
 
@@ -473,8 +533,10 @@ optional readiness warning to review the portal fallback. That configuration
 warning does not invalidate retained access or establish scanner health or
 incident readiness. When AzMonitor is selected, missing subscription scanner
 access is a required failure, not a reason to grant it silently.
-This grant survived the live Hibernate of 2026-11-04 (read-only readiness
-confirms it); waking with it is not yet proven.
+This grant survived the live Hibernates of 2026-11-04 and 2026-11-05 (read-only
+readiness confirms it), and on 2026-11-05 it alone satisfied the wake's required
+`azure-monitor-alert-access` check, with no `-GrantAzureMonitorAlertAccess` switch
+([evidence boundaries](#live-lifecycle-proof-2026-11-05)).
 Reconciliation requires separate scope approval, not implicit revocation.
 Otherwise, wake adopts existing direct grant names,
 creates missing grants and avoids unnecessary Graph principal-name lookups.
@@ -498,22 +560,24 @@ az identity show --subscription <SUBSCRIPTION_ID> `
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -Inspect |
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -Inspect |
   Out-File -LiteralPath <NEW_PRIVATE_EXPORT_PATH.json> -Encoding utf8 -NoClobber
 
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -WhatIf
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
-# Only after authorizing the exact preview:
+# Only after authorizing the exact preview. Hibernate is ConfirmImpact High, so
+# an AI tool or other non-interactive host must pass -Confirm:$false; without it
+# the run stops with "NonInteractive mode" before any change (measured live).
 .\scripts\Hibernate-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
-  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
+  -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -Confirm:$false
 
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Hibernated `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Hibernated `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> `
   -OutputFormat Json -TimeoutSeconds 180
 ```
@@ -558,8 +622,10 @@ read-only GET of the running existing parent returned `type: AzMonitor`, with
 says Azure Monitor needs no supplied credentials; neither that guide nor the ARM
 schema specifies an additional required connector resource for this integration.
 This existing-parent evidence does not establish how a fresh instance initializes.
-**Fresh-agent intake from IaC plus the script remains unproven until the rebuild
-and separately authorized delivery verification.**
+**Fresh-agent intake from IaC plus the script worked on the 2026-11-05 from-zero
+rebuild:** the T09 alert fired and the agent's thread appeared 17 seconds later,
+with no portal connect click. That covers T09 only; SQL and LOB delivery on a
+rebuilt agent stay unverified until each is separately authorized and exercised.
 
 ### Explicit Azure Monitor access grant
 
@@ -586,13 +652,13 @@ For a separate IAM approval, omit the deploy switch and use:
 ```powershell
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath <ABSOLUTE_PRIVATE_FOLDER>\sre-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -WhatIf
 
 # After approving that exact principal, role and subscription scope:
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath <ABSOLUTE_PRIVATE_FOLDER>\sre-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
 ```
 
@@ -620,9 +686,10 @@ modern v3 filters explicitly restore enabled three-hour cooldown and Review/Sev2
 Do not replay an old full export as a PUT payload: it is reference
 evidence, not a supported restore input. Optional repository authentication needs
 explicit reauthorization. Hibernate with the retained identity was proven live
-on 2026-11-04, but an in-place T09 repair proves neither a fresh bootstrap nor a
-wake: reactivation after Hibernate and a from-zero Deploy remain unproven until
-a separately authorized live run.
+on 2026-11-04 and again on 2026-11-05, together with a from-zero Deploy and a
+wake from the retained identity ([what that established](#live-lifecycle-proof-2026-11-05)).
+An in-place T09 repair proves none of these, and a proven wake does not certify a
+later instance: repeat the readiness checks after every wake.
 
 After AI-led combined activation/SRE reactivation completes, the SRE-owning
 assistant must [offer one optional T09 incident in conversation](ai-deploy-handbook.md#post-activation-incident-offer),
@@ -643,13 +710,14 @@ Use the same explicit subscription/tenant/skin as deployment:
 ```powershell
 .\scripts\Remove-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -WhatIf
-# Only after approving that exact preview, rerun without -WhatIf.
+# Only after approving that exact preview, rerun without -WhatIf (and with
+# -Confirm:$false in a non-interactive host: Remove is ConfirmImpact High).
 
 .\scripts\Test-SreReadiness.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath .\config\demo-skin.json -DesiredState Removed `
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Removed `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 ```
 
@@ -698,6 +766,48 @@ service reliability, a destructive lifecycle or a new incident. Preserve actual
 approval/executor evidence separately; never treat narration as approval, use
 unrestricted approval to bridge a missing capability, or delete the parent as a
 configuration-repair shortcut. Historical results do not certify today's instance.
+
+### Live lifecycle proof, 2026-11-05
+
+One live session that used only these docs ran a from-zero build, one T09
+incident, then Hibernate, wake and Hibernate again. It established the following
+and nothing beyond it.
+
+- **Build.** Deploy took 326 s and `Test-SreReadiness.ps1 -DesiredState Active`
+  passed 21 of 21 required checks.
+- **Hibernate** took 180 s the first time and 151 s the second. Each run ended with
+  `-DesiredState Hibernated` readiness passing (7 checks, including the 2 required
+  ones) using the saved principal. The first execute attempt without
+  `-Confirm:$false` stopped after 7 s with "NonInteractive mode" and changed
+  nothing: a non-interactive host must pass `-Confirm:$false` to Hibernate and Remove.
+- **Wake.** The `-WhatIf` preview took 90 s and showed the counts in
+  [what to expect](#what-to-expect-previews-and-durations). Deploy took 289 s and
+  Active readiness passed 21 of 21 required checks. No `-GrantAzureMonitorAlertAccess`
+  was given: the retained subscription-scope Monitoring Contributor grant alone
+  satisfied `azure-monitor-alert-access`.
+- **Identity.** The UAMI principal and all seven of its role-assignment IDs were
+  identical before, between and after the cycles, with no duplicates, so the
+  deterministic IDs held. The deployer's parent-scoped administrator assignment was
+  recreated with the new parent, and the parent's system principal changed.
+- **Survives Hibernate:** the SRE group, the UAMI, its seven grants (six workload,
+  one subscription-scope Monitoring Contributor), workspace Application Insights with
+  the first run's audit telemetry in the Arc workspace, the Smart Detection action
+  group, and the private exports and backups.
+- **Lost:** the parent, its handler and three response plans (the wake rebuilds them
+  from the versioned assets), every thread and message, memory notes and the approval
+  card history. A woken agent starts with no threads.
+- **First T09 run, with its caveat.** The alert fired 5.2 minutes after the fault
+  command finished, the agent's thread appeared 17 seconds later, and the Review card
+  was pending about 7 minutes after the fault. No Approve arrived before the agreed
+  20-minute deadline, so the operator fallback repaired the app. The Approve registered
+  about 21 minutes after the deadline, on the by-then stale card; the agent's own write
+  then ran under its managed identity as a no-op, and its RCA said a person had fixed
+  the app first. Alert, thread, card and executor each worked, but **a clean in-window
+  repair, approved before the deadline and executed by the agent without the fallback,
+  is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt agent
+  were not run.
+- **Not covered:** the destructive Removed convergence, and any instance other than
+  the one tested. Repeat the readiness checks after every wake.
 
 ## Appendix: dated rehearsal evidence
 

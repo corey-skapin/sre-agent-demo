@@ -46,7 +46,8 @@
 ## Activation and configuration
 
 - Activate/verify Arc first; use its owner's fresh readiness handoff.
-- Render `Initialize-SreConfiguration.ps1` locally, then authorize `-Inspect`.
+- Render `Initialize-SreConfiguration.ps1` locally: it is the preview on a fresh
+  parent. Authorize `-Inspect` only against an existing parent.
 - Approve the full preview before `-Apply -BackupPath <NEW_EXTERNAL_FILE>`.
 - Create with `Deploy-SreAgent.ps1 -ApproveParentCreation -ConfigurationBackupPath`
   or explicit `-ParentOnly`; existing parents refuse Deploy. Parent-only is not Active.
@@ -106,7 +107,8 @@
 
 - Obtain explicit hibernation authorization; never park a requested Active demo.
 - Export needed config/evidence outside git and save the live UAMI principal first.
-- Preview normal `Hibernate-SreAgent.ps1 -WhatIf`, then execute approved scope.
+- Preview normal `Hibernate-SreAgent.ps1 -WhatIf`, then execute approved scope;
+  non-interactive hosts need `-Confirm:$false` (ConfirmImpact High) to proceed.
 - Delete only the paid parent; retain dedicated group/UAMI, existing workload
   grants, workspace AppInsights and owned existing Action Group.
 - Do not revoke standing grants, delete the UAMI/group or create missing
