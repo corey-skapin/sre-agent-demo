@@ -16,6 +16,11 @@ from the approved inputs and setup readbacks in repo-root
 ```
 
 Open the returned `.local/presenter-runsheet.md` for the SRE presentation.
+The guide belongs to the checkout that generated it: `.local` is gitignored, the
+output path is fixed at `<checkout>\.local\presenter-runsheet.md`, and its link to
+the Arc guide is computed relative to that file. Generate it in the checkout the
+presenter will open, not in a temporary worktree that will be deleted, and
+regenerate it there after any move or copy (a copied guide has a broken Arc link).
 The generator is offline. It reads JSON and fills the tracked
 `docs/delivery-runsheet.md` source; plain Markdown does not interpolate JSON.
 Refresh after setup changes. Saved context timestamps describe the inputs,
@@ -26,7 +31,11 @@ the template's level-2 headings `This afternoon: verified existing investigation
 `Live faults` and steps 1 to 7 (step 7 exactly `7. Close`), so keep them when editing
 `docs/delivery-runsheet.md`; `tests/Test-PresenterRunsheet.ps1` checks this.
 
-Context schema version 1 requires these exact nonsecret fields:
+Context schema version 1 requires these exact nonsecret fields. Start from the
+fictional [`config/demo-context.example.json`](../config/demo-context.example.json):
+copy it to `.local/demo-context.json` and replace every value from the approved
+setup readbacks. The tracked presenter test renders that file, so its shape stays
+current.
 
 | Field | Saved setup source |
 | --- | --- |
@@ -34,8 +43,8 @@ Context schema version 1 requires these exact nonsecret fields:
 | `subscriptionId`, `tenantId` | Explicit approved target |
 | `recordedAtUtc` | UTC timestamp ending in `Z` for the saved context |
 | `resourceGroups` | Object with confirmed `arc`, `infra`, `sre` names |
-| `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment |
-| `applicationUrl` | Container App HTTPS endpoint |
+| `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment: the `Portal:` line `Deploy-SreAgent.ps1` prints. Save it then; it can also be rebuilt as `https://portal.azure.com/#view/Microsoft_Azure_PaasServerless/AgentFrameBlade.ReactView/id/` followed by the agent's ARM ID with each `/` written `%2F` |
+| `applicationUrl` | Container App HTTPS endpoint: `https://` plus `properties.configuration.ingress.fqdn` from `az containerapp show` |
 | `applicationInsightsResourceId` | SRE diagnostics component |
 | `logAnalyticsWorkspaceId` | Existing Arc workspace |
 | `containerAppResourceId`, `arcMachineResourceId` | Exact T09 app and T11 Arc machine |

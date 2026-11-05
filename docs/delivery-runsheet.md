@@ -14,6 +14,14 @@ and explain the same flow from the configured plan; do not send a chat message o
 create an incident to fill the gap. Regenerating this guide overwrites the local copy,
 so add the verified list last.
 
+A rebuilt or newly woken agent has no investigations: deleting the parent discards
+its threads, memory and history, so every list is empty until incidents are
+separately authorized. That is expected, not a failure. Open the agent once well
+before the audience arrives and before arming any fault, and let its welcome thread
+finish: the first visit to a fresh agent is not read-only. It starts a welcome thread
+that spends agent usage and runs beside any incident thread, which can then overwrite
+memory notes.
+
 ## Live faults
 
 Read this before Arc chapter 7. The AI runs every command here. The presenter says
