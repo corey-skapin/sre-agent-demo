@@ -26,6 +26,43 @@ card or customization step is required.
 
 The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
+## What you get
+
+These screenshots come from the first from-zero run of this layer on a demo estate
+(fictional Contoso names, identifiers masked). In that run an operator repaired the
+app before the agent's approved change landed, so the report says a person fixed it
+first: the images show what the agent presents, not a clean in-window repair
+([what the live proof established](docs/sre-response-plan-automation.md#live-lifecycle-proof-2026-11-05)).
+
+![Incidents view listing one resolved Sev2 Azure Monitor incident and its response plan](docs/images/sre-incidents.png)
+
+**Incidents.** The Azure Monitor alert arrives as an incident and the matching Review
+response plan picks it up.
+
+![Triggers and response plans tab listing three Review-mode plans](docs/images/sre-response-plans.png)
+
+**Triggers & response plans.** The three Review-mode plans this layer configures (SQL
+lock timeout, LOB app on Arc, Container App restarts), each routed from Azure Monitor
+at Sev2.
+
+![Incident thread showing the alert details and the agent's first read-only investigation steps](docs/images/sre-thread-investigation.png)
+
+**Investigation.** The agent starts from the alert and gathers read-only evidence
+(revisions, replicas, logs, activity) in the incident thread. Read the command, not the
+card title: these read-only commands carry titles such as "Scaling Azure resource".
+
+![Incident thread showing an Updating Azure resource card with the proposed command, completed after approval](docs/images/sre-thread-approval.png)
+
+**Proposed change, awaiting approval, then applied.** A change to Azure appears as an
+"Updating Azure resource" card with the exact command. In Review mode it runs only after
+a person approves, and the agent then verifies the result. This capture was taken after
+approval, so the card shows as completed.
+
+![Incident thread showing the agent's RCA report with timeline, cause, impact and current state](docs/images/sre-thread-rca.png)
+
+**RCA report.** The agent closes with a report: timeline, cause, impact, current state
+and evidence gaps.
+
 ## Repo layout
 
 ```text
@@ -36,6 +73,7 @@ infra/
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
 config/
   demo-skin.json             # fictional default skin (also dummy-customer.demo-skin.json); schema in demo-skin.schema.json
+  demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
 samples/
   lob-arc-app/               # Local T11 app; optional operator-supplied repository context
@@ -54,7 +92,7 @@ scripts/
   Invoke-T10ArcFault.ps1     # historical T10 experiment fault helper, kept for its ledger
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
-docs/                        # start at docs/README.md
+docs/                        # start at docs/README.md; images/ holds the README screenshots
 ```
 
 ## Prerequisites
