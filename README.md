@@ -154,6 +154,10 @@ $tokens = $null; $errors = $null
 $errors
 ```
 
+A passing test run ends with `ALL OFFLINE TEST SUITES PASSED` and exit code 0. The
+`WARNING` and `What if` lines above it are expected mock output; allow up to a
+minute (34 to 50 s measured).
+
 ## Deploy against an existing arc-demo environment
 
 ### Rebuild prerequisites

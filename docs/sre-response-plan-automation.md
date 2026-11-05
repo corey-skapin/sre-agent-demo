@@ -446,10 +446,11 @@ the optional rehearsal item does not affect the overall status.
 Worker warnings are captured before job remoting and included as optional
 `inspection-warnings` data, never printed ahead of the JSON document. They do not
 hide required failures or change a required check's outcome. A pending
-`inspection-warnings` row on its own, next to an overall `pass`, is advisory. A
-common cause is unrelated stderr from an installed Azure CLI extension, such as a
-Python `SyntaxWarning` from `monitor-control-service`; read the row's observed
-text before ignoring it.
+`inspection-warnings` row on its own, next to an overall `pass`, is advisory. The
+scripts drop the known harmless Python `SyntaxWarning` that an installed Azure CLI
+extension can print on every call (seen with `monitor-control-service`); other
+unrelated stderr, such as another extension's warning, still surfaces in that row,
+so read its observed text before ignoring it.
 
 ### What to expect: previews and durations
 
@@ -480,7 +481,7 @@ Measured live on 2026-11-05 (the first from-zero build): offline tests 48 s,
 configuration apply included), `Test-SreReadiness.ps1 -DesiredState Active` 73 to
 133 s, `New-LobArcAppMonitorAlert.ps1 -Action Create` 20 s,
 `Invoke-LobArcAppOnArc.ps1 -Action Deploy` about 3 minutes (the guest part took
-16 s) and `Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
+16 s; its result lists `GuestExitCode` and `GuestOutput` directly) and `Initialize-SreConfiguration.ps1 -Inspect` 11 s. Give each command at
 least 600 s. If a Deploy is interrupted after the parent exists, do not rerun it:
 Deploy refuses an existing parent, even in `-WhatIf`. Run
 `Initialize-SreConfiguration.ps1 -Inspect`, review it, then an approved

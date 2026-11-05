@@ -531,11 +531,15 @@ function Invoke-ArcRunCommand {
 
     $result = Invoke-AzCli -Arguments @('connectedmachine', 'run-command', 'show', '--name', $runCommandName, '--machine-name', $MachineName, '-g', $ArcResourceGroupName, '-o', 'json')
     $result = Assert-SreRunCommandResult -Result $result
+    $properties = if ($result.PSObject.Properties['properties']) { $result.properties } else { $result }
+    $view = $properties.instanceView
 
     [pscustomobject]@{
         Action = $Action
         MachineName = $MachineName
         RunCommandName = $runCommandName
+        GuestExitCode = $view.exitCode
+        GuestOutput = if ($view.PSObject.Properties['output']) { $view.output } else { $null }
         Result = $result
     }
 }
