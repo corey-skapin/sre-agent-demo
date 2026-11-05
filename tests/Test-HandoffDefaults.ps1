@@ -39,9 +39,8 @@ $manifest = Get-Content (Join-Path $root 'samples\lob-arc-app\source-context.exa
 Check ($manifest.repositoryUrl -eq '' -and $manifest.commit -eq '') 'Sample manifest requires operator-supplied external source context'
 $docsRoot = Join-Path $root 'docs'
 $instructions = Get-Content -LiteralPath (Join-Path $root 'AGENTS.md')
-Check ($instructions.Count -le 130) 'Assistant instructions stay within 130 lines'
-Check (($instructions -join "`n") -notmatch '\b20\d\d-\d\d-\d\d\b') 'Dated run diaries stay out of loaded assistant instructions'
-Check (($instructions -join "`n").Contains('docs/ai-deploy-handbook.md#post-activation-incident-offer')) 'Instructions preserve the canonical conversational offer'
+Check ($instructions.Count -le 100) 'AGENTS.md stays short (100 lines or fewer)'
+Check (($instructions -join "`n") -notmatch '\b20\d\d-\d\d-\d\d\b') 'Dated run diaries stay out of AGENTS.md'
 $docsIndex = Get-Content -LiteralPath (Join-Path $docsRoot 'README.md') -Raw
 foreach ($document in $files | Where-Object { $_.StartsWith('docs/') -and $_.EndsWith('.md') }) {
     $link = $document.Substring('docs/'.Length)
