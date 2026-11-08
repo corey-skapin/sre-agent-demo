@@ -18,7 +18,10 @@ Don't ask for approval again at each step.
   and evidence. Pass the skin as `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`.
   The tracked skins are fictional examples.
 - The Arc estate must be Active first. This repo never deploys, changes or
-  removes it.
+  removes it. By default the build also needs its Container App
+  (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
+  this repo's LOB scripts add; [Prerequisites](README.md#prerequisites) says how to
+  drop either.
 - Read [README.md](README.md), then the
   [setup path](docs/sre-response-plan-automation.md#setup-path-at-a-glance).
   [docs/README.md](docs/README.md) lists everything else.

@@ -95,8 +95,17 @@ docs/                        # start at docs/README.md; images/ holds the README
 
 ## Prerequisites
 
-1. Existing current `arc-demo` deployment; enable its optional Container App
-   workload when presenting T09.
+1. An existing, Active `arc-demo` deployment from the companion `arc-demo` repo. The
+   default skin sets `sre.requiredScenarios` to `["T09", "T11"]`, so it also needs
+   the Container App `ca-<NamePrefix>-fault` and its restart alert (the Arc estate
+   creates them when its skin sets `workloads.deployContainerApps` to `true`; the
+   default is off) and the LOB app and its alert (this repo's
+   `Invoke-LobArcAppOnArc.ps1` and `New-LobArcAppMonitorAlert.ps1`, which the Arc
+   build wrapper runs as step P8). Deploy stops at its Container App lookup if the
+   app is missing, and readiness fails without either alert. To build without one
+   scenario, list only the other in `sre.requiredScenarios` in your private skin
+   before the first build, for example `["T09"]`; see
+   [Rebuild prerequisites](#rebuild-prerequisites).
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
    ambient subscription selection. Sign in to that tenant yourself with
    `az login --tenant <TENANT_ID>`; no script runs it for you.
