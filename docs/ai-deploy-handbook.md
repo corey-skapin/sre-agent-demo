@@ -394,8 +394,10 @@ restore history lost when a parent is deleted.
 
 ## Runtime commands
 
+Sign in to your tenant yourself first with `az login --tenant <TENANT_ID>`. If an
+AI tool is driving, it asks you to do this and waits rather than running it.
+
 ```powershell
-az login --tenant <TENANT_ID>
 # Scripts pass --subscription on every request and never run az account set.
 # <PRIVATE_LAB_FOLDER>\sre-skin.json is your private skin (kept outside git).
 .\tests\Invoke-Tests.ps1

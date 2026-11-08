@@ -9,8 +9,9 @@ Don't ask for approval again at each step.
 
 - Confirm the tenant and subscription with the user once, at the start of the
   session. Pass them to every script (`-SubscriptionId`, `-TenantId`). Never take
-  them from the ambient `az` login, and never run `az login`, `az logout` or
-  `az account set` to switch accounts or subscriptions.
+  them from the ambient `az` login, and never run `az logout` or `az account set`.
+  If the CLI isn't signed in to that tenant, ask the user to run
+  `az login --tenant <TENANT_ID>` and wait; don't run it yourself.
 - Keep private values in one folder outside git, for example
   `<PRIVATE_LAB_FOLDER>`: the skin (a copy of `config\demo-skin.json` saved as
   `sre-skin.json`), the saved presenter context, configuration backups, exports

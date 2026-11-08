@@ -61,10 +61,11 @@ References used for this runbook: Azure SRE Agent overview, run modes, incident 
 
 ## 1. Deploy arc-demo with the Container App workload
 
+Sign in to your tenant yourself first with `az login --tenant <TENANT_ID>`. If an
+AI tool is driving, it asks you to do this and waits rather than running it.
+
 ```powershell
 # Run from the companion Arc checkout.
-
-az login --tenant <TENANT_ID>
 
 .\scripts\Deploy-ArcDemo.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `

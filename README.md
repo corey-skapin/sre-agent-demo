@@ -98,7 +98,8 @@ docs/                        # start at docs/README.md; images/ holds the README
 1. Existing current `arc-demo` deployment; enable its optional Container App
    workload when presenting T09.
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
-   ambient subscription selection.
+   ambient subscription selection. Sign in to that tenant yourself with
+   `az login --tenant <TENANT_ID>`; no script runs it for you.
 3. PowerShell 7.4+ (every script requires it), Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
 
