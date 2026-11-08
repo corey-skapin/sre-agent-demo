@@ -111,6 +111,14 @@ docs/                        # start at docs/README.md; images/ holds the README
    `az login --tenant <TENANT_ID>`; no script runs it for you.
 3. PowerShell 7.4+ (every script requires it), Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
+5. A subscription that can create an Azure SRE Agent in your region. The agent can be
+   created only in the
+   [supported regions](https://learn.microsoft.com/azure/sre-agent/supported-regions)
+   (Australia East, the default, is one). To see what your subscription can use, open
+   [sre.azure.com](https://sre.azure.com), choose **Create agent**, pick the
+   subscription and open the **Region** dropdown. An empty dropdown means the
+   subscription isn't registered for SRE Agent; the Learn page links the
+   registration request.
 
 Default arc-demo names discovered by the script:
 
@@ -202,7 +210,8 @@ On Windows, keep the CLI installation's bundled Python runtime: the shared
 wrapper uses native `python.exe -IBm azure.cli`, not a shell command string or
 an unrelated Python installation. It fails explicitly if that runtime is missing.
 SRE registration, region availability and your role-assignment rights are separate
-from these client prerequisites.
+from these client prerequisites; see items 4 and 5 under
+[Prerequisites](#prerequisites).
 
 Readiness isolates a missing, denied or malformed scenario resource/alert into
 its own failed check and still evaluates later handler, routing and IAM checks.

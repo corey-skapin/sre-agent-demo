@@ -22,6 +22,9 @@ Don't ask for approval again at each step.
   (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
   this repo's LOB scripts add; [Prerequisites](README.md#prerequisites) says how to
   drop either.
+- The user's subscription must be registered for Azure SRE Agent and offer the
+  agent's region (Australia East by default). Ask them to check;
+  [Prerequisites](README.md#prerequisites) has the steps.
 - Read [README.md](README.md), then the
   [setup path](docs/sre-response-plan-automation.md#setup-path-at-a-glance).
   [docs/README.md](docs/README.md) lists everything else.
