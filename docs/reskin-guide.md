@@ -62,6 +62,9 @@ Keep constant:
      -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
    ```
 
+   On a first build also add `-GrantAzureMonitorAlertAccess` to the Deploy command:
+   readiness fails without that grant, and Deploy refuses an existing parent.
+
 5. `-ParentOnly` instead of `-ConfigurationBackupPath` stops after the parent and
    is not Ready: render, inspect and apply the current-schema
    configuration using `sre-response-plan-automation.md`, with a new external

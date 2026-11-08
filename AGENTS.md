@@ -36,10 +36,13 @@ Run these from the repo root, each with the three inputs above.
 - **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
   -ApproveParentCreation -ConfigurationBackupPath <NEW_FILE_OUTSIDE_REPO.json>`.
   It creates the paid parent (4 AAUs per hour until you delete it), then applies
-  and checks the configuration (about 5.5 minutes). Add
-  `-GrantAzureMonitorAlertAccess` to create the one subscription Monitoring
-  Contributor grant the agent needs to read alerts, unless its identity already
-  has it.
+  and checks the configuration (about 5.5 minutes). On a first build also pass
+  `-GrantAzureMonitorAlertAccess`: it creates the one subscription Monitoring
+  Contributor grant the agent needs for Azure Monitor alerts, and readiness fails
+  without it. A wake doesn't need it: the retained identity keeps the grant. If the
+  parent already exists and the grant is missing, Deploy refuses an existing
+  parent, so run `Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId
+  <UAMI_PRINCIPAL_ID>` instead (`-WhatIf`, then `-GrantAzureMonitorAlertAccess`).
 - **Check:** `Test-SreReadiness.ps1 -DesiredState Active`. Every required check
   must pass. After parking or removing, use `Hibernated` or `Removed` with
   `-PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>`.

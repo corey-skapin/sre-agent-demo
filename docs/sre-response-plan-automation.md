@@ -652,19 +652,25 @@ the readiness check fails when AzMonitor is selected but its grant is missing.
 The caller needs permission to assign roles at the subscription. No account
 switch, Graph lookup, broad role reconciliation or permission bypass occurs.
 
-To grant it separately from Deploy, omit the deploy switch and use:
+To grant it separately from Deploy (Deploy can't once the parent exists), omit the
+deploy switch. Read the identity's principal ID first, then use it as
+`<UAMI_PRINCIPAL_ID>`:
 
 ```powershell
+az identity show --subscription <SUBSCRIPTION_ID> `
+  --resource-group rg-<PREFIX>-sre --name <AGENT_NAME>-uami `
+  --query principalId --output tsv --only-show-errors
+
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
-  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -WhatIf
+  -PrincipalId <UAMI_PRINCIPAL_ID> -WhatIf
 
 # After reading that exact principal, role and subscription scope:
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
-  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
+  -PrincipalId <UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
 ```
 
 WhatIf creates no local files and previews at most one assignment. An existing

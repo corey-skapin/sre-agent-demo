@@ -302,8 +302,10 @@ For Active:
    README prerequisites describe.
 3. Preview `Deploy-SreAgent.ps1 -WhatIf` and read the diff before changes.
    On a fresh parent the offline render is the configuration preview.
-4. Deploy with `-ApproveParentCreation` and a new external `-ConfigurationBackupPath`.
-   It creates the parent, then applies and verifies the handler and plans. Use
+4. Deploy with `-ApproveParentCreation` and a new external `-ConfigurationBackupPath`;
+   on a first build add `-GrantAzureMonitorAlertAccess` too, because readiness fails
+   without that grant and Deploy refuses an existing parent. It creates the parent,
+   then applies and verifies the handler and plans. Use
    `-ParentOnly` (deliberately not a claim that the demo is Ready) only to review
    the configuration preview first.
 5. For a running parent, or after `-ParentOnly`, render

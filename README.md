@@ -241,7 +241,9 @@ An existing parent is refused before IaC, including WhatIf: use configuration-on
 Inspect/Apply for handler and plan changes instead of overwriting live settings.
 The complete build creates the parent, then applies and read-back-verifies the
 handler and response plans. It needs `-ConfigurationBackupPath`: a **new** file in
-an existing directory outside the repository, kept as the reference export.
+an existing directory outside the repository, kept as the reference export. On a
+first build also pass `-GrantAzureMonitorAlertAccess` (explained after the
+command); Deploy can't add the grant to an existing parent.
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
@@ -256,11 +258,17 @@ The complete build took about 5.5 minutes live. If it is interrupted after the
 parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
 -Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 
-Add `-GrantAzureMonitorAlertAccess` to create the one subscription-level role grant
-the agent needs to read alerts (you need permission to assign roles there; see
-[How it consumes arc-demo](#how-it-consumes-arc-demo)); without that grant,
-required readiness fails on `azure-monitor-alert-access` unless the retained
-identity already holds it. `-ParentOnly` replaces `-ConfigurationBackupPath` to
+On a first build, add `-GrantAzureMonitorAlertAccess` to that command. It creates
+the one subscription-level Monitoring Contributor grant the agent needs for Azure
+Monitor alerts (you need permission to assign roles there; see
+[How it consumes arc-demo](#how-it-consumes-arc-demo)), and required readiness
+fails on `azure-monitor-alert-access` without it. A wake after parking doesn't need
+the switch: the retained identity keeps the grant. If the parent already exists and
+the grant is missing, Deploy refuses an existing parent, so run
+`Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId <UAMI_PRINCIPAL_ID>` instead:
+preview it with `-WhatIf`, then run it with `-GrantAzureMonitorAlertAccess` (the
+[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant)
+section has the commands). `-ParentOnly` replaces `-ConfigurationBackupPath` to
 stop after the control plane; that result is **not Ready**. Finish with
 `Test-SreReadiness.ps1 -DesiredState Active` (below).
 
