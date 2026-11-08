@@ -44,9 +44,10 @@ Run these from the repo root, each with the three inputs above.
   its grants are reused.
 - **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with
   `-Confirm:$false`.
-- **Incident:** follow [the T09 runbook](docs/t09-native-containerapp-closed-loop.md).
-  It breaks the demo Container App on purpose, waits for the alert and the
-  agent's proposed fix, then checks recovery.
+- **Incident:** follow
+  [Run one incident after setup](docs/ai-deploy-handbook.md#run-one-incident-after-setup-optional),
+  once Active readiness passes. It breaks the demo Container App on purpose,
+  waits for the alert and the agent's proposed fix, then checks recovery.
 - **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
   from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
   The Arc half is in the Arc repo (`docs/runsheet.md`).

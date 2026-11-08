@@ -7,6 +7,15 @@ portal, and the app recovers. Present from the generated
 Ask your AI tool to run it for you, or follow it yourself. Either way, you click
 **Approve** in the SRE portal (step 7).
 
+**Already built the SRE layer?** If you built with the Arc build wrapper and this
+repo's `Deploy-SreAgent.ps1` (with `-ConfigurationBackupPath`) and kept the default
+`T09` scenario, steps 1 to 4 below are already done: the build needed the Container
+App, created the agent, applied the Review plans and read them back, and step 3 is
+optional. Don't repeat steps 1 and 2: the Arc estate already has the app, and Deploy
+refuses an existing parent. Once `Test-SreReadiness.ps1 -DesiredState Active`
+passes, run step 1's "Capture the resource IDs" block for the variables the later
+steps use, then start at step 5.
+
 A 2026-10-20 retry showed the whole loop: a new Sev2 alert, an independent v3
 Review investigation, your approval of the exact `SIMULATE_CRASH=false` card, and
 the repair executed by the SRE managed identity (matching tool completion and Azure
