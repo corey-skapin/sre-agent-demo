@@ -304,10 +304,12 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 No companion Arc files or workloads are changed by this repo.
 
 Azure Monitor intake also requires exactly one subscription-scoped Monitoring
-Contributor assignment on the live UAMI. Opt in with
-`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess`, or preview and run the
-[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Without it, selected-AzMonitor readiness fails rather than silently granting access.
+Contributor assignment on the live UAMI, and a first build needs it.
+`-GrantAzureMonitorAlertAccess` is the switch that confirms you want
+`Deploy-SreAgent.ps1` to create that one role assignment; on an existing parent,
+preview and run the
+[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant)
+instead. Nothing creates it silently, so without it selected-AzMonitor readiness fails.
 IaC sets `incidentManagementConfiguration.type = AzMonitor`; the script supplies
 the role grant when you pass the switch. A portal connection click is **not a required
 rebuild step**. Readiness reports the ARM selection as `incident-platform`, not

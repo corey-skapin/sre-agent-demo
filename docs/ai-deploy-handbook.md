@@ -481,11 +481,12 @@ reconcile. The sole exception is one existing subscription
 Monitoring Contributor grant for the exact retained UAMI, including while the
 parent is absent or its incident platform is disconnected. It is a documented
 [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-Creation requires explicit `-GrantAzureMonitorAlertAccess`, either on Deploy or
-the [standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant);
+A first build needs that grant. `-GrantAzureMonitorAlertAccess`, on Deploy or on the
+[standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant),
+is the switch that confirms its creation;
 other scopes/roles/principals and duplicates are not exempt.
 Fresh/wake Bicep sets `incidentManagementConfiguration.type = AzMonitor`; the
-opt-in script supplies the scanner role. No routine portal connection
+grant script supplies the scanner role. No routine portal connection
 step is required. Read back the selection and grant separately. The existing
 `incident-platform` check reads ARM configuration, not scanner health: an
 unset/non-AzMonitor selection emits an advisory warning, not a new required gate.

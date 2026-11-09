@@ -533,7 +533,8 @@ outside the requested profile at the two workload groups, with one narrow
 exception: an existing subscription Monitoring Contributor grant on the exact
 retained UAMI, regardless of whether the parent exists or has a connected incident platform.
 This is the documented [Azure Monitor alert-management prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-It can be adopted or explicitly created with `-GrantAzureMonitorAlertAccess`.
+It is adopted when it already exists; a first build creates it with
+`-GrantAzureMonitorAlertAccess`.
 Other roles, scopes,
 principals or duplicate grants remain rejected. The same exact-grant tolerance
 applies before wake, so retained platform access does not block reconstruction
@@ -616,7 +617,7 @@ Fresh creation and wake already select `incidentManagementConfiguration.type:
 AzMonitor` in `infra\modules\sre-agent.bicep`, through the
 [supported parent ARM property](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 This is not a handler/filter configuration step or an optional data connector.
-The opt-in grant script supplies the other half: the exact subscription Monitoring
+The grant script supplies the other half: the exact subscription Monitoring
 Contributor assignment required by the
 [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
 The normal rebuild path is **IaC platform selection plus the scripted
@@ -649,12 +650,13 @@ connector as a prerequisite, or redeploy an existing parent to hide a warning. A
 selected platform with no observed alerts needs scanner-access, rule/firing and
 routing diagnosis, not a blind connection replay.
 
-The subscription grant is **opt-in**, not an incidental portal side effect.
-`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` ensures it after parent
-deployment and before handler configuration, using the newly returned UAMI
-principal. Without that switch deployment does not grant subscription access;
-the readiness check fails when AzMonitor is selected but its grant is missing.
-The caller needs permission to assign roles at the subscription. No account
+A first build needs the subscription grant, and it is not an incidental portal side
+effect. `-GrantAzureMonitorAlertAccess` is the confirm switch for that one
+subscription-scope role assignment: `Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess`
+ensures it after parent deployment and before handler configuration, using the newly
+returned UAMI principal. Without that switch deployment does not grant subscription
+access; the readiness check fails when AzMonitor is selected but its grant is
+missing. The caller needs permission to assign roles at the subscription. No account
 switch, Graph lookup, broad role reconciliation or permission bypass occurs.
 
 To grant it separately from Deploy (Deploy can't once the parent exists), omit the
