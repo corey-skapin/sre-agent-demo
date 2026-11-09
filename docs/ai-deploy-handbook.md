@@ -302,8 +302,11 @@ For Active:
    README prerequisites describe.
 3. Preview `Deploy-SreAgent.ps1 -WhatIf` and read the diff before changes.
    On a fresh parent the offline render is the configuration preview.
-4. Deploy with `-ApproveParentCreation` and a new external `-ConfigurationBackupPath`.
-   It creates the parent, then applies and verifies the handler and plans. Use
+4. Deploy with `-ApproveParentCreation`, `-GrantAzureMonitorAlertAccess` and a new
+   external `-ConfigurationBackupPath`. The grant switch confirms the one
+   subscription role assignment a first build needs: readiness fails without it, and
+   Deploy refuses an existing parent. A wake needs no change. Deploy creates the
+   parent, then applies and verifies the handler and plans. Use
    `-ParentOnly` (deliberately not a claim that the demo is Ready) only to review
    the configuration preview first.
 5. For a running parent, or after `-ParentOnly`, render
@@ -394,8 +397,10 @@ restore history lost when a parent is deleted.
 
 ## Runtime commands
 
+Sign in to your tenant yourself first with `az login --tenant <TENANT_ID>`. If an
+AI tool is driving, it asks you to do this and waits rather than running it.
+
 ```powershell
-az login --tenant <TENANT_ID>
 # Scripts pass --subscription on every request and never run az account set.
 # <PRIVATE_LAB_FOLDER>\sre-skin.json is your private skin (kept outside git).
 .\tests\Invoke-Tests.ps1
@@ -405,9 +410,12 @@ az bicep build --file .\infra\main.bicep --stdout
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
+# -GrantAzureMonitorAlertAccess confirms the one subscription role assignment a
+# first build needs. A wake needs no change: an existing grant is left alone.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 # The steps below are the manual route: -ParentOnly (not Ready) and then
@@ -415,7 +423,8 @@ az bicep build --file .\infra\main.bicep --stdout
 # running parent, which Deploy refuses.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
@@ -472,11 +481,12 @@ reconcile. The sole exception is one existing subscription
 Monitoring Contributor grant for the exact retained UAMI, including while the
 parent is absent or its incident platform is disconnected. It is a documented
 [platform prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-Creation requires explicit `-GrantAzureMonitorAlertAccess`, either on Deploy or
-the [standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant);
+A first build needs that grant. `-GrantAzureMonitorAlertAccess`, on Deploy or on the
+[standalone grant script](sre-response-plan-automation.md#explicit-azure-monitor-access-grant),
+is the switch that confirms its creation;
 other scopes/roles/principals and duplicates are not exempt.
 Fresh/wake Bicep sets `incidentManagementConfiguration.type = AzMonitor`; the
-opt-in script supplies the scanner role. No routine portal connection
+grant script supplies the scanner role. No routine portal connection
 step is required. Read back the selection and grant separately. The existing
 `incident-platform` check reads ARM configuration, not scanner health: an
 unset/non-AzMonitor selection emits an advisory warning, not a new required gate.

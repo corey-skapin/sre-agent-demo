@@ -59,8 +59,13 @@ Keep constant:
      -TenantId <TENANT_ID> `
      -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
      -ApproveParentCreation `
+     -GrantAzureMonitorAlertAccess `
      -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
    ```
+
+   `-GrantAzureMonitorAlertAccess` confirms the one subscription role assignment a
+   first build needs: readiness fails without it, and Deploy refuses an existing
+   parent. A wake needs no change: an existing grant is left alone.
 
 5. `-ParentOnly` instead of `-ConfigurationBackupPath` stops after the parent and
    is not Ready: render, inspect and apply the current-schema

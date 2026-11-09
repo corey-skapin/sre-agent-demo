@@ -95,12 +95,35 @@ docs/                        # start at docs/README.md; images/ holds the README
 
 ## Prerequisites
 
-1. Existing current `arc-demo` deployment; enable its optional Container App
-   workload when presenting T09.
+1. An existing, Active `arc-demo` deployment from the companion `arc-demo` repo. The
+   default skin sets `sre.requiredScenarios` to `["T09", "T11"]`, so it also needs
+   the Container App `ca-<NamePrefix>-fault` and its restart alert (the Arc estate
+   creates them when its skin sets `workloads.deployContainerApps` to `true`; the
+   default is off) and the LOB app and its alert (this repo's
+   `Invoke-LobArcAppOnArc.ps1` and `New-LobArcAppMonitorAlert.ps1`, which the Arc
+   build wrapper runs as step P8). Deploy stops at its Container App lookup if the
+   app is missing, and readiness fails without either alert. To build without one
+   scenario, list only the other in `sre.requiredScenarios` in your private skin
+   before the first build, for example `["T09"]`; see
+   [Rebuild prerequisites](#rebuild-prerequisites).
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
-   ambient subscription selection.
-3. PowerShell 7.4+ (every script requires it), Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
+   ambient subscription selection. Sign in to that tenant yourself with
+   `az login --tenant <TENANT_ID>`; no script runs it for you.
+3. PowerShell 7.4+ (every script requires it, so run them with `pwsh`, not Windows
+   PowerShell), Azure CLI 2.60+, the Bicep CLI (`az bicep install`) and the
+   `containerapp` and `connectedmachine` CLI extensions
+   (`az extension add --name containerapp`, then the same for `connectedmachine`).
+   The scripts don't install or check them, so a missing extension shows up as an
+   Azure CLI "not a valid command" error.
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
+5. A subscription that can create an Azure SRE Agent in your region. The agent can be
+   created only in the
+   [supported regions](https://learn.microsoft.com/azure/sre-agent/supported-regions)
+   (Australia East, the default, is one). To see what your subscription can use, open
+   [sre.azure.com](https://sre.azure.com), choose **Create agent**, pick the
+   subscription and open the **Region** dropdown. An empty dropdown means the
+   subscription isn't registered for SRE Agent; the Learn page links the
+   registration request.
 
 Default arc-demo names discovered by the script:
 
@@ -192,7 +215,8 @@ On Windows, keep the CLI installation's bundled Python runtime: the shared
 wrapper uses native `python.exe -IBm azure.cli`, not a shell command string or
 an unrelated Python installation. It fails explicitly if that runtime is missing.
 SRE registration, region availability and your role-assignment rights are separate
-from these client prerequisites.
+from these client prerequisites; see items 4 and 5 under
+[Prerequisites](#prerequisites).
 
 Readiness isolates a missing, denied or malformed scenario resource/alert into
 its own failed check and still evaluates later handler, routing and IAM checks.
@@ -222,7 +246,9 @@ An existing parent is refused before IaC, including WhatIf: use configuration-on
 Inspect/Apply for handler and plan changes instead of overwriting live settings.
 The complete build creates the parent, then applies and read-back-verifies the
 handler and response plans. It needs `-ConfigurationBackupPath`: a **new** file in
-an existing directory outside the repository, kept as the reference export.
+an existing directory outside the repository, kept as the reference export. The
+command includes `-GrantAzureMonitorAlertAccess`, which a first build needs
+(explained after the command).
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
@@ -230,6 +256,7 @@ an existing directory outside the repository, kept as the reference export.
   -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
 
@@ -237,11 +264,17 @@ The complete build took about 5.5 minutes live. If it is interrupted after the
 parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
 -Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 
-Add `-GrantAzureMonitorAlertAccess` to create the one subscription-level role grant
-the agent needs to read alerts (you need permission to assign roles there; see
-[How it consumes arc-demo](#how-it-consumes-arc-demo)); without that grant,
-required readiness fails on `azure-monitor-alert-access` unless the retained
-identity already holds it. `-ParentOnly` replaces `-ConfigurationBackupPath` to
+`-GrantAzureMonitorAlertAccess` creates the one subscription-level Monitoring
+Contributor grant the agent needs for Azure Monitor alerts (you need permission to
+assign roles there; see [How it consumes arc-demo](#how-it-consumes-arc-demo)), and
+required readiness fails on `azure-monitor-alert-access` without it. A wake after
+parking needs no change to the command: the retained identity keeps the grant, so
+the switch finds it and changes nothing. If the parent already exists and the grant
+is missing, Deploy refuses an existing parent, so run
+`Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId <UAMI_PRINCIPAL_ID>` instead:
+preview it with `-WhatIf`, then run it with `-GrantAzureMonitorAlertAccess` (the
+[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant)
+section has the commands). `-ParentOnly` replaces `-ConfigurationBackupPath` to
 stop after the control plane; that result is **not Ready**. Finish with
 `Test-SreReadiness.ps1 -DesiredState Active` (below).
 
@@ -256,6 +289,7 @@ configuration step ([reskin guide](docs/reskin-guide.md)):
   -TenantId <TENANT_ID> `
   -ParentOnly `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ArcResourceGroupName rg-my-arc `
   -InfraResourceGroupName rg-my-arc-infra `
   -LogAnalyticsWorkspaceId /subscriptions/.../providers/Microsoft.OperationalInsights/workspaces/law-my-arc `
@@ -270,10 +304,12 @@ This layer reads the existing arc-demo resource group IDs, Log Analytics workspa
 No companion Arc files or workloads are changed by this repo.
 
 Azure Monitor intake also requires exactly one subscription-scoped Monitoring
-Contributor assignment on the live UAMI. Opt in with
-`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess`, or preview and run the
-[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant).
-Without it, selected-AzMonitor readiness fails rather than silently granting access.
+Contributor assignment on the live UAMI, and a first build needs it.
+`-GrantAzureMonitorAlertAccess` is the switch that confirms you want
+`Deploy-SreAgent.ps1` to create that one role assignment; on an existing parent,
+preview and run the
+[standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant)
+instead. Nothing creates it silently, so without it selected-AzMonitor readiness fails.
 IaC sets `incidentManagementConfiguration.type = AzMonitor`; the script supplies
 the role grant when you pass the switch. A portal connection click is **not a required
 rebuild step**. Readiness reports the ARM selection as `incident-platform`, not

@@ -7,6 +7,14 @@ portal, and the app recovers. Present from the generated
 Ask your AI tool to run it for you, or follow it yourself. Either way, you click
 **Approve** in the SRE portal (step 7).
 
+**Already built the SRE layer?** If you built with the Arc build wrapper and this
+repo's `Deploy-SreAgent.ps1` (with `-ConfigurationBackupPath`) and kept the default
+`T09` scenario, steps 1 to 4 below are already done: the build needed the Container
+App, created the agent, applied the Review plans and read them back, and step 3 is
+optional. Don't repeat steps 1 and 2: the Arc estate already has the app, and Deploy
+refuses an existing parent. Once `Test-SreReadiness.ps1 -DesiredState Active`
+passes, start at step 5, which defines the variables the later steps use.
+
 A 2026-10-20 retry showed the whole loop: a new Sev2 alert, an independent v3
 Review investigation, your approval of the exact `SIMULATE_CRASH=false` card, and
 the repair executed by the SRE managed identity (matching tool completion and Azure
@@ -23,11 +31,16 @@ Connecting a source-code repository is optional and was not captured.
 
 1. Deploy `arc-demo` with `-DeployContainerApps $true`.
 2. Deploy this SRE Agent layer against the existing `arc-demo` resources.
-3. Enable `SIMULATE_CRASH=true` on the Container App.
-4. Let the Azure Monitor `RestartCount` alert fire.
-5. Let Azure SRE Agent investigate and produce an RCA.
-6. Approve the proposed Review-mode Azure fix.
-7. Verify recovery and show the audit trail.
+3. Optionally connect your own code repository for RCA context.
+4. Check the Review-mode response plan.
+5. Induce the fault: enable `SIMULATE_CRASH=true` on the Container App.
+6. Observe the investigation: the Azure Monitor `RestartCount` alert fires and Azure
+   SRE Agent investigates and produces an RCA.
+7. Approve the proposed Review-mode Azure fix.
+8. Verify recovery.
+9. Show the audit trail.
+
+The numbers match the numbered steps below.
 
 ## Resource map
 
@@ -61,10 +74,11 @@ References used for this runbook: Azure SRE Agent overview, run modes, incident 
 
 ## 1. Deploy arc-demo with the Container App workload
 
+Sign in to your tenant yourself first with `az login --tenant <TENANT_ID>`. If an
+AI tool is driving, it asks you to do this and waits rather than running it.
+
 ```powershell
 # Run from the companion Arc checkout.
-
-az login --tenant <TENANT_ID>
 
 .\scripts\Deploy-ArcDemo.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> `
@@ -110,11 +124,12 @@ $containerAlertId = az monitor metrics alert show `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ParentOnly `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
 
-`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions need your approval. `-ParentOnly` means this deploy doesn't complete the data-plane setup below; `-ApproveParentCreation` confirms you want to start the paid AAU meter. For a demo that is already running, don't redeploy: run readiness and check the existing configuration first.
+`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions need your approval. `-ParentOnly` means this deploy doesn't complete the data-plane setup below; `-ApproveParentCreation` confirms you want to start the paid AAU meter; `-GrantAzureMonitorAlertAccess` confirms the one subscription role assignment the agent needs to read Azure Monitor alerts, and readiness fails without it. For a demo that is already running, don't redeploy: run readiness and check the existing configuration first.
 
 ## 3. Connect code context (optional)
 
@@ -166,10 +181,20 @@ is optional, not the only automation path.
 
 ## 5. Induce the fault
 
-Use the helper script to create a new crashing revision:
+Define the variables that steps 5 to 9 use, then use the helper script to create a
+new crashing revision. If your shell doesn't keep variables between commands,
+define them again before each later block.
 
 ```powershell
 # Run from the SRE checkout.
+$subscriptionId = '<SUBSCRIPTION_ID>'
+$tenantId = '<TENANT_ID>'
+$containerAppId = az containerapp show `
+  --subscription $subscriptionId `
+  --resource-group rg-arc-demo-infra `
+  --name ca-arc-demo-fault `
+  --query id `
+  --output tsv
 
 .\scripts\Invoke-NativeContainerAppFault.ps1 `
   -SubscriptionId $subscriptionId `

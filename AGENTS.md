@@ -9,30 +9,45 @@ Don't ask for approval again at each step.
 
 - Confirm the tenant and subscription with the user once, at the start of the
   session. Pass them to every script (`-SubscriptionId`, `-TenantId`). Never take
-  them from the ambient `az` login, and never run `az login`, `az logout` or
-  `az account set` to switch accounts or subscriptions.
+  them from the ambient `az` login, and never run `az logout` or `az account set`.
+  If the CLI isn't signed in to that tenant, ask the user to run
+  `az login --tenant <TENANT_ID>` and wait; don't run it yourself.
 - Keep private values in one folder outside git, for example
   `<PRIVATE_LAB_FOLDER>`: the skin (a copy of `config\demo-skin.json` saved as
   `sre-skin.json`), the saved presenter context, configuration backups, exports
   and evidence. Pass the skin as `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`.
   The tracked skins are fictional examples.
+- Use `pwsh` (PowerShell 7.4+; Windows PowerShell can't run the scripts), Azure CLI
+  2.60+ with Bicep (`az bicep install`), and the `containerapp` and
+  `connectedmachine` extensions (`az extension add --name containerapp`, then the
+  same for `connectedmachine`). The scripts don't install any of it.
 - The Arc estate must be Active first. This repo never deploys, changes or
-  removes it.
+  removes it. By default the build also needs its Container App
+  (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
+  this repo's LOB scripts add; [Prerequisites](README.md#prerequisites) says how to
+  drop either.
+- The user's subscription must be registered for Azure SRE Agent and offer the
+  agent's region (Australia East by default). Ask them to check;
+  [Prerequisites](README.md#prerequisites) has the steps.
 - Read [README.md](README.md), then the
   [setup path](docs/sre-response-plan-automation.md#setup-path-at-a-glance).
   [docs/README.md](docs/README.md) lists everything else.
 
 ## Commands
 
-Run these from the repo root, each with the three inputs above.
+Run these from the repo root. The scripts are in `scripts\`: run `NAME.ps1` as
+`.\scripts\NAME.ps1`, each with the three inputs above.
 
 - **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
-  -ApproveParentCreation -ConfigurationBackupPath <NEW_FILE_OUTSIDE_REPO.json>`.
-  It creates the paid parent (4 AAUs per hour until you delete it), then applies
-  and checks the configuration (about 5.5 minutes). Add
-  `-GrantAzureMonitorAlertAccess` to create the one subscription Monitoring
-  Contributor grant the agent needs to read alerts, unless its identity already
-  has it.
+  -ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath
+  <NEW_FILE_OUTSIDE_REPO.json>`. It creates the paid parent (4 AAUs per hour until
+  you delete it), then applies and checks the configuration (about 5.5 minutes).
+  The grant switch creates the one subscription Monitoring Contributor grant the
+  agent needs for Azure Monitor alerts, and readiness fails without it. A wake
+  needs no change: the switch finds the retained grant and changes nothing. If the
+  parent already exists and the grant is missing, Deploy refuses an existing
+  parent, so run `Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId
+  <UAMI_PRINCIPAL_ID>` instead (`-WhatIf`, then `-GrantAzureMonitorAlertAccess`).
 - **Check:** `Test-SreReadiness.ps1 -DesiredState Active`. Every required check
   must pass. After parking or removing, use `Hibernated` or `Removed` with
   `-PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>`.
@@ -43,9 +58,10 @@ Run these from the repo root, each with the three inputs above.
   its grants are reused.
 - **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with
   `-Confirm:$false`.
-- **Incident:** follow [the T09 runbook](docs/t09-native-containerapp-closed-loop.md).
-  It breaks the demo Container App on purpose, waits for the alert and the
-  agent's proposed fix, then checks recovery.
+- **Incident:** follow
+  [Run one incident after setup](docs/ai-deploy-handbook.md#run-one-incident-after-setup-optional),
+  once Active readiness passes. It breaks the demo Container App on purpose,
+  waits for the alert and the agent's proposed fix, then checks recovery.
 - **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
   from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
   The Arc half is in the Arc repo (`docs/runsheet.md`).

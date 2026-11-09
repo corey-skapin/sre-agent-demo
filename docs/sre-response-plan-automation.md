@@ -35,7 +35,7 @@ the section holding its commands and rules.
 
 | Step | Do this | Details |
 | --- | --- | --- |
-| Build | Read the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. Add `-GrantAzureMonitorAlertAccess` to create the one required subscription grant, unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
+| Build | Read the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. The grant switch creates the one required subscription grant on a first build and leaves an existing one alone on a wake | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
 | Verify | `Test-SreReadiness.ps1 ... -DesiredState Active`; every required check must pass | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle) |
 | Present | Generate `.local/presenter-runsheet.md` ([handbook](ai-deploy-handbook.md#your-presenter-guide)). Before a fresh live fault run `Invoke-SreDemoRoute.ps1 -Scenario <SQL\|LOB\|ContainerApp> -Action Prepare`, afterwards `-Action Restore` | [Reset between demo runs](#reset-between-demo-runs) |
 | Park | `Hibernate-SreAgent.ps1 ... -WhatIf`, then run it, then `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Hibernation and later reactivation](#hibernation-and-later-reactivation) |
@@ -379,8 +379,13 @@ For a new/rebuilt layer, complete deployment can chain parent plus configuration
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 ```
+
+`-GrantAzureMonitorAlertAccess` confirms the one subscription role assignment a first
+build needs. A wake needs no change: an existing exact grant is found and left alone
+([details](#explicit-azure-monitor-access-grant)).
 
 Use `-ParentOnly` explicitly if only the parent is intended. It is not Ready.
 Do not redeploy the running parent merely to repair modern plans: inspect/apply
@@ -528,7 +533,8 @@ outside the requested profile at the two workload groups, with one narrow
 exception: an existing subscription Monitoring Contributor grant on the exact
 retained UAMI, regardless of whether the parent exists or has a connected incident platform.
 This is the documented [Azure Monitor alert-management prerequisite](https://learn.microsoft.com/azure/sre-agent/permissions).
-It can be adopted or explicitly created with `-GrantAzureMonitorAlertAccess`.
+It is adopted when it already exists; a first build creates it with
+`-GrantAzureMonitorAlertAccess`.
 Other roles, scopes,
 principals or duplicate grants remain rejected. The same exact-grant tolerance
 applies before wake, so retained platform access does not block reconstruction
@@ -611,7 +617,7 @@ Fresh creation and wake already select `incidentManagementConfiguration.type:
 AzMonitor` in `infra\modules\sre-agent.bicep`, through the
 [supported parent ARM property](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 This is not a handler/filter configuration step or an optional data connector.
-The opt-in grant script supplies the other half: the exact subscription Monitoring
+The grant script supplies the other half: the exact subscription Monitoring
 Contributor assignment required by the
 [Azure Monitor scanner guide](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
 The normal rebuild path is **IaC platform selection plus the scripted
@@ -644,27 +650,34 @@ connector as a prerequisite, or redeploy an existing parent to hide a warning. A
 selected platform with no observed alerts needs scanner-access, rule/firing and
 routing diagnosis, not a blind connection replay.
 
-The subscription grant is **opt-in**, not an incidental portal side effect.
-`Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess` ensures it after parent
-deployment and before handler configuration, using the newly returned UAMI
-principal. Without that switch deployment does not grant subscription access;
-the readiness check fails when AzMonitor is selected but its grant is missing.
-The caller needs permission to assign roles at the subscription. No account
+A first build needs the subscription grant, and it is not an incidental portal side
+effect. `-GrantAzureMonitorAlertAccess` is the confirm switch for that one
+subscription-scope role assignment: `Deploy-SreAgent.ps1 -GrantAzureMonitorAlertAccess`
+ensures it after parent deployment and before handler configuration, using the newly
+returned UAMI principal. Without that switch deployment does not grant subscription
+access; the readiness check fails when AzMonitor is selected but its grant is
+missing. The caller needs permission to assign roles at the subscription. No account
 switch, Graph lookup, broad role reconciliation or permission bypass occurs.
 
-To grant it separately from Deploy, omit the deploy switch and use:
+To grant it separately from Deploy (Deploy can't once the parent exists), omit the
+deploy switch. Read the identity's principal ID first, then use it as
+`<UAMI_PRINCIPAL_ID>`:
 
 ```powershell
+az identity show --subscription <SUBSCRIPTION_ID> `
+  --resource-group rg-<PREFIX>-sre --name <AGENT_NAME>-uami `
+  --query principalId --output tsv --only-show-errors
+
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
-  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -WhatIf
+  -PrincipalId <UAMI_PRINCIPAL_ID> -WhatIf
 
 # After reading that exact principal, role and subscription scope:
 .\scripts\Grant-SreAzureMonitorAlertAccess.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
-  -PrincipalId <NEW_UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
+  -PrincipalId <UAMI_PRINCIPAL_ID> -GrantAzureMonitorAlertAccess
 ```
 
 WhatIf creates no local files and previews at most one assignment. An existing
@@ -803,8 +816,10 @@ and nothing beyond it.
   repair, approved before the deadline and executed by the agent without the manual
   reset, is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt
   agent were not run.
-- **Not covered:** the destructive Removed convergence, and any instance other than
-  the one tested. Repeat the readiness checks after every wake.
+- **Not covered:** the destructive Removed convergence, a wake that passes
+  `-GrantAzureMonitorAlertAccess` (the offline tests show an existing exact grant is
+  found and left alone), and any instance other than the one tested. Repeat the
+  readiness checks after every wake.
 
 ### Earlier SQL and LOB rehearsals
 
