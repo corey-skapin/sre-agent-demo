@@ -120,11 +120,12 @@ $containerAlertId = az monitor metrics alert show `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ParentOnly `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -AccessLevel High `
   -AdditionalManagedResourceIds @($containerAppId, $containerAlertId)
 ```
 
-`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions need your approval. `-ParentOnly` means this deploy doesn't complete the data-plane setup below; `-ApproveParentCreation` confirms you want to start the paid AAU meter. For a demo that is already running, don't redeploy: run readiness and check the existing configuration first.
+`High` access assigns Contributor to the agent identity on the existing `arc-demo` resource groups. The agent still runs in Review mode, so write actions need your approval. `-ParentOnly` means this deploy doesn't complete the data-plane setup below; `-ApproveParentCreation` confirms you want to start the paid AAU meter; `-GrantAzureMonitorAlertAccess` confirms the one subscription role assignment the agent needs to read Azure Monitor alerts, and readiness fails without it. For a demo that is already running, don't redeploy: run readiness and check the existing configuration first.
 
 ## 3. Connect code context (optional)
 

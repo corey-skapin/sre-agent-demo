@@ -35,7 +35,7 @@ the section holding its commands and rules.
 
 | Step | Do this | Details |
 | --- | --- | --- |
-| Build | Read the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. Add `-GrantAzureMonitorAlertAccess` to create the one required subscription grant, unless the retained identity already holds it | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
+| Build | Read the offline render first: on a fresh parent it is the exact handler and plan set Deploy applies, while `-Inspect` needs an existing parent. Then `Deploy-SreAgent.ps1 ... -WhatIf`, then the same command with `-ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>`, which applies the configuration straight after creating the parent. The grant switch creates the one required subscription grant on a first build and leaves an existing one alone on a wake | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle); expected previews and durations in [what to expect](#what-to-expect-previews-and-durations) |
 | Verify | `Test-SreReadiness.ps1 ... -DesiredState Active`; every required check must pass | [Deployment, readiness and lifecycle](#deployment-readiness-and-lifecycle) |
 | Present | Generate `.local/presenter-runsheet.md` ([handbook](ai-deploy-handbook.md#your-presenter-guide)). Before a fresh live fault run `Invoke-SreDemoRoute.ps1 -Scenario <SQL\|LOB\|ContainerApp> -Action Prepare`, afterwards `-Action Restore` | [Reset between demo runs](#reset-between-demo-runs) |
 | Park | `Hibernate-SreAgent.ps1 ... -WhatIf`, then run it, then `Test-SreReadiness.ps1 -DesiredState Hibernated -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>` | [Hibernation and later reactivation](#hibernation-and-later-reactivation) |
@@ -379,8 +379,13 @@ For a new/rebuilt layer, complete deployment can chain parent plus configuration
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 ```
+
+`-GrantAzureMonitorAlertAccess` confirms the one subscription role assignment a first
+build needs. A wake needs no change: an existing exact grant is found and left alone
+([details](#explicit-azure-monitor-access-grant)).
 
 Use `-ParentOnly` explicitly if only the parent is intended. It is not Ready.
 Do not redeploy the running parent merely to repair modern plans: inspect/apply
@@ -809,8 +814,10 @@ and nothing beyond it.
   repair, approved before the deadline and executed by the agent without the manual
   reset, is still unproven on a rebuilt agent.** SQL and LOB incidents on the rebuilt
   agent were not run.
-- **Not covered:** the destructive Removed convergence, and any instance other than
-  the one tested. Repeat the readiness checks after every wake.
+- **Not covered:** the destructive Removed convergence, a wake that passes
+  `-GrantAzureMonitorAlertAccess` (the offline tests show an existing exact grant is
+  found and left alone), and any instance other than the one tested. Repeat the
+  readiness checks after every wake.
 
 ### Earlier SQL and LOB rehearsals
 

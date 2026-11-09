@@ -302,10 +302,11 @@ For Active:
    README prerequisites describe.
 3. Preview `Deploy-SreAgent.ps1 -WhatIf` and read the diff before changes.
    On a fresh parent the offline render is the configuration preview.
-4. Deploy with `-ApproveParentCreation` and a new external `-ConfigurationBackupPath`;
-   on a first build add `-GrantAzureMonitorAlertAccess` too, because readiness fails
-   without that grant and Deploy refuses an existing parent. It creates the parent,
-   then applies and verifies the handler and plans. Use
+4. Deploy with `-ApproveParentCreation`, `-GrantAzureMonitorAlertAccess` and a new
+   external `-ConfigurationBackupPath`. The grant switch confirms the one
+   subscription role assignment a first build needs: readiness fails without it, and
+   Deploy refuses an existing parent. A wake needs no change. Deploy creates the
+   parent, then applies and verifies the handler and plans. Use
    `-ParentOnly` (deliberately not a claim that the demo is Ready) only to review
    the configuration preview first.
 5. For a running parent, or after `-ParentOnly`, render
@@ -409,9 +410,12 @@ az bicep build --file .\infra\main.bicep --stdout
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -WhatIf
 
+# -GrantAzureMonitorAlertAccess confirms the one subscription role assignment a
+# first build needs. A wake needs no change: an existing grant is left alone.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_ABSOLUTE_PATH_OUTSIDE_REPO.json>
 
 # The steps below are the manual route: -ParentOnly (not Ready) and then
@@ -419,7 +423,8 @@ az bicep build --file .\infra\main.bicep --stdout
 # running parent, which Deploy refuses.
 .\scripts\Deploy-SreAgent.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `
-  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation
+  -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -ParentOnly -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess
 
 .\scripts\Initialize-SreConfiguration.ps1 `
   -SubscriptionId <SUBSCRIPTION_ID> -TenantId <TENANT_ID> `

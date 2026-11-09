@@ -241,9 +241,9 @@ An existing parent is refused before IaC, including WhatIf: use configuration-on
 Inspect/Apply for handler and plan changes instead of overwriting live settings.
 The complete build creates the parent, then applies and read-back-verifies the
 handler and response plans. It needs `-ConfigurationBackupPath`: a **new** file in
-an existing directory outside the repository, kept as the reference export. On a
-first build also pass `-GrantAzureMonitorAlertAccess` (explained after the
-command); Deploy can't add the grant to an existing parent.
+an existing directory outside the repository, kept as the reference export. The
+command includes `-GrantAzureMonitorAlertAccess`, which a first build needs
+(explained after the command).
 
 ```powershell
 .\scripts\Deploy-SreAgent.ps1 `
@@ -251,6 +251,7 @@ command); Deploy can't add the grant to an existing parent.
   -TenantId <TENANT_ID> `
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
 
@@ -258,13 +259,13 @@ The complete build took about 5.5 minutes live. If it is interrupted after the
 parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
 -Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 
-On a first build, add `-GrantAzureMonitorAlertAccess` to that command. It creates
-the one subscription-level Monitoring Contributor grant the agent needs for Azure
-Monitor alerts (you need permission to assign roles there; see
-[How it consumes arc-demo](#how-it-consumes-arc-demo)), and required readiness
-fails on `azure-monitor-alert-access` without it. A wake after parking doesn't need
-the switch: the retained identity keeps the grant. If the parent already exists and
-the grant is missing, Deploy refuses an existing parent, so run
+`-GrantAzureMonitorAlertAccess` creates the one subscription-level Monitoring
+Contributor grant the agent needs for Azure Monitor alerts (you need permission to
+assign roles there; see [How it consumes arc-demo](#how-it-consumes-arc-demo)), and
+required readiness fails on `azure-monitor-alert-access` without it. A wake after
+parking needs no change to the command: the retained identity keeps the grant, so
+the switch finds it and changes nothing. If the parent already exists and the grant
+is missing, Deploy refuses an existing parent, so run
 `Grant-SreAzureMonitorAlertAccess.ps1 -PrincipalId <UAMI_PRINCIPAL_ID>` instead:
 preview it with `-WhatIf`, then run it with `-GrantAzureMonitorAlertAccess` (the
 [standalone grant](docs/sre-response-plan-automation.md#explicit-azure-monitor-access-grant)
@@ -283,6 +284,7 @@ configuration step ([reskin guide](docs/reskin-guide.md)):
   -TenantId <TENANT_ID> `
   -ParentOnly `
   -ApproveParentCreation `
+  -GrantAzureMonitorAlertAccess `
   -ArcResourceGroupName rg-my-arc `
   -InfraResourceGroupName rg-my-arc-infra `
   -LogAnalyticsWorkspaceId /subscriptions/.../providers/Microsoft.OperationalInsights/workspaces/law-my-arc `
