@@ -26,17 +26,20 @@ Don't ask for approval again at each step.
   (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
   this repo's LOB scripts add; [Prerequisites](README.md#prerequisites) says how to
   drop either.
-- The user's subscription must be registered for Azure SRE Agent and offer the
-  agent's region (Australia East by default). Ask them to check;
-  [Prerequisites](README.md#prerequisites) has the steps.
+- Check yourself (read-only) that the subscription offers the SRE agent in the skin's
+  `azure.location`: `az provider show -n Microsoft.App --subscription <SUBSCRIPTION_ID> --query
+  "resourceTypes[?resourceType=='agents'] | [0].locations" -o tsv` prints display names; compare
+  ignoring spaces and case. If the region is listed, carry on without asking and say in your
+  final summary that you checked. If the command fails, that's probably sign-in or permissions,
+  not a registration answer. If it lists nothing (probably not registered) or only other regions,
+  ask the user once ([Prerequisites](README.md#prerequisites)); never switch region yourself.
 - Read [README.md](README.md), then the
   [setup path](docs/sre-response-plan-automation.md#setup-path-at-a-glance).
   [docs/README.md](docs/README.md) lists everything else.
 
 ## Commands
 
-Run these from the repo root. The scripts are in `scripts\`: run `NAME.ps1` as
-`.\scripts\NAME.ps1`, each with the three inputs above.
+Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs above.
 
 - **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
   -ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath

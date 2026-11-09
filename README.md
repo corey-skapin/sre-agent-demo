@@ -119,7 +119,9 @@ docs/                        # start at docs/README.md; images/ holds the README
 5. A subscription that can create an Azure SRE Agent in your region. The agent can be
    created only in the
    [supported regions](https://learn.microsoft.com/azure/sre-agent/supported-regions)
-   (Australia East, the default, is one). To see what your subscription can use, open
+   (Australia East, the default, is one). Your AI tool checks this first with a
+   read-only `az provider show` call (the command is in [`AGENTS.md`](AGENTS.md)) and
+   asks you only if that can't confirm your region. To check by hand, open
    [sre.azure.com](https://sre.azure.com), choose **Create agent**, pick the
    subscription and open the **Region** dropdown. An empty dropdown means the
    subscription isn't registered for SRE Agent; the Learn page links the
