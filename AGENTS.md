@@ -17,6 +17,10 @@ Don't ask for approval again at each step.
   `sre-skin.json`), the saved presenter context, configuration backups, exports
   and evidence. Pass the skin as `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`.
   The tracked skins are fictional examples.
+- Use `pwsh` (PowerShell 7.4+; Windows PowerShell can't run the scripts), Azure CLI
+  2.60+ with Bicep (`az bicep install`), and the `containerapp` and
+  `connectedmachine` extensions (`az extension add --name containerapp`, then the
+  same for `connectedmachine`). The scripts don't install any of it.
 - The Arc estate must be Active first. This repo never deploys, changes or
   removes it. By default the build also needs its Container App
   (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
@@ -31,7 +35,8 @@ Don't ask for approval again at each step.
 
 ## Commands
 
-Run these from the repo root, each with the three inputs above.
+Run these from the repo root. The scripts are in `scripts\`: run `NAME.ps1` as
+`.\scripts\NAME.ps1`, each with the three inputs above.
 
 - **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
   -ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath

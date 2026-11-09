@@ -109,7 +109,12 @@ docs/                        # start at docs/README.md; images/ holds the README
 2. Explicit tenant/subscription inputs matching the Arc estate; do not rely on
    ambient subscription selection. Sign in to that tenant yourself with
    `az login --tenant <TENANT_ID>`; no script runs it for you.
-3. PowerShell 7.4+ (every script requires it), Azure CLI 2.60+ and Bicep CLI (`az bicep install`).
+3. PowerShell 7.4+ (every script requires it, so run them with `pwsh`, not Windows
+   PowerShell), Azure CLI 2.60+, the Bicep CLI (`az bicep install`) and the
+   `containerapp` and `connectedmachine` CLI extensions
+   (`az extension add --name containerapp`, then the same for `connectedmachine`).
+   The scripts don't install or check them, so a missing extension shows up as an
+   Azure CLI "not a valid command" error.
 4. Permission to create a resource group, managed identity, Application Insights component, `Microsoft.App/agents` resource, and role assignments on the existing arc-demo resource groups.
 5. A subscription that can create an Azure SRE Agent in your region. The agent can be
    created only in the
