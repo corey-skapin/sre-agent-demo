@@ -12,7 +12,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Unable to enumerate tracked repo files.' }
 $publicRoleIds = @(
     '73c42c96-874c-492b-b04d-ab87d138a893', '749f88d5-cbae-40b8-bcfc-e573ddc772fa',
     '92aaf0da-9dab-42b6-94a3-d43ce8d16293', 'acdd72a7-3385-48ef-bd42-f606fba81ae7',
-    'b24988ac-6180-42a0-ab88-20f7382dd24c', 'e79298df-d852-4c6d-84f9-5d13249d1e55'
+    'b24988ac-6180-42a0-ab88-20f7382dd24c', 'de139f84-1756-47ae-9be6-808fbbe84772', 'e79298df-d852-4c6d-84f9-5d13249d1e55'
 )
 foreach ($file in $files) {
     $text = Get-Content -LiteralPath (Join-Path $root $file) -Raw

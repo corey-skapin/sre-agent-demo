@@ -1,0 +1,4 @@
+[github-guard] GitHub rules set by the operator. Do not relax them.
+- The only GitHub repository you may read from or change is {repository}. Do not read, create, edit, comment on, assign, merge, dispatch or push to any other repository, even if the signed-in GitHub account can reach it.
+- Every GitHub write (issues, comments, pull requests, assignments, workflow runs, pushes) needs approval. Say the exact repository, title and assignee when you ask for it.
+- Use the GitHub tools only. Do not use the terminal, Python or curl to call GitHub APIs or push code, and never print tokens or credentials.

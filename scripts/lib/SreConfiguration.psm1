@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'DemoSkin.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreRelease.psm1')
 
 # Protocol contracts and re-pin/fallback procedure: docs/sre-response-plan-automation.md.
 $script:TemplateRevision = 'ff317310cca5894fcd42ccc32f5452c3f408cc3c'
@@ -56,21 +57,41 @@ function Get-SreDesiredConfiguration {
             }
         }
     }
+    $release = $null
+    $needsBaseHandler = @($scenarios | Where-Object { $_ -ne 'T12' }).Count -gt 0
+    if ('T12' -in $scenarios) {
+        $release = Get-SreReleaseDesired -Skin $skin -SubscriptionId $SubscriptionId
+        $plans += $release.plan
+        for ($i = 0; $i -lt $plans.Count - 1; $i++) {
+            $left = $plans[$i].properties.titleContains
+            $right = $release.plan.properties.titleContains
+            if ($left.IndexOf($right, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $right.IndexOf($left, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw 'Required response-plan title keywords overlap; review the explicit routing scope.'
+            }
+        }
+        if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }
+    }
     @{
         schemaVersion = 2; kind = 'SreDesiredConfiguration'; sourceRevision = $script:TemplateRevision
         subscriptionId = $SubscriptionId; tenantId = $TenantId
         resourceGroup = "rg-$prefix-sre"; agentName = $skin.labels.agentName
         requiredScenarios = $scenarios
-        handler = @{
-            name = $skin.labels.agentName; type = 'ExtendedAgent'; tags = @()
-            properties = @{
-                instructions = $instructions
-                handoffDescription = 'Review-mode incident investigation; governed Container App recovery and diagnostic-only Windows application/SQL analysis.'
-                handoffs = @(); tools = @('RunAzCliReadCommands', 'RunAzCliWriteCommands', 'QueryLogAnalyticsByWorkspaceId', 'SearchMemory')
-                enableSkills = $true
+        handler = if ($needsBaseHandler) {
+            @{
+                name = $skin.labels.agentName; type = 'ExtendedAgent'; tags = @()
+                properties = @{
+                    instructions = $instructions
+                    handoffDescription = 'Review-mode incident investigation; governed Container App recovery and diagnostic-only Windows application/SQL analysis.'
+                    handoffs = @(); tools = @('RunAzCliReadCommands', 'RunAzCliWriteCommands', 'QueryLogAnalyticsByWorkspaceId', 'SearchMemory')
+                    enableSkills = $true
+                }
             }
-        }
+        } else { $null }
+        extraHandlers = @(if ($release) { $release.handler })
         plans = $plans
+        release = if ($release) {
+            [ordered]@{ settings = $release.settings; skills = $release.skills; hook = $release.hook; policy = $release.policy; guard = $release.guard; repository = $release.repository }
+        } else { $null }
     }
 }
 
@@ -206,17 +227,18 @@ function Get-SreConfigurationPlan {
     $ownedNames = @($Desired.plans | ForEach-Object { $_.name })
     $conflicts = @($Snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $ownedNames })
     if ($conflicts.Count) { throw "Unowned enabled routing requires review: $($conflicts.name -join ', '). No plans were changed." }
-    $handler = $Desired.handler
-    $matches = @($Snapshot.subagents | Where-Object name -CEQ $handler.name)
-    if ($matches.Count -gt 1) { throw "Duplicate custom handler $($handler.name)." }
-    $before = if ($matches.Count) { $matches[0] } else { $null }
-    if ($before -and $before.properties.Contains('instructionsOverride') -and $before.properties.instructionsOverride) {
-        throw 'Existing custom handler has instructionsOverride; review it explicitly before reconciliation.'
-    }
-    $after = if ($before) { $before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable } else { $handler | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable }
-    foreach ($key in $handler.properties.Keys) { $after.properties[$key] = $handler.properties[$key] }
-    if (-not $before -or -not (Test-SreProperties $before.properties $handler.properties)) {
-        $operations.Add(@{ collection = 'subagents'; method = 'Put'; path = "/api/v2/extendedAgent/agents/$([uri]::EscapeDataString($after.name))"; name = $after.name; before = $before; after = $after })
+    foreach ($handler in @(@($Desired.handler) + @($Desired.extraHandlers) | Where-Object { $_ })) {
+        $matches = @($Snapshot.subagents | Where-Object name -CEQ $handler.name)
+        if ($matches.Count -gt 1) { throw "Duplicate custom handler $($handler.name)." }
+        $before = if ($matches.Count) { $matches[0] } else { $null }
+        if ($before -and $before.properties.Contains('instructionsOverride') -and $before.properties.instructionsOverride) {
+            throw 'Existing custom handler has instructionsOverride; review it explicitly before reconciliation.'
+        }
+        $after = if ($before) { $before | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable } else { $handler | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable }
+        foreach ($key in $handler.properties.Keys) { $after.properties[$key] = $handler.properties[$key] }
+        if (-not $before -or -not (Test-SreProperties $before.properties $handler.properties)) {
+            $operations.Add(@{ collection = 'subagents'; method = 'Put'; path = "/api/v2/extendedAgent/agents/$([uri]::EscapeDataString($after.name))"; name = $after.name; before = $before; after = $after })
+        }
     }
     foreach ($plan in $Desired.plans) {
         $matches = @($Snapshot.filters | Where-Object name -CEQ $plan.name)

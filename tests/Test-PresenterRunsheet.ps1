@@ -22,7 +22,7 @@ try {
     $scriptPath = Join-Path $fixture 'scripts\New-PresenterRunsheet.ps1'
     Copy-Item -LiteralPath (Join-Path $root 'scripts\New-PresenterRunsheet.ps1') -Destination $scriptPath
     Copy-Item -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Destination (Join-Path $fixture 'docs\delivery-runsheet.md')
-    foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md')) {
+    foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md', 't12-friday-release.md')) {
         [IO.File]::WriteAllText((Join-Path $fixture "docs\$file"), '# Reference page')
     }
     $contextPath = Join-Path $fixture '.local\demo-context.json'
@@ -110,6 +110,8 @@ try {
     Check ($text.Contains('manual path needs its own live completion evidence')) 'Rendering does not claim SRE investigation completion'
     Check ($text.Contains('container-review') -and $text.Contains('lob-review')) 'Both supplied plans included'
     Check ($text.Contains('SQL is not configured in this saved guide') -and $text -notmatch 'SQL:START|6201|sqlMachineResourceId') 'Absent SQL context gives a clear skip, not guessed readiness'
+    Check ($text.Contains('The Friday release (T12) is not configured in this saved guide') -and
+        $text -notmatch 'T12:START|T12:END|Invoke-FridayRelease|releasePlanRow|ticketing web app') 'Absent T12 context gives a clear skip, no scenario text and no empty plan row'
     Check ($text.Contains('2026-10-27T00:00:00Z') -and $text.Contains('do not certify current health')) 'Saved context time carries no fresh-health claim'
     Check ($text -notmatch [regex]::Escape($fixture)) 'Generated links do not leak absolute workstation paths'
     Check ($text.Contains('Arc%20guide%20%5Bone%5D%20%231/presenter.md')) 'Companion path escapes Markdown delimiters'
@@ -149,6 +151,68 @@ try {
     $context.sql.responsePlan = $context.lobResponsePlan
     Reject { Render } 'Invalid SQL plan'
     $context.Remove('sql')
+    $siteName = 'app-demo-ticketing-0a1b2c3d'
+    $siteId = "/subscriptions/$subscription/resourceGroups/rg-demo-ticketing/providers/Microsoft.Web/sites/$siteName"
+    $context.release = @{
+        appResourceId = $siteId; appUrl = "https://$siteName.azurewebsites.net"; repository = 'contoso/ticketing-app'
+        goodVersion = 'v1.2.0'; badVersion = 'v1.3.0'; responsePlan = 'ticketing-release-review-v1'
+    }
+    $releaseText = Get-Content -LiteralPath (Render) -Raw
+    $releaseFlat = $releaseText -replace '\s+', ' '
+    Check ($releaseText -notmatch '\{\{|\}\}|T12:START|T12:END|Friday release \(T12\) is not configured') 'Optional T12 section has no unresolved markers or skip note'
+    Check ($releaseFlat.Contains('| ticketing-release-review-v1 | Checkout failures on the ticketing web app | On, Azure Monitor, Sev2, Review, cooldown off |')) 'T12 plan renders as a complete three-column table row'
+    Check ($releaseFlat.Contains("[$siteName](https://portal.azure.com/#resource$siteId)") -and $releaseFlat.Contains("[the app](https://$siteName.azurewebsites.net)")) 'T12 section links the exact web app and its address'
+    Check ($releaseFlat.Contains('Invoke-FridayRelease.ps1 -Action Start') -and $releaseFlat.Contains('-Action Status -Wait') -and
+        $releaseFlat.Contains('-Action Reset -DeleteThreads') -and $releaseFlat.Contains('sets `WEBSITE_RUN_FROM_PACKAGE` to the package URL of v1.2.0')) 'T12 section runs the scenario and names the exact fix to check before approving'
+    Check ($releaseFlat.Contains('assigned to Copilot in contoso/ticketing-app') -and $releaseFlat.Contains('stops for a second **Approve**')) 'T12 section names the repository and the second approval'
+    Check ($releaseFlat.Contains('Review only governs Azure changes') -and $releaseFlat.Contains('hasn''t been tried live') -and $releaseFlat.Contains('reaches every repository the signed-in account can reach')) 'T12 trust beat is honest about the Review boundary, the untried deny rule and the sign-in scope'
+    Check ($releaseFlat.Contains('never that the audit proves it') -and $releaseFlat.Contains('doesn''t predict when the alert clears')) 'T12 section keeps the approval and closing-summary wording'
+    Check ($releaseText.Contains('../docs/t12-friday-release.md#what-is-proven-and-what-isnt') -and $releaseText.Contains('(../docs/t12-friday-release.md)')) 'T12 runbook links resolve from the generated guide, preserving the section fragment'
+    Check ($releaseText.IndexOf('## 6. Optional: one live incident') -lt $releaseText.IndexOf('### The Friday release (T12)') -and
+        $releaseText.IndexOf('### The Friday release (T12)') -lt $releaseText.IndexOf('## 7. Close')) 'T12 section sits inside step 6 so the Arc splice headings stay put'
+    Check (Test-ArcSpliceShape $releaseText) 'The T12 render keeps the same Arc splice headings'
+    Check ($releaseText.TrimEnd().EndsWith("**Say:** `"$closing`"")) 'The shared Arc closing is still the last spoken text with T12'
+    Check ($releaseText -notmatch '(?:\r?\n){3}') 'Conditional T12 markers do not leave repeated blank lines'
+    foreach ($link in [regex]::Matches($releaseText, '\]\((?<target>[^)]+)\)')) {
+        $target = $link.Groups['target'].Value
+        if ($target -match '^https://') { continue }
+        $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path $output -Parent) ([Uri]::UnescapeDataString(($target -split '#', 2)[0]))))
+        Check (Test-Path -LiteralPath $resolved -PathType Leaf) 'Relative link in the T12 render resolves'
+    }
+    $context.release['accessToken'] = 'synthetic-rejected-value'
+    Reject { Render } 'release must contain only'
+    $context.release.Remove('accessToken')
+    $context.release.Remove('repository')
+    Reject { Render } 'Missing or invalid release.repository'
+    $context.release.repository = 'contoso/ticketing-app'
+    $context.release.appResourceId = $siteId.Replace($subscription, $context.tenantId)
+    Reject { Render } 'Invalid releaseAppResourceId'
+    $context.release.appResourceId = $siteId.Replace('Microsoft.Web/sites', 'Microsoft.Web/serverfarms')
+    Reject { Render } 'Invalid releaseAppResourceId'
+    $context.release.appResourceId = $siteId
+    foreach ($url in @('http://app.azurewebsites.net', 'https://app.example.test', 'https://app.azurewebsites.net/checkout', 'https://app.azurewebsites.net?token=synthetic', ('https://u' + [char]64 + 'app.azurewebsites.net'))) {
+        $context.release.appUrl = $url
+        Reject { Render } 'Invalid releaseAppUrl'
+    }
+    $context.release.appUrl = "https://$siteName.azurewebsites.net"
+    foreach ($bad in @(@('badVersion', '1.3.0'), @('goodVersion', 'v1.2'), @('repository', 'no-owner'), @('responsePlan', $context.lobResponsePlan), @('responsePlan', 'Bad Plan'))) {
+        $saved = $context.release[$bad[0]]
+        $context.release[$bad[0]] = $bad[1]
+        Reject { Render } 'Invalid T12 repository, version or response plan'
+        $context.release[$bad[0]] = $saved
+    }
+    $context.sql = @{
+        machineResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.HybridCompute/machines/win-sql-demo"
+        alertResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.Insights/scheduledQueryRules/al-demo-sql-lock-timeout"
+        responsePlan = 'sql-review'; alertTitleContains = 'Arc SQL lock timeout'; eventSource = 'ArcSqlEngineDemo'
+    }
+    $bothText = Get-Content -LiteralPath (Render) -Raw
+    Check ($bothText.Contains('sql-review') -and $bothText.Contains('ticketing-release-review-v1') -and $bothText -notmatch '\{\{|\}\}|SQL:START|T12:START' -and (Test-ArcSpliceShape $bothText)) 'SQL and T12 can both be configured'
+    $context.release.responsePlan = 'sql-review'
+    Reject { Render } 'Invalid T12 repository, version or response plan'
+    $context.release.responsePlan = 'ticketing-release-review-v1'
+    $context.Remove('sql')
+    $context.Remove('release')
     $context.companionArcRunsheetPath = Join-Path $fixture 'missing.md'
     $missing = Get-Content -LiteralPath (Render) -Raw
     Check ($missing.Contains('companion Arc guide is absent') -and $missing -notmatch 'missing\.md') 'Absent companion is a skip note without broken link'

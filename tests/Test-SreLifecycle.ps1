@@ -290,6 +290,30 @@ try {
     $wake = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
     Check ($wake.status -eq 'fail' -and $wake.checks[0].id -eq 'parent' -and @($wake.checks | Where-Object id -EQ 'inspection-error').Count -eq 0) 'Active readiness on a parked estate reports the absent parent, not an inspection crash'
     Check (@($wake.checks | Where-Object { $_.id -match '^rbac-' -and $_.status -eq 'pass' }).Count -eq 2) 'Active readiness on a parked estate still verifies the retained workload grants'
+    # T12: the one grant its workload Bicep gives the identity is owned by this repo; without T12 the same grant is unknown.
+    . (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+    Import-Module (Join-Path $root 'scripts\lib\DemoSkin.psm1') -Force
+    Import-Module (Join-Path $root 'scripts\lib\SreRelease.psm1') -Force
+    $t12Skin = New-TestT12SkinFile -Root $root
+    try {
+        $t12Settings = Get-SreReleaseSettings -Skin (Get-DemoSkin -Path $t12Skin -RepoRoot $root) -SubscriptionId $subscription
+        $siteGrantName = '00000000-0000-0000-0000-000000000007'
+        Reset-Fixture
+        $global:LifecycleState.assignments += @{ id = "$($t12Settings.appId)/providers/Microsoft.Authorization/roleAssignments/$siteGrantName"; name = $siteGrantName
+            properties = @{ principalId = $principal; scope = $t12Settings.appId; roleDefinitionId = '/roles/de139f84-1756-47ae-9be6-808fbbe84772' } }
+        & $hibernate -SubscriptionId $subscription -TenantId $tenant -SkinPath $t12Skin -Confirm:$false
+        Check ($agent -notin $global:LifecycleState.resources.id -and @($global:LifecycleState.assignments | Where-Object name -EQ $siteGrantName).Count -eq 1 -and @($global:AzCalls | Where-Object { $_ -like 'role assignment delete*' }).Count -eq 0) 'T12: parking deletes only the paid parent and keeps the web app grant'
+        $t12Parked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal -SkinPath $t12Skin
+        Check ($t12Parked.status -eq 'pass' -and @($t12Parked.checks | Where-Object { $_.id -in @('retained-state-drift', 'retained-workload-grants') -and $_.status -eq 'pass' }).Count -eq 2) 'T12: the web app grant is an expected retained grant, not drift or excess'
+        $plainParked = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Hibernated -PreviousIdentityPrincipalId $principal
+        Check (@($plainParked.checks | Where-Object { $_.id -in @('retained-state-drift', 'retained-workload-grants') -and $_.status -eq 'fail' }).Count -eq 2) 'Without T12 the same grant is reported as unexpected'
+        Throws { & $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf } 'Unexpected identity-owned'
+        $global:AzCalls.Clear()
+        & $remove -SubscriptionId $subscription -TenantId $tenant -SkinPath $t12Skin -WhatIf
+        Check (@($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'T12: previewing Remove-SreAgent with the T12 skin accepts the known web app grant and changes nothing'
+        & $remove -SubscriptionId $subscription -TenantId $tenant -SkinPath $t12Skin -PreviousIdentityPrincipalId $principal -Confirm:$false
+        Check (-not $global:LifecycleState.groupExists -and @($global:LifecycleState.assignments).Count -eq 0) 'T12: Remove-SreAgent removes the known web app grant together with the identity'
+    } finally { Remove-Item -LiteralPath $t12Skin -Force -ErrorAction SilentlyContinue }
     Write-Host "$count lifecycle assertions passed. All cloud calls mocked."
 } finally {
     Remove-Variable -Scope Global -Name LifecycleState -ErrorAction SilentlyContinue

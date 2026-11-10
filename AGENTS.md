@@ -7,25 +7,22 @@ Don't ask for approval again at each step.
 
 ## Before you start
 
-- Confirm the tenant and subscription with the user once, at the start of the
-  session. Pass them to every script (`-SubscriptionId`, `-TenantId`). Never take
-  them from the ambient `az` login, and never run `az logout` or `az account set`.
-  If the CLI isn't signed in to that tenant, ask the user to run
-  `az login --tenant <TENANT_ID>` and wait; don't run it yourself.
-- Keep private values in one folder outside git, for example
-  `<PRIVATE_LAB_FOLDER>`: the skin (a copy of `config\demo-skin.json` saved as
-  `sre-skin.json`), the saved presenter context, configuration backups, exports
-  and evidence. Pass the skin as `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`.
-  The tracked skins are fictional examples.
+- Confirm the tenant and subscription with the user once, at the start of the session. Pass them
+  to every script (`-SubscriptionId`, `-TenantId`). Never take them from the ambient `az` login,
+  and never run `az logout` or `az account set`. If the CLI isn't signed in to that tenant, ask
+  the user to run `az login --tenant <TENANT_ID>` and wait; don't run it yourself.
+- Keep private values in one folder outside git, for example `<PRIVATE_LAB_FOLDER>`: the skin (a
+  copy of `config\demo-skin.json` saved as `sre-skin.json`), the saved presenter context,
+  configuration backups, exports and evidence. Pass the skin as
+  `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`. The tracked skins are fictional examples.
 - Use `pwsh` (PowerShell 7.4+; Windows PowerShell can't run the scripts), Azure CLI
   2.60+ with Bicep (`az bicep install`), and the `containerapp` and
   `connectedmachine` extensions (`az extension add --name containerapp`, then the
   same for `connectedmachine`). The scripts don't install any of it.
-- The Arc estate must be Active first. This repo never deploys, changes or
-  removes it. By default the build also needs its Container App
-  (`workloads.deployContainerApps` in the Arc skin) and the LOB app and alert that
-  this repo's LOB scripts add; [Prerequisites](README.md#prerequisites) says how to
-  drop either.
+- The Arc estate must be Active first. This repo never deploys, changes or removes it. By default
+  the build also needs its Container App (`workloads.deployContainerApps` in the Arc skin) and the
+  LOB app and alert that this repo's LOB scripts add; [Prerequisites](README.md#prerequisites)
+  says how to drop either.
 - Check yourself (read-only) that the subscription offers the SRE agent in the skin's
   `azure.location`: `az provider show -n Microsoft.App --subscription <SUBSCRIPTION_ID> --query
   "resourceTypes[?resourceType=='agents'] | [0].locations" -o tsv` prints display names; compare
@@ -54,36 +51,37 @@ Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs
 - **Check:** `Test-SreReadiness.ps1 -DesiredState Active`. Every required check
   must pass. After parking or removing, use `Hibernated` or `Removed` with
   `-PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID>`.
-- **Park:** save the UAMI principal ID, run `Hibernate-SreAgent.ps1 -WhatIf` and
-  show the preview, then run it with `-Confirm:$false`. It deletes only the paid
-  parent. Park SRE before Arc.
+- **Park:** save the UAMI principal ID, run `Hibernate-SreAgent.ps1 -WhatIf` and show the preview,
+  then run it with `-Confirm:$false`. It deletes only the paid parent. Park SRE before Arc.
 - **Wake:** wake Arc first, then run the Build commands again. The identity and
   its grants are reused.
-- **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with
-  `-Confirm:$false`.
+- **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with `-Confirm:$false`.
 - **Incident:** follow
   [Run one incident after setup](docs/ai-deploy-handbook.md#run-one-incident-after-setup-optional),
   once Active readiness passes. It breaks the demo Container App on purpose,
   waits for the alert and the agent's proposed fix, then checks recovery.
+- **T12 (optional Friday release):** with `T12` and a `release` section in the skin, run
+  `Deploy-TicketingWorkload.ps1` (`-WhatIf` first) and wait for its role before Build. The user
+  signs in to GitHub once per build (`Initialize-SreConfiguration.ps1 -Apply -GitHubSignIn`) and
+  clicks each **Approve**; keep the GitHub `ask` policy. Run it with `Invoke-FridayRelease.ps1`.
+  Park, then `Remove-TicketingWorkload.ps1`, then `Remove-SreAgent.ps1`
+  ([T12 runbook](docs/t12-friday-release.md)).
 - **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
   from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
   The Arc half is in the Arc repo (`docs/runsheet.md`).
-- **Tests:** `.\tests\Invoke-Tests.ps1` (offline, about a minute).
+- **Tests:** `.\tests\Invoke-Tests.ps1` (offline, about 70 s; allow four minutes on a busy machine).
 
 ## Safety
 
-- Preview removals and other destructive steps with `-WhatIf` and show the user
-  the preview before you run them. If a preview includes anything you didn't
-  expect, stop and tell the user.
-- Never delete or change resources the scripts don't own: the Arc estate, shared
-  Arc and Monitor resources, other people's role assignments, and anything a
-  script refuses or reports as unknown.
+- Preview removals and other destructive steps with `-WhatIf` and show the user the preview before
+  you run them. If a preview includes anything you didn't expect, stop and tell the user.
+- Never delete or change resources the scripts don't own: the Arc estate, shared Arc and Monitor
+  resources, other people's role assignments, and anything a script refuses or reports as unknown.
 - Keep secrets, tenant and subscription IDs, emails and private paths out of git.
   Run the tests and scan your diff for them before every commit.
 - Keep every response plan in Review mode. Don't switch the agent to Autonomous.
-- If a configuration write times out, read the state back
-  (`Initialize-SreConfiguration.ps1 -Inspect`) before trying again. Never resend
-  it blindly.
+- If a configuration write times out, read the state back (`Initialize-SreConfiguration.ps1
+  -Inspect`) before trying again. Never resend it blindly.
 - Describe portal steps only from current Microsoft Learn or controls you have
   seen. Don't invent menu paths or buttons.
 - Don't invent prices; see [the cost reference](docs/sre-cost-and-demo-fidelity.md).

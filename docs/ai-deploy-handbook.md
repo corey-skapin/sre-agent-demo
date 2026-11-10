@@ -51,6 +51,7 @@ current.
 | `containerResponsePlan`, `lobResponsePlan` | Rendered plan names |
 | `lobAlertTitleContains`, `lobEventSource` | Rendered LOB signal values |
 | `sql` (optional) | Object with exactly `machineResourceId`, `alertResourceId`, `responsePlan`, `alertTitleContains`, `eventSource`, saved only after verified SQL setup |
+| `release` (optional) | Object with exactly `appResourceId`, `appUrl`, `repository`, `goodVersion`, `badVersion`, `responsePlan`, saved only after the T12 workload is deployed and `Test-SreReadiness.ps1` passes its `T12-` rows |
 | `companionArcRunsheetPath` (optional) | Explicit absolute path to the Arc guide, preferably its generated local copy |
 
 Collect these once, at setup. Your skin stays a setup input; you don't edit it to
@@ -72,6 +73,22 @@ the rendered plan name, exact title `Arc SQL lock timeout` and source
 `ArcSqlEngineDemo`. Its IDs must match the explicit subscription and Arc group.
 Omit it until the Arc engine/signal and SRE route are verified; the guide then
 shows a skip note. Source defaults alone are not verified setup.
+
+The optional `release` object is the T12 equivalent. `appResourceId` is the
+ticketing web app's resource ID (the `Deploy-TicketingWorkload.ps1` output names
+the app and its group), `appUrl` is its `https://<name>.azurewebsites.net`
+address, `repository` is `<OWNER>/<REPOSITORY>`, the two versions are `vX.Y.Z`
+tags and `responsePlan` is the rendered plan name. The resource ID must match the
+explicit subscription and be a web app, and the URL must be an `azurewebsites.net`
+address without credentials or a path. Omit it and the guide
+shows a skip note where the Friday release goes
+([T12 runbook](t12-friday-release.md)).
+
+The guide is one document for every act, so its context always needs the Container
+App, Arc machine and LOB fields above. A deployment that requires only `T12` can run
+the incident from the [T12 runbook](t12-friday-release.md), but it can't generate the
+guide: the generator rejects the missing fields. Save the full context to get the
+guide, or present T12 from the runbook.
 
 ### LOB investigation validation
 
@@ -298,8 +315,9 @@ For Active:
 1. Confirm the Arc estate is active using Arc readiness and actual inventory.
 2. Validate the skin offline: run `Initialize-SreConfiguration.ps1` with only the
    explicit target and `-SkinPath` (no cloud calls), then the local mocked tests and
-   Bicep compilation. Create the T11 LOB app/alert and enable SQL as the
-   README prerequisites describe.
+   Bicep compilation. Create the T11 LOB app/alert, enable SQL and, for T12, deploy
+   the ticketing workload with `Deploy-TicketingWorkload.ps1` as the README
+   prerequisites and the [T12 runbook](t12-friday-release.md) describe.
 3. Preview `Deploy-SreAgent.ps1 -WhatIf` and read the diff before changes.
    On a fresh parent the offline render is the configuration preview.
 4. Deploy with `-ApproveParentCreation`, `-GrantAzureMonitorAlertAccess` and a new
@@ -343,6 +361,8 @@ For Hibernated:
    -DesiredState Hibernated -PreviousIdentityPrincipalId <saved ID>`.
    Missing legacy diagnostics or stale free grants are optional wake diagnostics,
    not a reason to leave the paid parent running. Denied inspection still fails.
+   With T12, the ticketing workload keeps running and its plan keeps billing: remove
+   it with `Remove-TicketingWorkload.ps1` when you're finished.
 5. Finish SRE verification before Arc hibernation. Arc lifecycle is separate;
    don't stop its workloads from this repo. Wake/verify Arc before SRE.
 
@@ -350,6 +370,8 @@ For Removed:
 
 1. Keep your exports and the saved principal.
 2. Preview `Remove-SreAgent.ps1 -WhatIf` with the same explicit target and skin.
+   With T12, park the agent and run `Remove-TicketingWorkload.ps1` (preview first)
+   before this step.
 3. Unknown resources/roles/scopes block removal: check what they are rather than
    bypassing the block.
 4. Run it (`-Confirm:$false` in a non-interactive host); known
@@ -360,7 +382,10 @@ For Removed:
    external-grant absence is pending even when the group is gone.
 
 None of these steps changes plans to Autonomous, removes quickstart plans, revokes
-extra grants or connects a repository; do those only if you ask.
+extra grants or connects a repository; do those only if you ask. The one exception
+is T12's code repository: it is connected only after you sign in to GitHub yourself
+(`Initialize-SreConfiguration.ps1 -Apply -GitHubSignIn`), and only after the GitHub
+`ask` policy and the repository-only instruction are in place.
 
 ## Run one incident after setup (optional)
 

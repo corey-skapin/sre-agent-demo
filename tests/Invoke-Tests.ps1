@@ -587,6 +587,9 @@ try {
 & (Join-Path $PSScriptRoot 'Test-SreMonitorAccess.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreLifecycle.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreDemoRoute.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreRelease.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreReleaseExtras.ps1')
+& (Join-Path $PSScriptRoot 'Test-FridayRelease.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
 $generator = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ScenarioScript' }, $true)

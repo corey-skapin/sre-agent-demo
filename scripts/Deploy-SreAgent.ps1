@@ -125,6 +125,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreLifecycle.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreConfiguration.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRelease.psm1') -Force
 $skinModule = Join-Path $PSScriptRoot 'lib\DemoSkin.psm1'
 if (Test-Path -LiteralPath $skinModule) {
     Import-Module $skinModule -Force
@@ -223,6 +224,14 @@ if ('SQL' -in $requiredScenarios) {
     if ($sqlMachineId -ine $expectedSqlMachineId) { throw 'SQL managed-resource lookup returned a different host, group or subscription; no deployment attempted.' }
     $AdditionalManagedResourceIds += $sqlMachineId
 }
+$releaseGrants = @()
+if (Test-SreReleaseScenario -Skin $skin) {
+    $release = Get-SreReleaseSettings -Skin $skin -SubscriptionId $SubscriptionId
+    $releaseGroupId = Get-AzTsv -Arguments @('group', 'show', '--name', $release.resourceGroup, '--query', 'id') -Description "T12 ticketing group '$($release.resourceGroup)' (run Deploy-TicketingWorkload.ps1 first)"
+    $null = Get-AzTsv -Arguments @('resource', 'show', '--ids', $release.appId, '--query', 'id') -Description "T12 web app '$($release.appName)' (run Deploy-TicketingWorkload.ps1 first)"
+    $AdditionalManagedResourceIds += $releaseGroupId
+    $releaseGrants = @(Get-SreReleaseKnownGrants -Settings $release)
+}
 $AdditionalManagedResourceIds = @($AdditionalManagedResourceIds | Sort-Object -Unique)
 
 # Adopt existing role names for this principal; never attempt to overwrite an old principal's assignment.
@@ -261,6 +270,7 @@ if ($principalId) {
     if ($platformGrants.Count -gt 1) { throw 'Duplicate Azure Monitor platform grants; reconcile explicitly before Active; no grants changed.' }
     if (@($retainedAssignments | Where-Object {
         -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+        -not (Test-SreKnownGrant $_ $releaseGrants) -and
         ($_.principalId -ne $principalId -or $_.scope -notin @($arcResourceGroupId, $infraResourceGroupId) -or ($_.roleDefinitionId -split '/')[-1] -notin $allowedRoles)
     }).Count) { throw "$AccessLevel profile has incompatible grant scope/role. Reconcile explicitly before Active; no grants changed." }
 }

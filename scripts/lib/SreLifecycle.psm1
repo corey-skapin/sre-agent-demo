@@ -9,6 +9,15 @@ function Test-SreAzMonitorPlatformGrant {
         ($Assignment.roleDefinitionId -split '/')[-1] -ieq '749f88d5-cbae-40b8-bcfc-e573ddc772fa')
 }
 
+function Test-SreKnownGrant {
+    # A known grant is one a repo script creates on purpose (for example the T12 workload grants), matched by exact scope and role.
+    param([object]$Assignment, [object[]]$KnownGrants = @())
+    foreach ($grant in @($KnownGrants)) {
+        if ($Assignment.scope -ieq $grant.scope -and ($Assignment.roleDefinitionId -split '/')[-1] -ieq $grant.roleId) { return $true }
+    }
+    return $false
+}
+
 function Get-SreArmRoleAssignments {
     param([string]$SubscriptionId, [string]$ScopeId, [string]$PrincipalId)
     $path = "$ScopeId/providers/Microsoft.Authorization/roleAssignments"
@@ -47,7 +56,8 @@ function Get-SreLifecycleInventory {
         [string]$ArcResourceGroupName, [string]$InfraResourceGroupName,
         [string]$PreviousIdentityPrincipalId,
         [ValidateSet('Hibernated', 'Removed')][string]$DesiredState = 'Hibernated',
-        [string[]]$AdditionalOwnedRoleAssignmentIds = @()
+        [string[]]$AdditionalOwnedRoleAssignmentIds = @(),
+        [object[]]$KnownGrants = @()
     )
     function Read-AzJson([string[]]$Arguments) {
         Invoke-SreAz -SubscriptionId $SubscriptionId -Arguments ($Arguments + @('-o', 'json')) | ConvertFrom-Json -Depth 100
@@ -106,6 +116,7 @@ function Get-SreLifecycleInventory {
         if ($platformGrants.Count -gt 1) { $drift.Add('Duplicate Azure Monitor platform grants. Reconcile before Active or Removed.') }
         $unexpectedAssignments = @($owned | Where-Object {
             -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+            -not (Test-SreKnownGrant $_ $KnownGrants) -and
             ($_.scope -notin $scopes -or ($_.roleDefinitionId -split '/')[-1] -notin $roles) -and
             $_.id -notin $AdditionalOwnedRoleAssignmentIds
         })
@@ -125,4 +136,4 @@ function Get-SreLifecycleInventory {
     }
 }
 
-Export-ModuleMember -Function Get-SreArmRoleAssignments, Get-SreLifecycleInventory, Test-SreAzMonitorPlatformGrant
+Export-ModuleMember -Function Get-SreArmRoleAssignments, Get-SreLifecycleInventory, Test-SreAzMonitorPlatformGrant, Test-SreKnownGrant

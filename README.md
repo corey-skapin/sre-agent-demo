@@ -21,6 +21,7 @@ top to bottom after the Arc section in the companion repo.
 - RBAC on the existing arc-demo Arc/observability and infra resource groups:
   - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
+- Optional T12 ("The Friday release"): a small ticketing web app on App Service in its own resource group, with a checkout-failure alert and one new Website Contributor grant for the agent identity, scoped to that web app (its other grants are unchanged). It is deployed by `Deploy-TicketingWorkload.ps1` before the paid parent and removed by `Remove-TicketingWorkload.ps1`; see [`docs\t12-friday-release.md`](docs/t12-friday-release.md).
 
 The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
@@ -69,10 +70,12 @@ infra/
   modules/sre-identity.bicep # retained SRE-only user-assigned identity
   modules/sre-agent.bicep    # disposable parent and App Insights, referencing retained identity
   modules/role-assignments.bicep # RG-scoped RBAC for the agent identity
+  ticketing/                 # optional T12 workload: main.bicep (subscription scope), workload.bicep, quota-probe.bicep
 config/
   demo-skin.json             # fictional default skin (also dummy-customer.demo-skin.json); schema in demo-skin.schema.json
   demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
+  t12/                       # optional T12 instructions, skills, Stop hook, GitHub guard and tool policy
 samples/
   lob-arc-app/               # Local T11 app; optional repository context you supply
 scripts/
@@ -88,6 +91,10 @@ scripts/
   Invoke-LobArcAppOnArc.ps1  # deploys/operates the T11 LOB app on a Windows Arc server
   New-LobArcAppMonitorAlert.ps1 # creates or prints the T11 log alert signal
   Invoke-T10ArcFault.ps1     # Arc-server fault helper (heartbeat, service, disk, CPU, event) with Induce/Reset/Status
+  Deploy-TicketingWorkload.ps1 # T12: deploys the ticketing web app, its alert and the agent's write grant before the parent
+  Remove-TicketingWorkload.ps1 # T12: deletes the ticketing group (refuses while the agent exists)
+  Invoke-FridayRelease.ps1   # T12: Start (release the bad version), Status and Reset
+  Send-ReleaseTraffic.ps1    # T12: background checkout traffic the run starts and stops
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
 docs/                        # start at docs/README.md; images/ holds the README screenshots
@@ -126,6 +133,12 @@ docs/                        # start at docs/README.md; images/ holds the README
    subscription and open the **Region** dropdown. An empty dropdown means the
    subscription isn't registered for SRE Agent; the Learn page links the
    registration request.
+6. For the optional T12 scenario only: a copy of the ticketing app repository in a
+   GitHub account you control, and App Service quota for the plan size in the
+   region you choose (`Deploy-TicketingWorkload.ps1` checks it before creating
+   anything). T12 needs the Arc estate's resource groups, workspace and Action
+   Group to exist but not T09 or T11; see
+   [`docs\t12-friday-release.md`](docs/t12-friday-release.md#prerequisites).
 
 Default arc-demo names discovered by the script:
 
@@ -178,8 +191,8 @@ $errors
 ```
 
 A passing test run ends with `ALL OFFLINE TEST SUITES PASSED` and exit code 0. The
-`WARNING` and `What if` lines above it are expected mock output; allow up to a
-minute (34 to 50 s measured).
+`WARNING` and `What if` lines above it are expected mock output; allow up to four
+minutes (about 70 s measured on a quiet machine, 145 to 210 s on a busy one).
 
 ## Deploy against an existing arc-demo environment
 
@@ -510,6 +523,7 @@ automatic demo downgrade. Leave a demo you are still using running.
 - `docs\t09-native-containerapp-closed-loop.md` - Azure-native Container App loop.
 - `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance".
 - `docs\t11-lob-app-on-arc-bridge.md` - How to deploy the LOB app on an Arc server, create its alert and break it.
+- `docs\t12-friday-release.md` - The Friday release: deploy a small web app, release a bad version and watch the agent propose the redeploy-previous fix.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
@@ -520,3 +534,8 @@ instance; record current readiness and incident evidence separately.
 - **T09 Container App:** live validated end to end with Azure Monitor alert-to-thread routing, SRE RCA, Review approval, SRE-executed repair, app recovery and actual MonitorCondition recovery.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and Arc Run Command recovery that you run yourself. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.
+- **T12 Friday release:** built and covered by offline tests only. The alert, thread and Review-card timings, the approved card running under the agent's identity and the GitHub `ask` policy were measured on a spike web app with the same shape, but the package swap, the cooldown switch, the Stop hook and the Copilot hand-off are not yet shown live; [what is proven](docs/t12-friday-release.md#what-is-proven-and-what-isnt) lists them.
+
+## Notices
+
+A few T12 files are adapted from Microsoft's MIT-licensed `microsoft/sre-agent` labs; [`NOTICE.md`](NOTICE.md) lists them and carries the license text.
