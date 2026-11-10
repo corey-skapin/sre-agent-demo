@@ -51,8 +51,11 @@ try {
     $repo = New-TempDirectory
     Check ($null -eq (Read-FridayRun -RepoRoot $repo)) 'No run is recorded at first'
     $run = New-FridayRun -RepoRoot $repo -Settings $settings -HostName 'app.azurewebsites.net'
-    Check ($run.state -ceq 'running' -and $run.goodVersion -ceq 'v1.2.0' -and $run.badVersion -ceq 'v1.3.0' -and $run.host -ceq 'app.azurewebsites.net' -and $run.runId -cmatch '^\d{8}T\d{6}Z$') 'A new run records the versions, the host and an ID'
+    Check ($run.state -ceq 'running' -and $run.goodVersion -ceq 'v1.2.0' -and $run.badVersion -ceq 'v1.3.0' -and $run.host -ceq 'app.azurewebsites.net' -and $run.runId -cmatch '^\d{8}T\d{6}Z-[0-9a-f]{8}$') 'A new run records the versions, the host and an ID'
     Check ($run.trafficLog -ceq (Join-Path $repo ".local\friday-release\traffic-$($run.runId).csv") -and $null -eq $run.trafficPid) 'The traffic log lives in the ignored .local folder; no generator yet'
+    # CI once failed because a Start in the same second as an earlier run reused that run's traffic log, and the old rows in it passed for fresh traffic.
+    $burst = @(1..20 | ForEach-Object { New-FridayRun -RepoRoot $repo -Settings $settings -HostName 'app.azurewebsites.net' })
+    Check (@($burst | ForEach-Object { $_.runId } | Select-Object -Unique).Count -eq 20 -and @($burst | ForEach-Object { $_.trafficLog } | Select-Object -Unique).Count -eq 20) 'Runs created in the same second get different IDs and different traffic logs'
     Save-FridayRun -RepoRoot $repo -Run $run
     $back = Read-FridayRun -RepoRoot $repo
     Check ($back.runId -ceq $run.runId -and $back.events -is [hashtable] -and $back.cards -is [hashtable]) 'A run round-trips through its JSON file with its tables intact'
@@ -106,6 +109,11 @@ try {
     # --- Is the generator really sending? -----------------------------------------------------------------------------------------
     $healthLog = Join-Path $repo 'health.csv'
     [IO.File]::WriteAllLines($healthLog, @('utc,status,ms', "$(& $at 570),200,90", "$(& $at 573),200,90", "$(& $at 590),200,90"))
+    # A log that is already there belongs to an earlier generator. Starting another on it would count the old rows as this one's calls.
+    $noTraffic = New-TempDirectory
+    New-Item -ItemType Directory -Path (Join-Path $noTraffic 'scripts') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $noTraffic 'scripts\Send-ReleaseTraffic.ps1'), 'exit 0')
+    Throws { Start-FridayTraffic -RepoRoot $noTraffic -AppUrl 'https://app.azurewebsites.net' -LogPath $healthLog } 'already exists'
     $child = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 120') -PassThru -WindowStyle Hidden
     $live = @{ trafficPid = $child.Id; trafficStartedUtc = $child.StartTime.ToUniversalTime().ToString('o'); trafficLog = $healthLog }
     $health = Get-FridayTrafficHealth -Run $live -NowUtc (& $at 600)
@@ -268,8 +276,9 @@ try {
                 # Stands in for the real app: once the bad release is set, the stub traffic generator logs failed checkouts.
                 $marker = Join-Path $s.markerDir 'bad.marker'
                 if ($s.configured -ceq $s.badTag) {
-                    $log = @(Get-ChildItem -LiteralPath $s.markerDir -Filter 'traffic-*.csv' | Sort-Object LastWriteTime | Select-Object -Last 1)
-                    $s.rowsAtRelease = if ($log.Count) { @(Read-SharedLines $log[0].FullName).Count - 1 } else { 0 }
+                    # The log of the run being released, as its record names it.
+                    $log = [string](Get-Content -LiteralPath (Join-Path $s.markerDir 'current.json') -Raw | ConvertFrom-Json).trafficLog
+                    $s.rowsAtRelease = if (Test-Path -LiteralPath $log) { @(Read-SharedLines $log).Count - 1 } else { 0 }
                     New-Item -ItemType File -Path $marker -Force | Out-Null
                 } else { Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
             }
@@ -424,12 +433,18 @@ Start-Sleep -Seconds 30
     $startRunner = { param([hashtable]$Arguments) $state.agentReady = $true; try { & $runner -SubscriptionId $subscription -TenantId $tenant -SkinPath $skinPath @Arguments 6>&1 3>&1 } finally { $state.agentReady = $false } }
     $state.markerDir = $directory
 
+    # CI once failed here: Start reused the traffic log of an earlier run begun in the same second, and the 25 to 30 minute old rows in it passed for
+    # fresh traffic. Leave such logs under every name a second-granularity run ID could have had from now on; a new run must not touch them.
+    $seedFrom = [DateTimeOffset]::UtcNow
+    $leftovers = @(-5..120 | ForEach-Object { Join-Path $directory ('traffic-{0}.csv' -f $seedFrom.AddSeconds($_).ToString('yyyyMMddTHHmmssZ')) })
+    foreach ($leftover in $leftovers) { [IO.File]::WriteAllLines($leftover, $rolloutCsv) }
+
     & $useGenerator $stubHealthy
     $global:AzCalls.Clear()
-    $startText = & $text @(& $startRunner @{ Action = 'Start'; BaselineMinutes = 0 })
+    $startText = try { & $text @(& $startRunner @{ Action = 'Start'; BaselineMinutes = 0 }) } catch { "Start failed: $($_.Exception.Message)" }
     $started = Read-FridayRun -RepoRoot $fixture
     $releases = @($global:AzCalls | Where-Object { $_ -like 'webapp config appsettings set*' })
-    Check ($startText -match 'Baseline proven: \d+ checkouts, all 200' -and $startText -match 'Released v1\.3\.0 at ' -and $releases.Count -eq 1 -and $releases[0] -like '*releases/download/v1.3.0/*') 'Start proves the baseline, then releases the bad version once'
+    Check ($startText -match 'Baseline proven: \d+ checkouts, all 200' -and $startText -match 'Released v1\.3\.0 at ' -and $releases.Count -eq 1 -and $releases[0] -like '*releases/download/v1.3.0/*') "Start proves the baseline from its own traffic, then releases the bad version once, even with older logs around. Output: $startText"
     Check ($state.rowsAtRelease -ge 1) 'Checkouts were already flowing when the bad version went out'
     Check ($started.state -ceq 'running' -and $started.trafficPid -and $started.events.ContainsKey('releaseApplied') -and $started.events.ContainsKey('badServing') -and $started.events.ContainsKey('firstFailure')) 'The run records the release, the bad release serving and the first failed checkout'
     $generatorPid = [int]$started.trafficPid
@@ -437,6 +452,7 @@ Start-Sleep -Seconds 30
     $stopped = $false
     for ($wait = 0; $wait -lt 25 -and -not $stopped; $wait++) { $stopped = -not (Get-Process -Id $generatorPid -ErrorAction SilentlyContinue); if (-not $stopped) { Start-Sleep -Milliseconds 200 } }
     Check ($stopped -and $state.configured -ceq 'v1.2.0' -and -not (Test-Path -LiteralPath (Join-Path $directory 'bad.marker'))) 'Reset stops the generator that Start began and puts the good release back'
+    Remove-Item -LiteralPath $leftovers -Force
 
     $refusals = @(
         @{ stub = $stubDead; pattern = 'Nothing was released: the traffic generator is not running\. Run -Action Reset'; what = 'A generator that is not running' }
@@ -444,7 +460,6 @@ Start-Sleep -Seconds 30
         @{ stub = $stubStale; pattern = "Nothing was released: the traffic generator's last checkout was \d+ s ago"; what = 'A generator whose last checkout is old' })
     foreach ($refusal in $refusals) {
         & $useGenerator $refusal.stub
-        Start-Sleep -Seconds 1
         $global:AzCalls.Clear()
         Throws { & $startRunner @{ Action = 'Start'; BaselineMinutes = 0 } } $refusal.pattern
         $aborted = Read-FridayRun -RepoRoot $fixture

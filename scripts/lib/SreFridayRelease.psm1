@@ -45,7 +45,8 @@ function Save-FridayRun {
 function New-FridayRun {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][System.Collections.IDictionary]$Settings, [Parameter(Mandatory)][string]$HostName)
     $started = [DateTimeOffset]::UtcNow
-    $runId = $started.ToString('yyyyMMddTHHmmssZ')
+    # The suffix keeps two runs begun in the same second from sharing a traffic log: the older run's rows would pass for the newer run's calls.
+    $runId = '{0}-{1}' -f $started.ToString('yyyyMMddTHHmmssZ'), [guid]::NewGuid().ToString('N').Substring(0, 8)
     @{
         runId = $runId; state = 'running'; startedUtc = $started.ToString('o'); host = $HostName
         goodVersion = $Settings.goodVersion; badVersion = $Settings.badVersion
@@ -93,6 +94,8 @@ function Read-FridayTraffic {
 
 function Start-FridayTraffic {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$AppUrl, [Parameter(Mandatory)][string]$LogPath, [int]$IntervalSeconds = 3, [int]$DurationSeconds = 7200)
+    # A log belongs to one generator. Rows an earlier generator left in it would be read as this one's calls, so a log that exists is refused.
+    if (Test-Path -LiteralPath $LogPath) { throw "The traffic log '$LogPath' already exists, so it belongs to an earlier run. Start the generator on a new path." }
     $script = Join-Path $RepoRoot 'scripts\Send-ReleaseTraffic.ps1'
     # Start-Process joins an argument array with spaces and does not quote it, so both paths are quoted: a repo path with a space would otherwise split.
     $process = Start-Process -FilePath (Get-Process -Id $PID).Path -PassThru -WindowStyle Hidden -ArgumentList @(
