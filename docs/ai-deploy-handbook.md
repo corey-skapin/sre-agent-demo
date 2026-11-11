@@ -52,6 +52,7 @@ current.
 | `lobAlertTitleContains`, `lobEventSource` | Rendered LOB signal values |
 | `sql` (optional) | Object with exactly `machineResourceId`, `alertResourceId`, `responsePlan`, `alertTitleContains`, `eventSource`, saved only after verified SQL setup |
 | `release` (optional) | Object with exactly `appResourceId`, `appUrl`, `repository`, `goodVersion`, `badVersion`, `responsePlan`, saved only after the T12 workload is deployed and `Test-SreReadiness.ps1` passes its `T12-` rows |
+| `acts` (optional) | List of one or more of `ASK`, `MEMORY` and `PROACTIVE`, each once, saved only after `Test-SreReadiness.ps1` passes the modules' `ACTS-` rows. `PROACTIVE` also needs `release` |
 | `companionArcRunsheetPath` (optional) | Explicit absolute path to the Arc guide, preferably its generated local copy |
 
 Collect these once, at setup. Your skin stays a setup input; you don't edit it to
@@ -83,6 +84,17 @@ explicit subscription and be a web app, and the URL must be an `azurewebsites.ne
 address without credentials or a path. Omit it and the guide
 shows a skip note where the Friday release goes
 ([T12 runbook](t12-friday-release.md)).
+
+The optional `acts` list switches on the modular acts in the guide: it adds a
+running order for the full 28-minute run and the 15-minute executive cut, and one
+block for each module you list: [Act 1, ask it anything](ask-anything.md),
+[Act 3, it remembers](it-remembers.md) and
+[Act 4, it works when nothing is broken](proactive-checks.md). A module you leave
+out gets a skip note, and with no `acts` field the guide has no trace of them. Each
+act stands alone, except that `PROACTIVE` reads the ticketing web app, so the
+generator rejects it without `release`, and the executive cut needs `PROACTIVE`
+(its governance deck). Keep `acts` in step with your skin's
+`sre.requiredScenarios`: list only the modules you built.
 
 The guide is one document for every act, so its context always needs the Container
 App, Arc machine and LOB fields above. A deployment that requires only `T12` can run

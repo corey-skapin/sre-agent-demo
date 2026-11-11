@@ -4,7 +4,7 @@
     Lists, runs, turns on and turns off the three PROACTIVE scheduled tasks: the estate health check, the Bicep drift scan and the governance deck.
 
 .DESCRIPTION
-    Status    Shows each task: Off or On, its schedule, when it last ran and runs next, how many runs, and the thread of the last run.
+    Status    Shows each task: Off or On, its schedule, how many times it has run, when it last ran and runs next, and its mode.
     Run       Runs one task now (-Name) with the agent's run-now call and prints the thread it started. With -Wait it follows that thread until
               the agent is idle. The task's agent is read-only, so nothing waits for a click.
     Enable / Disable

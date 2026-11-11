@@ -1,4 +1,5 @@
 #Requires -Version 7.4
+# The two tag names and the Benign, Risky and Critical pattern follow microsoft/sre-agent labs/terraform-drift-detection (scripts/induce-drift.ps1) at commit e6afdfc8a5e446b488325118b0c07da7c3d8462a. MIT, Copyright (c) Microsoft Corporation. See NOTICE.md.
 <#
 .SYNOPSIS
     Puts three small, harmless drifts on the ticketing web app, one Benign, one Risky and one Critical, so the Bicep drift scan has something to find, and puts them back.
