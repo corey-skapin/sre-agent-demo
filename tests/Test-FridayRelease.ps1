@@ -480,7 +480,7 @@ Start-Sleep -Seconds 30
         # A stub generator that outlived a failed test: found by the unique fixture path in its command line.
         try { Get-CimInstance Win32_Process -Filter "Name = 'pwsh.exe'" -ErrorAction Stop | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($fixture) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } } catch { $null = $_ }
     }
-    Remove-Item Function:\global:Invoke-WebRequest, Function:\global:Read-SharedLines -ErrorAction SilentlyContinue
+    Remove-Item Function:\Invoke-WebRequest, Function:\Read-SharedLines -ErrorAction SilentlyContinue
     Remove-Variable -Scope Global -Name WebCalls, WebResponder, FridayState -ErrorAction SilentlyContinue
     $global:AzResponder = $previousResponder
     $global:AzExitCode = $previousExit

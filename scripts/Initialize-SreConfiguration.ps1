@@ -10,6 +10,9 @@ When the skin requires T12 (the Friday release), Apply also sets the GitHub tool
 repository-only instruction first, then the skills and the Stop hook, then the handler and plan,
 and last the code repository. The repository needs the one-time GitHub sign-in; add -GitHubSignIn
 to print the link and wait for it. Run Apply again after the sign-in with a new -BackupPath.
+When the skin turns on ASK, MEMORY or PROACTIVE (the estate-question skill, the seeded notes, and the read-only agents, skills and Review-mode
+scheduled tasks), Apply also puts those on the agent, after the handlers and plans and before the code repository: the tasks are created Off, and the
+notes are seeded only into an empty notes folder.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -27,32 +30,38 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'lib\SreConfiguration.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreDataPlane.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreReleaseExtras.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreActsExtras.psm1') -Force
 $desired = Get-SreDesiredConfiguration -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath
 if ($Inspect -and $Apply) { throw 'Choose -Inspect or -Apply, not both.' }
 if (-not $Inspect -and -not $Apply) { $desired | ConvertTo-Json -Depth 100; return }
 if ($Apply -and [string]::IsNullOrWhiteSpace($BackupPath)) { throw '-Apply requires an explicit -BackupPath outside the repository before any cloud request.' }
 $session = New-SreConfigurationSession -Desired $desired -TimeoutSeconds $TimeoutSeconds
 try {
-    $context = if ($desired.release) { ConvertTo-SreDataContext -Session $session -SubscriptionId $SubscriptionId -TenantId $TenantId } else { $null }
+    $context = if ($desired.release -or $desired.acts) { ConvertTo-SreDataContext -Session $session -SubscriptionId $SubscriptionId -TenantId $TenantId } else { $null }
     if ($Inspect) {
         $snapshot = Get-SreConfigurationSnapshot $session
         $report = @{
             desired = $desired; observed = $snapshot
             reconciliation = Get-SreConfigurationPlan $desired $snapshot
         }
-        if ($context) {
+        if ($context -and $desired.release) {
             $observedExtras = Get-SreReleaseObserved -Context $context -Desired $desired
             $report.release = @{
                 before = Get-SreReleaseExtrasPlan -Desired $desired -Observed $observedExtras -Stage Before
                 after = Get-SreReleaseExtrasPlan -Desired $desired -Observed $observedExtras -Stage After
             }
         }
+        if ($context -and $desired.acts) {
+            $report.acts = Get-SreActsPlan -Desired $desired -Observed (Get-SreActsObserved -Context $context -Desired $desired)
+        }
         $report | ConvertTo-Json -Depth 100
     } else {
         $releaseBefore = $null
-        if ($context) { $releaseBefore = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage Before -BackupPath $BackupPath -WhatIf:$WhatIfPreference }
+        if ($context -and $desired.release) { $releaseBefore = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage Before -BackupPath $BackupPath -WhatIf:$WhatIfPreference }
         $result = Invoke-SreConfigurationReconcile -Desired $desired -Session $session -BackupPath $BackupPath -WhatIf:$WhatIfPreference
-        if ($context) {
+        # The acts come after the handlers (their tasks name the two read-only agents) and before the repository stage, which can wait on a person.
+        if ($context -and $desired.acts) { $result.acts = Invoke-SreActs -Context $context -Desired $desired -BackupPath $BackupPath -WhatIf:$WhatIfPreference }
+        if ($context -and $desired.release) {
             $releaseAfter = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath $BackupPath -GitHubSignIn:$GitHubSignIn -WhatIf:$WhatIfPreference
             $result.release = @{ before = $releaseBefore; after = $releaseAfter }
         }

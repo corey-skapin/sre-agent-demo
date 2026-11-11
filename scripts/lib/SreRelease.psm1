@@ -98,6 +98,17 @@ function Get-SreReleaseKnownGrants {
     )
 }
 
+function Get-SreReleaseDemoTags {
+    # The tags every resource of the ticketing workload carries: these defaults plus the skin's tags. The web app adds sreScenario=T12 itself (workload.bicep).
+    param([Parameter(Mandatory)][object]$Skin)
+    Merge-DemoHashtable -Defaults ([ordered]@{
+        owner = 'demo'
+        purpose = 'sre-agent'
+        env = 'demo'
+        layersOn = 'arc-demo'
+    }) -Overrides (Get-DemoSkinValue -Skin $Skin -Path 'tags' -Default @{})
+}
+
 function Get-SreReleaseGrantsForSkin {
     param([Parameter(Mandatory)][object]$Skin, [Parameter(Mandatory)][string]$SubscriptionId)
     if (-not (Test-SreReleaseScenario -Skin $Skin)) { return @() }
@@ -355,4 +366,4 @@ function Get-SreReleaseDesired {
     }
 }
 
-Export-ModuleMember -Function Test-SreReleaseScenario, Get-SreReleaseSiteSuffix, Get-SreReleaseSettings, Assert-SreReleaseGroupOwnership, Get-SreReleasePackageUrl, Get-SreReleaseKnownGrants, Get-SreReleaseGrantsForSkin, Get-SreReleaseAppHost, Get-SreReleaseSummary, Get-SreReleaseReadinessChecks, Assert-SreReleaseQuota, Test-SreReleasePackage, Wait-SreReleaseHealthy, Get-SreReleaseDeploymentParameters, ConvertFrom-SreMarkdownConfig, Get-SreReleaseDesired
+Export-ModuleMember -Function Test-SreReleaseScenario, Get-SreReleaseSiteSuffix, Get-SreReleaseSettings, Assert-SreReleaseGroupOwnership, Get-SreReleasePackageUrl, Get-SreReleaseKnownGrants, Get-SreReleaseDemoTags, Get-SreReleaseGrantsForSkin, Get-SreReleaseAppHost, Get-SreReleaseSummary, Get-SreReleaseReadinessChecks, Assert-SreReleaseQuota, Test-SreReleasePackage, Wait-SreReleaseHealthy, Get-SreReleaseDeploymentParameters, ConvertFrom-SreMarkdownConfig, Get-SreReleaseDesired

@@ -38,10 +38,12 @@ while ($listener.IsListening) {
         $request = $context.Request
         $method = $request.HttpMethod
         $path = $request.Url.AbsolutePath
-        $text = ''
-        if ($request.HasEntityBody) { $reader = [IO.StreamReader]::new($request.InputStream, [Text.Encoding]::UTF8); $text = $reader.ReadToEnd(); $reader.Dispose() }
+        $raw = [byte[]]@()
+        if ($request.HasEntityBody) { $memory = [IO.MemoryStream]::new(); $request.InputStream.CopyTo($memory); $raw = $memory.ToArray(); $memory.Dispose() }
+        $isGzip = [string]$request.ContentType -like 'application/gzip*'
+        $text = if ($raw.Length -and -not $isGzip) { [Text.Encoding]::UTF8.GetString($raw) } else { '' }
         $body = if ($text) { $text | ConvertFrom-Json -AsHashtable -Depth 30 } else { $null }
-        $null = $state.log.Add([pscustomobject]@{ method = $method; path = $path; ifMatch = $request.Headers['If-Match']; authorization = $request.Headers['Authorization']; body = $body })
+        $null = $state.log.Add([pscustomobject]@{ method = $method; path = $path; ifMatch = $request.Headers['If-Match']; authorization = $request.Headers['Authorization']; body = $body; bytes = $raw.Length; contentType = [string]$request.ContentType })
         if ($method -eq 'PUT' -and $state.failPut -and $path -match $state.failPut) {
             Send-Reply $context 400 @{ error = 'bad request' }
         } elseif ($path -eq '/api/v2/agent/settings/global') {
@@ -111,12 +113,117 @@ while ($listener.IsListening) {
                 }
                 Send-Reply $context 202 $null
             }
+        } elseif ($path -match '^/api/v2/extendedAgent/scheduledtasks/(?<name>[^/]+)$') {
+            $name = [uri]::UnescapeDataString($Matches.name)
+            if ($method -eq 'GET') {
+                if ($state.tasks.ContainsKey($name)) {
+                    $task = $state.tasks[$name].Clone()
+                    if ($state.omitTaskId) { $task.Remove('id') }
+                    if ($state.taskEnvelope) { Send-Reply $context 200 @{ name = $name; type = 'ScheduledTask'; properties = $task } } else { Send-Reply $context 200 $task }
+                } else { Send-Reply $context 404 @{ error = 'not found' } }
+            } else {
+                if (-not $state.ignoreWrites) {
+                    $p = $body.properties
+                    $existing = if ($state.tasks.ContainsKey($name)) { $state.tasks[$name] } else { $null }
+                    $enabled = if ($state.ignoreIsEnabled) { $true } else { $p.isEnabled -ne $false }
+                    $state.tasks[$name] = @{
+                        id = $(if ($existing) { $existing.id } else { [guid]::NewGuid().ToString() }); name = $name; description = $p.description
+                        status = $(if ($enabled) { 'Active' } else { 'Paused' }); cronExpression = $p.cronExpression; agentPrompt = $p.agentPrompt; agent = $p.agent
+                        agentMode = $p.agentMode; executionCount = $(if ($existing) { $existing.executionCount } else { 0 }); lastExecutionTime = $null; nextExecutionTime = $null; threadId = $null
+                    }
+                }
+                Send-Reply $context 202 $null
+            }
+        } elseif ($path -eq '/api/v1/scheduledtasks') {
+            Send-Reply $context 200 @{ value = @($state.tasks.Values) }
+        } elseif ($path -match '^/api/v1/scheduledtasks/(?<id>[^/]+)/execute$' -and $method -eq 'POST') {
+            $found = @($state.tasks.Values | Where-Object { $_.id -eq $Matches.id }) | Select-Object -First 1
+            if (-not $found) { Send-Reply $context 404 @{ error = 'no such task' } }
+            elseif ($state.refuseRunNow -and $found.status -ne 'Active') { Send-Reply $context 409 @{ error = 'task is not active' } }
+            else {
+                $threadId = [guid]::NewGuid().ToString()
+                $found.executionCount = [int]$found.executionCount + 1
+                $found.threadId = $threadId
+                $state.threads = @($state.threads) + @(@{ id = $threadId })
+                $state.messages[$threadId] = @(@{ id = 'm1'; text = 'report' })
+                $state.threadStates[$threadId] = $state.runThreadState
+                Send-Reply $context 200 @{ execution = @{ threadId = $threadId; manualExecution = $true } }
+            }
+        } elseif ($path -eq '/api/v2/extendedAgent/workspace/agent/files/list') {
+            $folder = [string]$request.QueryString['path']
+            $prefix = $folder.TrimEnd('/') + '/'
+            $known = $folder -eq '/root/sreagent/terminalRoot' -or @($state.dirs) -contains $folder -or @($state.files.Keys | Where-Object { $_.StartsWith($prefix) }).Count -gt 0 -or @($state.dirs | Where-Object { $_.StartsWith($prefix) }).Count -gt 0
+            if ($state.listStatus -ne 200) { Send-Reply $context ([int]$state.listStatus) @{ error = 'list failed' } }
+            elseif (-not $known) { Send-Reply $context ([int]$state.missingFolderStatus) @{ error = 'no such folder' } }
+            else {
+                $entries = [Collections.Generic.List[object]]::new()
+                $seen = @{}
+                foreach ($filePath in @($state.files.Keys | Sort-Object)) {
+                    if (-not $filePath.StartsWith($prefix)) { continue }
+                    $rest = $filePath.Substring($prefix.Length)
+                    $first = ($rest -split '/')[0]
+                    if ($seen.ContainsKey($first)) { continue }
+                    $seen[$first] = $true
+                    $isDir = $rest.Contains('/')
+                    $entries.Add(@{ name = $first; path = $prefix + $first; size = $(if ($isDir) { 0 } else { $state.files[$filePath].Length }); isDir = $isDir; isSymlink = $false; modifiedTime = '2026-11-12T00:00:00Z' })
+                }
+                foreach ($dir in @($state.dirs)) {
+                    if (-not $dir.StartsWith($prefix)) { continue }
+                    $first = ($dir.Substring($prefix.Length) -split '/')[0]
+                    if ($first -and -not $seen.ContainsKey($first)) { $seen[$first] = $true; $entries.Add(@{ name = $first; path = $prefix + $first; size = 0; isDir = $true; isSymlink = $false; modifiedTime = '2026-11-12T00:00:00Z' }) }
+                }
+                Send-Reply $context 200 @{ root = '/root/sreagent/terminalRoot'; path = $folder; entries = @($entries.ToArray()) }
+            }
+        } elseif ($path -eq '/api/v2/extendedAgent/workspace/agent/files/content') {
+            $file = [string]$request.QueryString['path']
+            if ($state.files.ContainsKey($file)) {
+                $bytes = [byte[]]$state.files[$file]
+                $context.Response.StatusCode = 200
+                $context.Response.ContentType = 'application/octet-stream'
+                $context.Response.ContentLength64 = $bytes.Length
+                if ($bytes.Length) { $context.Response.OutputStream.Write($bytes, 0, $bytes.Length) }
+                $context.Response.Close()
+            } else { Send-Reply $context 404 @{ error = 'no such file' } }
+        } elseif ($path -eq '/api/v1/WorkspaceMemory/synthesized-knowledge' -and $method -eq 'POST') {
+            if ($state.ignoreUpload) { Send-Reply $context 200 $null }
+            else {
+                try {
+                    $packed = [IO.MemoryStream]::new($raw)
+                    $gzip = [IO.Compression.GZipStream]::new($packed, [IO.Compression.CompressionMode]::Decompress)
+                    $unpacked = [IO.MemoryStream]::new()
+                    $gzip.CopyTo($unpacked)
+                    $tar = $unpacked.ToArray()
+                    $offset = 0
+                    $names = @()
+                    while ($offset + 512 -le $tar.Length) {
+                        $header = [byte[]]($tar[$offset..($offset + 511)])
+                        if (@($header | Where-Object { $_ -ne 0 }).Count -eq 0) { break }
+                        $entryName = [Text.Encoding]::ASCII.GetString($header, 0, 100).Split([char]0)[0]
+                        $size = [Convert]::ToInt64([Text.Encoding]::ASCII.GetString($header, 124, 11).Trim([char]0, ' '), 8)
+                        $stored = [Convert]::ToInt64([Text.Encoding]::ASCII.GetString($header, 148, 6).Trim([char]0, ' '), 8)
+                        $sum = 0
+                        for ($i = 0; $i -lt 512; $i++) { $sum += $(if ($i -ge 148 -and $i -lt 156) { 32 } else { $header[$i] }) }
+                        if ($sum -ne $stored) { throw "bad tar checksum for $entryName" }
+                        $offset += 512
+                        if ([char]$header[156] -eq '0') {
+                            $content = if ($size -gt 0) { [byte[]]($tar[$offset..($offset + $size - 1)]) } else { [byte[]]@() }
+                            $relative = if ($entryName.StartsWith('./')) { $entryName.Substring(2) } else { $entryName }
+                            $state.files["/root/sreagent/terminalRoot/memories/synthesizedKnowledge/$relative"] = $content
+                            $names += $relative
+                            $offset += [int]([Math]::Ceiling($size / 512.0) * 512)
+                        }
+                    }
+                    $state.uploads = @($state.uploads) + @(, $names)
+                    Send-Reply $context 200 $null
+                } catch { Send-Reply $context 400 @{ error = $_.Exception.Message } }
+            }
         } elseif ($path -eq '/api/v1/threads') {
             Send-Reply $context 200 @{ value = @($state.threads) }
         } elseif ($path -match '^/api/v1/threads/(?<id>[^/]+)/messages$') {
             $id = $Matches.id
             $messages = if ($state.messages.ContainsKey($id)) { @($state.messages[$id]) } else { @() }
-            Send-Reply $context 200 @{ value = $messages; state = 'Running' }
+            $threadState = if ($state.threadStates.ContainsKey($id)) { $state.threadStates[$id] } else { 'Running' }
+            Send-Reply $context 200 @{ value = $messages; state = $threadState }
         } elseif ($path -match '^/api/v1/threads/(?<id>[^/]+)$' -and $method -eq 'DELETE') {
             $state.threads = @($state.threads | Where-Object { $_.id -ne $Matches.id })
             Send-Reply $context 200 $null
@@ -147,6 +254,8 @@ function Start-FakeAgent {
         policy = @{ allow = @(); ask = @(); deny = @() }; etag = $null; instructions = ''; oauthUrl = "https://$githubHost/login/oauth/authorize?client_id=test"
         skills = @{}; hooks = @{}; repos = @{}; domains = @(); signInOnOAuth = $true; ignoreWrites = $false; rejectEtagOnce = $false; failPut = $null
         omitSkillTools = $false; domainsStatus = 200
+        tasks = @{}; files = @{}; dirs = @(); threadStates = @{}; taskEnvelope = $false; ignoreIsEnabled = $false; refuseRunNow = $false; omitTaskId = $false
+        ignoreUpload = $false; uploads = @(); runThreadState = 'Idle'; listStatus = 200; missingFolderStatus = 404
         threads = @(); messages = @{}; log = [Collections.ArrayList]::Synchronized([Collections.ArrayList]::new())
     })
     $runspace = [runspacefactory]::CreateRunspace()

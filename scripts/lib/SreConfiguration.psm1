@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'DemoSkin.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRelease.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreActs.psm1')
 
 # Protocol contracts and re-pin/fallback procedure: docs/sre-response-plan-automation.md.
 $script:TemplateRevision = 'ff317310cca5894fcd42ccc32f5452c3f408cc3c'
@@ -58,7 +59,7 @@ function Get-SreDesiredConfiguration {
         }
     }
     $release = $null
-    $needsBaseHandler = @($scenarios | Where-Object { $_ -ne 'T12' }).Count -gt 0
+    $needsBaseHandler = @($scenarios | Where-Object { $_ -in @('T09', 'T10', 'T11', 'SQL') }).Count -gt 0
     if ('T12' -in $scenarios) {
         $release = Get-SreReleaseDesired -Skin $skin -SubscriptionId $SubscriptionId
         $plans += $release.plan
@@ -71,6 +72,10 @@ function Get-SreDesiredConfiguration {
         }
         if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }
     }
+    $acts = Get-SreActsDesired -Skin $skin -SubscriptionId $SubscriptionId
+    $extraHandlers = @()
+    if ($release) { $extraHandlers += $release.handler }
+    if ($acts) { $extraHandlers += @($acts.agents) }
     @{
         schemaVersion = 2; kind = 'SreDesiredConfiguration'; sourceRevision = $script:TemplateRevision
         subscriptionId = $SubscriptionId; tenantId = $TenantId
@@ -87,11 +92,12 @@ function Get-SreDesiredConfiguration {
                 }
             }
         } else { $null }
-        extraHandlers = @(if ($release) { $release.handler })
+        extraHandlers = $extraHandlers
         plans = $plans
         release = if ($release) {
             [ordered]@{ settings = $release.settings; skills = $release.skills; hook = $release.hook; policy = $release.policy; guard = $release.guard; repository = $release.repository }
         } else { $null }
+        acts = $acts
     }
 }
 
