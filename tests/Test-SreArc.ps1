@@ -358,12 +358,15 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'scripts') -Destination (Join-Path $fixture 'scripts') -Recurse
     Copy-Item -LiteralPath (Join-Path $root 'config') -Destination (Join-Path $fixture 'config') -Recurse
     $lobLog = Join-Path $fixture 'lob-calls.txt'
-    # The T11 script is swapped for a stub that records how it was called, so no guest command is ever sent.
+    # The T11 script is swapped for a stub that records how it was called, so no guest command is ever sent. Like the real one it returns only after a wait
+    # (the Azure CLI waits for the run command, about two minutes), and its result carries the guest run command's own start time.
     [IO.File]::WriteAllText((Join-Path $fixture 'scripts\Invoke-LobArcAppOnArc.ps1'), @'
 [CmdletBinding(SupportsShouldProcess)]
 param($SubscriptionId, $TenantId, $SkinPath, $Action, $FaultMode)
 "$Action $FaultMode" | Add-Content -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) 'lob-calls.txt')
-[pscustomobject]@{ Action = $Action; GuestExitCode = 0; GuestOutput = 'ok' }
+$entered = [DateTimeOffset]::UtcNow
+if ($Action -eq 'InduceFault') { Start-Sleep -Seconds 2 }
+[pscustomobject]@{ Action = $Action; GuestExitCode = 0; GuestOutput = 'ok'; Result = @{ properties = @{ instanceView = @{ startTime = $entered.AddMilliseconds(500).ToString('o'); endTime = $entered.AddSeconds(1).ToString('o') } } } }
 '@)
     $runner = Join-Path $fixture 'scripts\Invoke-ArcServerRoom.ps1'
     $global:ArcFake = @{
@@ -445,14 +448,16 @@ param($SubscriptionId, $TenantId, $SkinPath, $Action, $FaultMode)
     $fake.agentReady = $false
 
     $sinceFault = [DateTimeOffset]::Parse($record.events.faultInduced, [Globalization.CultureInfo]::InvariantCulture)
-    $fake.alerts = @(@{ properties = @{ essentials = @{ alertRule = "/subscriptions/$subscription/resourceGroups/rg-arc-demo/providers/Microsoft.Insights/scheduledQueryRules/alert-arc-demo-lob-arc-app-fault"; startDateTime = $sinceFault.AddMinutes(6).ToString('o'); monitorCondition = 'Fired'; alertState = 'New'; monitorConditionResolvedDateTime = $null } } })
+    $requestedAt = [DateTimeOffset]::Parse($record.startedUtc, [Globalization.CultureInfo]::InvariantCulture)
+    Check ($sinceFault -ge $requestedAt -and ($sinceFault - $requestedAt).TotalSeconds -lt 1.5 -and ([DateTimeOffset]::UtcNow - $requestedAt).TotalSeconds -ge 2) 'The run starts when the fault request goes out, and the fault time is the guest script''s own start, not the moment the Azure CLI returned (the stub waits 2 s, the real one about two minutes)'
+    $fake.alerts = @(@{ properties = @{ essentials = @{ alertRule = "/subscriptions/$subscription/resourceGroups/rg-arc-demo/providers/Microsoft.Insights/scheduledQueryRules/alert-arc-demo-lob-arc-app-fault"; startDateTime = $sinceFault.AddSeconds(1).ToString('o'); monitorCondition = 'Fired'; alertState = 'New'; monitorConditionResolvedDateTime = $null } } })
     $fake.commands['sre-repair-lob-202611111200'] = @{ name = 'sre-repair-lob-202611111200'; properties = @{ provisioningState = 'Succeeded'; source = @{ script = $config.repairPath }
             instanceView = @{ executionState = 'Succeeded'; exitCode = 0; startTime = $sinceFault.AddMinutes(12).ToString('o'); endTime = $sinceFault.AddMinutes(12).AddSeconds(11).ToString('o'); output = "was=CrashOnProcessing now=Healthy state=Running last=267009`n" } } }
     $global:ArcAzCalls.Clear()
     $statusText = & $text (& $invoke @{ Action = 'Status' })
     $seen = Read-ArcRun -RepoRoot $fixture
     Check ($seen.events.ContainsKey('alertFired') -and $seen.events.ContainsKey('repairStarted') -and $seen.events.ContainsKey('repairEnded') -and $seen.repairRun.name -ceq 'sre-repair-lob-202611111200') 'Status records the alert and the repair run command it finds'
-    Check ($statusText -match 'data plane is not reachable' -and $statusText -match 'alert fired\s+\d\d:\d\d:\d\dZ \(\+6m00s\)' -and $statusText -match 'repair run command sre-repair-lob-202611111200: Succeeded, exit code 0' -and $statusText -match 'output: was=CrashOnProcessing now=Healthy state=Running') 'Without the SRE agent, Status still reports the alert and the repair, and says what it skipped'
+    Check ($statusText -match 'data plane is not reachable' -and $statusText -match 'alert fired\s+\d\d:\d\d:\d\dZ \(\+0m0[01]s\)' -and $statusText -match 'repair run command sre-repair-lob-202611111200: Succeeded, exit code 0' -and $statusText -match 'output: was=CrashOnProcessing now=Healthy state=Running') 'Without the SRE agent, Status still reports the alert (one that fired while the fault request was still returning counts) and the repair, and says what it skipped'
     Check ((& $writes) -eq 0) 'Status changes nothing in Azure'
 
     $whatIfReset = & $text (& $invoke @{ Action = 'Reset'; WhatIf = $true })

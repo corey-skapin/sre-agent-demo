@@ -163,10 +163,13 @@ switch ($Action) {
         try { $null = New-SreDataContext -SubscriptionId $SubscriptionId -TenantId $TenantId -ResourceGroupName $agentGroup -AgentName $agentName }
         catch { throw "The SRE agent is not ready, so the fault would go unnoticed: $($_.Exception.Message) Wake it with Deploy-SreAgent.ps1 and check Test-SreReadiness.ps1 -DesiredState Active first." }
         if (-not $PSCmdlet.ShouldProcess($arc.machineName, "set the LOB app to $($arc.faultMode) (T11 fault)")) { return }
+        # The run starts when the request goes out. The Azure CLI returns about two minutes after the script has ended, and an alert or a thread in that gap must still count.
+        $requestedUtc = [DateTimeOffset]::UtcNow
         $result = & $lobScript -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath -Action InduceFault -FaultMode $arc.faultMode -Confirm:$false
         if (-not $result -or $result.GuestExitCode -ne 0) { throw 'The fault was not confirmed by the server. Run -Action Reset before you try again.' }
-        $run = Initialize-ArcRun -Settings $arc
-        $null = Add-ArcRunEvent -Run $run -Name faultInduced -Utc ([DateTimeOffset]::UtcNow.ToString('o'))
+        $run = Initialize-ArcRun -Settings $arc -Started $requestedUtc
+        $guest = ConvertTo-ArcRunView (Get-SreProperty $result 'Result')
+        $null = Add-ArcRunEvent -Run $run -Name faultInduced -Utc $(if ($guest -and $guest.startUtc) { $guest.startUtc } else { $requestedUtc.ToString('o') })
         Save-ArcRun -RepoRoot $repoRoot -Run $run
         Write-Output "Run $($run.runId): $($arc.machineName) is set to $($arc.faultMode) at $(([DateTimeOffset]::Parse($run.events.faultInduced, [Globalization.CultureInfo]::InvariantCulture)).ToString('HH:mm:ss'))Z."
         Write-Output 'Next: -Action Status -Wait. The alert fires within about 10 minutes, the thread follows within a minute, and the card a few minutes after. A person clicks Approve in the SRE portal.'

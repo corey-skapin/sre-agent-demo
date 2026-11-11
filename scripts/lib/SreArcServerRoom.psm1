@@ -52,11 +52,11 @@ function Save-ArcRun {
 }
 
 function Initialize-ArcRun {
-    param([Parameter(Mandatory)][Collections.IDictionary]$Settings)
-    $started = [DateTimeOffset]::UtcNow
+    # -Started is when the fault request went out. Status ignores alerts and threads from before it, so it must not be later than the fault itself.
+    param([Parameter(Mandatory)][Collections.IDictionary]$Settings, [DateTimeOffset]$Started = [DateTimeOffset]::UtcNow)
     @{
-        runId = '{0}-{1}' -f $started.ToString('yyyyMMddTHHmmssZ'), [guid]::NewGuid().ToString('N').Substring(0, 8)
-        state = 'running'; startedUtc = $started.ToString('o'); machine = $Settings.machineName; faultMode = $Settings.faultMode
+        runId = '{0}-{1}' -f $Started.ToString('yyyyMMddTHHmmssZ'), [guid]::NewGuid().ToString('N').Substring(0, 8)
+        state = 'running'; startedUtc = $Started.ToString('o'); machine = $Settings.machineName; faultMode = $Settings.faultMode
         events = @{}; cards = @{}; threadId = $null
     }
 }
