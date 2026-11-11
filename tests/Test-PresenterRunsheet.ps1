@@ -22,7 +22,8 @@ try {
     $scriptPath = Join-Path $fixture 'scripts\New-PresenterRunsheet.ps1'
     Copy-Item -LiteralPath (Join-Path $root 'scripts\New-PresenterRunsheet.ps1') -Destination $scriptPath
     Copy-Item -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Destination (Join-Path $fixture 'docs\delivery-runsheet.md')
-    foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md', 't12-friday-release.md')) {
+    foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md', 't12-friday-release.md',
+            'ask-anything.md', 'it-remembers.md', 'proactive-checks.md', 'sre-cost-and-demo-fidelity.md')) {
         [IO.File]::WriteAllText((Join-Path $fixture "docs\$file"), '# Reference page')
     }
     $contextPath = Join-Path $fixture '.local\demo-context.json'
@@ -201,6 +202,98 @@ try {
         Reject { Render } 'Invalid T12 repository, version or response plan'
         $context.release[$bad[0]] = $saved
     }
+    # The act modules are optional: no acts field leaves no trace, each listed module renders, each unlisted one is a skip note.
+    $actsTrace = 'Running order|ask it anything|it remembers|works when nothing is broken|ACTS:|ASK:|MEMORY:|PROACTIVE:|CUT:'
+    Check ($text -notmatch $actsTrace -and $releaseText -notmatch $actsTrace) 'No acts field leaves no trace of the act modules'
+    # Every script command the act blocks tell you to run must name a real script, real parameters and valid -Action or -Source values.
+    function Test-ScriptCommands([string]$Markdown) {
+        $commands = 0
+        foreach ($span in [regex]::Matches($Markdown, '`(?<code>[A-Za-z][\w-]*\.ps1(?: [^`]*)?)`')) {
+            $tokens = @($span.Groups['code'].Value -split '\s+')
+            $scriptFile = Join-Path $root "scripts\$($tokens[0])"
+            Check (Test-Path -LiteralPath $scriptFile -PathType Leaf) "The guide names a script that exists: $($tokens[0])"
+            $ast = [Management.Automation.Language.Parser]::ParseFile($scriptFile, [ref]$null, [ref]$null)
+            $accepted = @{}
+            foreach ($parameter in $ast.ParamBlock.Parameters) {
+                $accepted[$parameter.Name.VariablePath.UserPath] = @($parameter.Attributes |
+                        Where-Object { $_ -is [Management.Automation.Language.AttributeAst] -and $_.TypeName.Name -eq 'ValidateSet' } |
+                        ForEach-Object { $_.PositionalArguments.Value })
+            }
+            for ($i = 1; $i -lt $tokens.Count; $i++) {
+                if ($tokens[$i] -match '^-(?<name>[A-Za-z]+)$') {
+                    $name = $Matches.name
+                    Check $accepted.ContainsKey($name) "$($tokens[0]) has a -$name parameter"
+                    if ($i + 1 -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-' -and $accepted[$name].Count) {
+                        Check ($tokens[$i + 1] -cin $accepted[$name]) "$($tokens[0]) -$name accepts $($tokens[$i + 1])"
+                    }
+                }
+            }
+            $commands++
+        }
+        return $commands
+    }
+    $context.acts = @('ASK', 'MEMORY', 'PROACTIVE')
+    $actsText = Get-Content -LiteralPath (Render) -Raw
+    $actsFlat = $actsText -replace '\s+', ' '
+    Check ($actsText -notmatch '\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)|(Act 1 \(ask it anything\)|Act 3 \(it remembers\)|Act 4 \(it works when nothing is broken\)) is not configured|no executive cut') 'All three modules render with no markers, skip notes or missing cut'
+    Check ($actsFlat.Contains('| 1. Ask it anything | configured | 3 | skipped |') -and $actsFlat.Contains('| 2. The Friday release | configured | 9 | 6, short form |') -and
+        $actsFlat.Contains('| 3. It remembers | configured | 3 | skipped |') -and $actsFlat.Contains('| 4. It works when nothing is broken | configured | 4 | 3, the governance deck only |') -and
+        $actsFlat.Contains('| 5. Why you can trust it | configured | 3 | 3 |') -and $actsFlat.Contains('| 6. The server room (Arc) | not built yet | 5 | skipped |')) 'Running order says which acts this guide has and how each runs in each cut'
+    $rows = @($actsText -split '\r?\n' | Where-Object { $_ -match '^\| (Open|Close|[1-6]\. )' })
+    $fullMinutes = 0
+    $cutMinutes = 0
+    foreach ($row in $rows) {
+        $cells = @($row.Trim().Trim('|') -split '\|' | ForEach-Object { $_.Trim() })
+        if ($cells[2] -match '^\d+$') { $fullMinutes += [int]$cells[2] }
+        if ($cells[3] -match '^(?<minutes>\d+)') { $cutMinutes += [int]$Matches.minutes }
+    }
+    Check ($rows.Count -eq 8 -and $fullMinutes -eq 28 -and $cutMinutes -eq 15) "Running order adds up to the 28-minute run and the 15-minute cut (got $fullMinutes and $cutMinutes)"
+    Check ($actsFlat.Contains('Only the Friday release has measured timings')) 'Running order is honest that most minutes are a budget'
+    $positions = @('## 6. Optional: one live incident', '### Running order', '### Act 1: ask it anything', '### The Friday release (T12)', '### Act 3: it remembers',
+        '### Act 4: it works when nothing is broken', '## 7. Close') | ForEach-Object { $actsText.IndexOf($_) }
+    Check (@($positions | Where-Object { $_ -lt 0 }).Count -eq 0 -and (@($positions | Sort-Object) -join ',') -ceq ($positions -join ',')) 'Every act block sits inside step 6, in act order, so the Arc splice headings stay put'
+    Check ((Test-ScriptCommands $actsText) -ge 8) 'The act blocks and the T12 block name real scripts and parameters'
+    Check ($actsFlat.Contains('Invoke-ScheduledTask.ps1 -Action Run -Name governance-deck') -and $actsFlat.Contains('Invoke-DriftDemo.ps1 -Action Start') -and
+        $actsFlat.Contains('Invoke-DriftDemo.ps1 -Action Reset') -and $actsFlat.Contains('Export-SreAgentFiles.ps1 -Source Notes -List') -and
+        $actsFlat.Contains('Export-SreAgentFiles.ps1 -Source Thread -ThreadId')) 'Act 3 and Act 4 give the exact commands'
+    Check ($actsFlat.Contains('read-only by design') -and $actsFlat.Contains('never "it can''t change anything"') -and $actsFlat.Contains('Review mode governs the Azure write tool, not Python')) 'Act 4 keeps the honest read-only wording and the Python caveat'
+    Check ($actsFlat.Contains('there is no way to clear the notes in place') -and $actsFlat.Contains('Don''t present the hand-written overview as something the agent learned')) 'Act 3 says plainly what the notes are and that rebuilding is the only clear'
+    Check (Test-ArcSpliceShape $actsText) 'The acts render keeps the same Arc splice headings'
+    Check ($actsText.TrimEnd().EndsWith("**Say:** `"$closing`"")) 'The shared Arc closing is still the last spoken text with the acts'
+    Check ($actsText -notmatch '(?:\r?\n){3}') 'Act markers do not leave repeated blank lines'
+    foreach ($link in [regex]::Matches($actsText, '\]\((?<target>[^)]+)\)')) {
+        $target = $link.Groups['target'].Value
+        if ($target -match '^https://') { continue }
+        $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path $output -Parent) ([Uri]::UnescapeDataString(($target -split '#', 2)[0]))))
+        Check (Test-Path -LiteralPath $resolved -PathType Leaf) 'Relative link in the acts render resolves'
+    }
+    Check ($actsText.Contains('../docs/ask-anything.md') -and $actsText.Contains('../docs/it-remembers.md') -and $actsText.Contains('../docs/proactive-checks.md') -and
+        $actsText.Contains('../docs/sre-cost-and-demo-fidelity.md')) 'The acts link their module pages and the cost reference'
+    $context.acts = @('ASK')
+    $askText = Get-Content -LiteralPath (Render) -Raw
+    Check ($askText.Contains('### Act 1: ask it anything') -and $askText.Contains('Act 3 (it remembers) is not configured in this saved guide') -and
+        $askText.Contains('Act 4 (it works when nothing is broken) is not configured in this saved guide') -and
+        $askText.Contains('There is no executive cut in this saved guide') -and $askText -notmatch '### Act [34]|Invoke-ScheduledTask|Invoke-DriftDemo|Export-SreAgentFiles') 'A guide with only the ASK module skips Acts 3 and 4 and the executive cut, with no leftover commands'
+    Check ($askText -notmatch '(?:\r?\n){3}|\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)' -and (Test-ArcSpliceShape $askText)) 'The ASK-only render is clean and keeps the Arc splice headings'
+    $savedRelease = $context.release
+    $context.Remove('release')
+    $context.acts = @('MEMORY')
+    $memoryText = Get-Content -LiteralPath (Render) -Raw
+    Check ($memoryText.Contains('### Act 3: it remembers') -and $memoryText.Contains('| 3. It remembers | configured | 3 | skipped |') -and
+        $memoryText.Contains('| 2. The Friday release | not configured | 9 | 6, short form |') -and $memoryText.Contains('Act 1 (ask it anything) is not configured in this saved guide') -and
+        $memoryText.Contains('The Friday release (T12) is not configured in this saved guide') -and $memoryText.Contains('There is no executive cut in this saved guide') -and
+        $memoryText -notmatch 'Invoke-FridayRelease|WEBSITE_RUN_FROM_PACKAGE|ticketing web app|Invoke-ScheduledTask|Invoke-DriftDemo') 'The MEMORY module stands alone without the Friday release and leaves no scenario text'
+    Check ($memoryText -notmatch '(?:\r?\n){3}|\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)' -and (Test-ArcSpliceShape $memoryText)) 'The MEMORY-only render is clean and keeps the Arc splice headings'
+    $context.acts = @('PROACTIVE')
+    Reject { Render } 'PROACTIVE needs the release'
+    $context.acts = @('ASK', 'PROACTIVE')
+    Reject { Render } 'PROACTIVE needs the release'
+    $context.release = $savedRelease
+    foreach ($badActs in @('ASK', @(), @('ASK', 'ASK'), @('ask'), @('BOGUS'), @('ASK', 7), @($null), $null)) {
+        $context.acts = $badActs
+        Reject { Render } 'acts must be a list of one or more of ASK, MEMORY and PROACTIVE'
+    }
+    $context.Remove('acts')
     $context.sql = @{
         machineResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.HybridCompute/machines/win-sql-demo"
         alertResourceId = "/subscriptions/$subscription/resourceGroups/rg-demo/providers/Microsoft.Insights/scheduledQueryRules/al-demo-sql-lock-timeout"

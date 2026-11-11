@@ -339,6 +339,27 @@ try {
         Remove-Item -LiteralPath $sqlSkinPath -Force
         & $readinessModule { param($Desired, $Skin) $script:ReadinessDesired=$Desired; $script:ReadinessSkin=$Skin; $script:ReadinessFailure='' } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
     }
+    $actsSkinPath = [IO.Path]::GetTempFileName()
+    try {
+        $actsSkin = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+        $actsSkin.sre.requiredScenarios += @('ASK', 'MEMORY')
+        $actsSkin | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $actsSkinPath
+        $actsDesired = Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant -SkinPath $actsSkinPath
+        & $readinessModule {
+            param($Desired, $Skin)
+            $script:ReadinessDesired = $Desired; $script:ReadinessSkin = $Skin
+            function script:Get-SreActsDataChecks { @() }
+        } $actsDesired $actsSkin
+        $actsReport = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $actsSkinPath
+        Assert-True (@($actsReport.checks | Where-Object { $_.id -match '^(ASK|MEMORY|PROACTIVE)-' }).Count -eq 0 -and @($actsReport.checks | Where-Object { $_.id -eq 'T11-resource-health' }).Count -eq 1) 'The ASK and MEMORY modules (and PROACTIVE) add no Arc resource-health rows of their own'
+    } finally {
+        Remove-Item -LiteralPath $actsSkinPath -Force
+        & $readinessModule {
+            param($Desired, $Skin)
+            $script:ReadinessDesired = $Desired; $script:ReadinessSkin = $Skin; $script:ReadinessFailure = ''
+            Remove-Item Function:\Get-SreActsDataChecks -ErrorAction SilentlyContinue
+        } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
+    }
     foreach ($failure in @('parent', 'denied', 'arc')) {
         & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
         $failed = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
@@ -590,6 +611,8 @@ try {
 & (Join-Path $PSScriptRoot 'Test-SreRelease.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreReleaseExtras.ps1')
 & (Join-Path $PSScriptRoot 'Test-FridayRelease.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreActs.ps1')
+& (Join-Path $PSScriptRoot 'Test-DriftDemo.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)
 $generator = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ScenarioScript' }, $true)

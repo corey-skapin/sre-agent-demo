@@ -2,8 +2,9 @@
 
 Some files in this repository are adapted from Microsoft's open-source
 [microsoft/sre-agent](https://github.com/microsoft/sre-agent) repository (its
-`labs/onboardinglab`), which is licensed under the MIT License. Each adapted file says
-so in a comment at its top and points here. They were adapted from commit
+`labs/onboardinglab`, `labs/terraform-drift-detection` and `labs/zava-learning`),
+which is licensed under the MIT License. Each adapted file says so in a comment at
+its top and points here. They were adapted from commit
 `e6afdfc8a5e446b488325118b0c07da7c3d8462a`:
 
 | File here | Adapted from |
@@ -12,6 +13,16 @@ so in a comment at its top and points here. They were adapted from commit
 | `config/t12/skills/azure-monitor-rca.md` | `labs/onboardinglab/workflow-templates/plugin/skills/azure-monitor-rca/SKILL.md` |
 | `config/t12/skills/github-issue-followup.md` | `labs/onboardinglab/workflow-templates/plugin/skills/github-issue-followup/SKILL.md` |
 | `config/t12/hooks/release-closing-check.md` | `labs/onboardinglab/agent-recipe/config/hooks/evidence-checklist.yaml` |
+| `config/acts/ask/skills/estate-query.md` | The shape of a skill file in `labs/onboardinglab/workflow-templates/plugin/skills` |
+| `config/acts/proactive/skills/estate-health-check.md` | `labs/onboardinglab/workflow-templates/scheduled-tasks/reservation-daily-health-report.yaml` and `labs/onboardinglab/workflow-templates/plugin/skills/proactive-health-check/SKILL.md` |
+| `config/acts/proactive/skills/bicep-drift-scan.md` | `labs/terraform-drift-detection/skills/terraform-drift-analysis.md` and `labs/terraform-drift-detection/scripts/induce-drift.ps1` |
+| `config/acts/proactive/skills/governance-deck.md` | `labs/zava-learning/sre-config/agent-config/skills/zava-audit-report/SKILL.md`, `nsg-audit/SKILL.md` and `rbac-audit/SKILL.md` |
+| `config/acts/proactive/agents/estate-auditor.md` | The idea of read-only auditor agents: `labs/zava-learning/sre-config/agent-config/agents` and `labs/onboardinglab/workflow-templates/scheduled-tasks` |
+| `config/acts/proactive/agents/deck-builder.md` | `labs/zava-learning/sre-config/agent-config/skills/zava-audit-report/SKILL.md` |
+| `config/acts/proactive/tasks/estate-health-check.md` | The task shape in `labs/onboardinglab/workflow-templates/scheduled-tasks/reservation-daily-health-report.yaml` |
+| `config/acts/proactive/tasks/bicep-drift-scan.md` | The idea of a scheduled drift scan graded Benign, Risky and Critical in `labs/terraform-drift-detection` |
+| `config/acts/proactive/tasks/governance-deck.md` | The weekly governance deck in `labs/zava-learning/sre-config/scheduled-tasks` |
+| `scripts/Invoke-DriftDemo.ps1` | The two tag names and the Benign, Risky and Critical pattern of `labs/terraform-drift-detection/scripts/induce-drift.ps1` |
 
 The ticketing application that the T12 scenario deploys is a separate repository
 with its own notice: an attributed import of the same lab's application.

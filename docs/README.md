@@ -30,6 +30,9 @@ generated from. If the local guide is missing,
 | [T09 runbook](t09-native-containerapp-closed-loop.md) | Run one Container App incident and watch the agent propose a fix |
 | [T11: LOB app on Arc](t11-lob-app-on-arc-bridge.md) | Deploy the LOB app on an Arc server, create its alert and break it |
 | [T12: The Friday release](t12-friday-release.md) | Deploy a small web app, release a bad version, and watch the agent find it and propose the redeploy-previous fix |
+| [Act 1: ask it anything](ask-anything.md) | Let your audience question the agent about the estate, from a question bank |
+| [Act 3: it remembers](it-remembers.md) | Seed the agent's notes, run the warm-up, and keep the notes across a rebuild |
+| [Act 4: it works when nothing is broken](proactive-checks.md) | Run the scheduled health check, the Bicep drift scan and the governance deck |
 | [Cost and fidelity](sre-cost-and-demo-fidelity.md) | See what the SRE layer costs and how parking changes it |
 | [Reskinning](reskin-guide.md) | Change the names, labels and region in your private skin |
 | [Sales guidance](sre-sales-rollout-guidance.md) | Plan a workshop or PoC around the demo |

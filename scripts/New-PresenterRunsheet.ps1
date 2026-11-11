@@ -24,7 +24,7 @@ $required = @(
 )
 if ($context -isnot [System.Collections.IDictionary]) { throw 'Context must be a JSON object.' }
 foreach ($key in $context.Keys) {
-    if ($key -notin ($required + @('companionArcRunsheetPath', 'sql', 'release'))) {
+    if ($key -notin ($required + @('companionArcRunsheetPath', 'sql', 'release', 'acts'))) {
         throw "Unsupported context field '$key'. Store only the documented nonsecret presenter fields."
     }
 }
@@ -118,6 +118,18 @@ if ($context.Contains('release')) {
         throw 'Invalid T12 repository, version or response plan contract.'
     }
 }
+$actModules = @()
+if ($context.Contains('acts')) {
+    $actModules = @($context.acts)
+    if ($context.acts -isnot [Collections.IList] -or $actModules.Count -lt 1 -or
+        @($actModules | Where-Object { $_ -isnot [string] -or $_ -cnotin @('ASK', 'MEMORY', 'PROACTIVE') }).Count -or
+        @($actModules | Select-Object -Unique).Count -ne $actModules.Count) {
+        throw 'acts must be a list of one or more of ASK, MEMORY and PROACTIVE, each once.'
+    }
+    if ('PROACTIVE' -in $actModules -and -not $context.Contains('release')) {
+        throw 'PROACTIVE needs the release (T12) section: the drift scan reads the ticketing web app.'
+    }
+}
 foreach ($key in $resources.Keys) {
     $scope = "/subscriptions/$($context.subscriptionId)/resourceGroups/$($context.resourceGroups[$resources[$key][0]])/providers/$($resources[$key][1])/"
     if ($context[$key] -notmatch ('^' + [regex]::Escape($scope) + '[A-Za-z0-9][A-Za-z0-9._-]*$')) {
@@ -196,6 +208,38 @@ if ($context.Contains('release')) {
     $template = [regex]::Replace($template, '(?m)^\| \{\{releasePlanRow\}\}.*\r?\n', '')
     $template = [regex]::Replace($template, '(?s)<!-- T12:START -->.*?<!-- T12:END -->',
         'The Friday release (T12) is not configured in this saved guide. Skip it until setup has deployed the ticketing workload and readiness passes its T12 rows; do not infer readiness from source defaults.')
+}
+# The acts are optional modules. No acts field leaves no trace; with it, the running order appears and each module that is not listed gets a skip note.
+$values.askGuideUrl = Get-RelativeLink (Join-Path $root 'docs\ask-anything.md')
+$values.memoryGuideUrl = Get-RelativeLink (Join-Path $root 'docs\it-remembers.md')
+$values.proactiveGuideUrl = Get-RelativeLink (Join-Path $root 'docs\proactive-checks.md')
+$values.costGuideUrl = Get-RelativeLink (Join-Path $root 'docs\sre-cost-and-demo-fidelity.md')
+$configured = { param($on) if ($on) { 'configured' } else { 'not configured' } }
+$values.askStatus = & $configured ('ASK' -in $actModules)
+$values.memoryStatus = & $configured ('MEMORY' -in $actModules)
+$values.proactiveStatus = & $configured ('PROACTIVE' -in $actModules)
+$values.releaseStatus = & $configured ($context.Contains('release'))
+$actNames = @{ ASK = 'Act 1 (ask it anything)'; MEMORY = 'Act 3 (it remembers)'; PROACTIVE = 'Act 4 (it works when nothing is broken)' }
+if ($context.Contains('acts')) {
+    $template = [regex]::Replace($template, '(?m)^<!-- ACTS:(START|END) -->\r?\n?', '')
+    if ('PROACTIVE' -in $actModules) {
+        $template = [regex]::Replace($template, '(?m)^<!-- CUT:(START|END) -->\r?\n?', '')
+    } else {
+        $template = [regex]::Replace($template, '(?s)<!-- CUT:START -->.*?<!-- CUT:END -->',
+            'There is no executive cut in this saved guide. It is built from the Friday release and the governance deck, so it needs the Friday release and the `PROACTIVE` module.')
+    }
+    foreach ($module in @('ASK', 'MEMORY', 'PROACTIVE')) {
+        if ($module -in $actModules) {
+            $template = [regex]::Replace($template, "(?m)^<!-- ${module}:(START|END) -->\r?\n?", '')
+        } else {
+            $template = [regex]::Replace($template, "(?s)<!-- ${module}:START -->.*?<!-- ${module}:END -->",
+                "$($actNames[$module]) is not configured in this saved guide. Skip it until your setup turns on the ``$module`` module and readiness passes its ``ACTS-`` rows; do not infer readiness from source defaults.")
+        }
+    }
+} else {
+    foreach ($block in @('ACTS', 'ASK', 'MEMORY', 'PROACTIVE')) {
+        $template = [regex]::Replace($template, "(?s)<!-- ${block}:START -->.*?<!-- ${block}:END -->\r?\n\r?\n", '')
+    }
 }
 $rendered = [regex]::Replace($template, '\{\{([A-Za-z]+)\}\}', {
     param($match)

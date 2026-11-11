@@ -61,12 +61,7 @@ $release = Get-SreReleaseSettings -Skin $skin -SubscriptionId $SubscriptionId
 $prefix = $skin.azure.namePrefix
 $agentName = [string]$skin.labels.agentName
 $sreGroup = "rg-$prefix-sre"
-$demoTags = Merge-DemoHashtable -Defaults ([ordered]@{
-    owner = 'demo'
-    purpose = 'sre-agent'
-    env = 'demo'
-    layersOn = 'arc-demo'
-}) -Overrides (Get-DemoSkinValue -Skin $skin -Path 'tags' -Default @{})
+$demoTags = Get-SreReleaseDemoTags -Skin $skin
 
 Write-Host "T12 workload: group '$($release.resourceGroup)' in $($release.location), web app '$($release.appName)', first release $($release.goodVersion)."
 

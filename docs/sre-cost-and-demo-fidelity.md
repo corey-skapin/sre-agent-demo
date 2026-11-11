@@ -92,6 +92,29 @@ change: 4 AAUs per agent-hour from creation until deletion, plus active work.
   every repository your GitHub account can reach, which is why the `ask` policy is
   applied before anything GitHub is connected.
 
+## Acts 1, 3 and 4: ask, remember and scheduled work
+
+The `ASK`, `MEMORY` and `PROACTIVE` modules add no resource, no second parent and no
+grant, so the SRE parent's cost doesn't change: 4 AAUs per agent-hour from creation
+until deletion, plus active work.
+
+- **Ask it anything.** No scheduled work. Each question is active work whose AAUs
+  can't be read back. Questions about the Arc servers need that estate awake, which
+  has its own cost in the Arc repository.
+- **It remembers.** The seed is one call at apply time. The overview is loaded into
+  every conversation, so it adds a little to each. The warm-up is a full incident,
+  so budget its hours at 4 AAUs each.
+- **Scheduled work.** The three tasks are paused, so they cost nothing until you run
+  one or resume its schedule. Each run is one agent thread of active work; measured
+  on 2026-11-11, the health check took 1 minute 45 seconds, the drift scan about
+  1 minute 30 seconds and the deck 2 minutes 42 seconds. With all three schedules
+  resumed, the agent would start 11 threads a week (five health checks, five drift
+  scans and one deck). The tasks live on the parent, so parking deletes them and
+  applying again recreates them paused.
+- **No per-run figure.** The active-flow AAUs of a run can't be read back (the same
+  limit as T12), so no run has a measured price. Use hours at 4 AAUs as your
+  estimate, and don't quote a price per run.
+
 ## Preserve evidence instead of guessing at telemetry savings
 
 Application Insights uses the existing workspace, so do not add a second

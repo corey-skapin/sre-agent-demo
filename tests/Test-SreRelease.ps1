@@ -248,7 +248,7 @@ try {
 
     Write-Host "$count T12 settings, grants, configuration and quota assertions passed. Azure and web calls were mocked."
 } finally {
-    Remove-Item Function:\global:Invoke-WebRequest -ErrorAction SilentlyContinue
+    Remove-Item Function:\Invoke-WebRequest -ErrorAction SilentlyContinue
     Remove-Variable -Scope Global -Name WebCalls, WebResponder, T12State -ErrorAction SilentlyContinue
     $global:AzResponder = $previousResponder
     $global:AzExitCode = $previousExit

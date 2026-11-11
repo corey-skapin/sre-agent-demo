@@ -376,6 +376,66 @@ After execution, verify the false fault flag, serving revision and HTTP 200.
 Check the alert's Monitor condition separately from its workflow status.
 Describe a manual reset as a manual reset, not agent repair, if you needed one.
 
+<!-- ACTS:START -->
+### Running order: the full 28 minutes or the 15-minute executive cut
+
+The acts below stand alone. Run any of them, in any order, or skip one: each says
+what it needs, and the others still work. Two running orders are suggested. Only the
+Friday release has measured timings, so treat the other minutes as a budget and time
+yourself in rehearsal.
+
+| Act | In this guide | Full run, 28 minutes | Executive cut, 15 minutes |
+| --- | --- | --- | --- |
+| Open | | | 1 |
+| 1. Ask it anything | {{askStatus}} | 3 | skipped |
+| 2. The Friday release | {{releaseStatus}} | 9 | 6, short form |
+| 3. It remembers | {{memoryStatus}} | 3 | skipped |
+| 4. It works when nothing is broken | {{proactiveStatus}} | 4 | 3, the governance deck only |
+| 5. Why you can trust it | {{releaseStatus}} | 3 | 3 |
+| 6. The server room (Arc) | not built yet | 5 | skipped |
+| Close | | 1 | 2 |
+
+The Friday release and *Why you can trust it* share one section below. Until the
+server-room act exists, spend its five minutes on the LOB and SQL investigations in
+steps 4 and 5. The close is step 7; add the pilot offer (one agent, one service) after
+it, with the figures in [the cost reference]({{costGuideUrl}}).
+
+<!-- CUT:START -->
+**Executive cut, in order.** Say one sentence to open: the agent is on call for this
+estate, it investigates by itself, and a person approves anything that changes Azure.
+Then:
+
+1. The Friday release, short form (6 minutes). Release the bad version about 12
+   minutes before, exactly as the full section says. At the beat, open the finished
+   thread and read its conclusion: the release, the file and line, and "about N
+   failed checkouts in M minutes". Open the Azure card, check that it sets
+   `WEBSITE_RUN_FROM_PACKAGE` to the good release, click **Approve**, and show the
+   timeline from `Invoke-FridayRelease.ps1 -Action Status`. Skip the evidence
+   walk-through and the GitHub issue.
+2. The governance deck (3 minutes). Open the deck that the `governance-deck` task
+   built before you started (Act 4 has the commands). Say that the agent reported and
+   proposed, and a person decides.
+3. Why you can trust it (3 minutes). The trust beat in the Friday release section.
+4. The close (2 minutes). Step 7, then the pilot offer.
+<!-- CUT:END -->
+<!-- ACTS:END -->
+
+<!-- ASK:START -->
+### Act 1: ask it anything
+
+Needs the `ASK` module and the agent up. Questions about the Arc servers also need
+the Arc estate awake for about 30 minutes first: after a wake, Windows telemetry
+arrives late, and a healthy server can look silent.
+
+Open a new chat with the agent, not the incident thread, and let the audience choose
+from [the question bank]({{askGuideUrl}}). Three questions fit the slot. Each answer
+should say where its facts came from: a query, a resource, a count. If one doesn't,
+ask "where did that come from?" and let the audience watch it show its work. If an
+answer is thin or wrong, say so and read the evidence. The bank marks which
+questions have been run live; a question that hasn't is a rehearsal item, not a demo
+item.
+<!-- ASK:END -->
+
 <!-- T12:START -->
 ### The Friday release (T12)
 
@@ -460,6 +520,75 @@ When you're done, ask your AI tool to run
 `Invoke-FridayRelease.ps1 -Action Reset -DeleteThreads`. If you reset the app
 yourself before approving, don't approve the old card afterwards.
 <!-- T12:END -->
+
+<!-- MEMORY:START -->
+### Act 3: it remembers
+
+Needs the `MEMORY` module, the agent up and one earlier investigation on this agent,
+so there is something to remember ([how the notes work]({{memoryGuideUrl}})). The
+Friday release is the easiest one to repeat.
+
+1. About 30 minutes before, run one incident to the end and let the thread finish:
+   the Friday release if it is configured here, or the Container App reset from step
+   6. The agent writes its notes while it works (about 3 minutes after the approved
+   fix, measured), and the Friday alert takes about 17 minutes to resolve, so a
+   chat asked sooner is told the alert is still Fired. Then ask your AI tool to check
+   that the notes exist with `Export-SreAgentFiles.ps1 -Source Notes -List`.
+2. At the beat, open a new chat and ask: "Have we had an incident on this estate
+   before? What was the cause and what fixed it?" It should cite the warm-up
+   incident: what broke, why, and the change that fixed it. If it doesn't, say so:
+   the notes didn't carry, and that is a finding, not a demo.
+3. Say what the notes are. The agent wrote them itself during the warm-up, beside a
+   short overview that a person wrote by hand and seeded when the agent was built.
+   Don't present the hand-written overview as something the agent learned.
+
+Rehearsals teach the agent: a second run reads the first run's notes and counts its
+failures. For a clean first look, rebuild the agent; there is no way to clear the
+notes in place. A rebuild doesn't clear Log Analytics or the Activity Log, so the
+agent can still find earlier releases there, as it did on 2026-11-11.
+<!-- MEMORY:END -->
+
+<!-- PROACTIVE:START -->
+### Act 4: it works when nothing is broken
+
+Needs the `PROACTIVE` module (which needs the Friday release), the agent up and the
+ticketing app serving. The three scheduled tasks are paused, so nothing here
+runs by itself: you run each one now ([the details]({{proactiveGuideUrl}})). On
+2026-11-11 the runs took 1 minute 45 seconds (health check), about 1 minute 30
+seconds (drift scan) and 2 minutes 42 seconds (deck), so start them ten minutes
+before the beat, and rehearse once anyway.
+
+**Before the beat**, ask your AI tool to:
+
+1. Start the deck first, since it is the longest run:
+   `Invoke-ScheduledTask.ps1 -Action Run -Name governance-deck`.
+2. Put the three drifts on the web app with `Invoke-DriftDemo.ps1 -Action Start`,
+   then run the scan: `Invoke-ScheduledTask.ps1 -Action Run -Name bicep-drift-scan`.
+3. Run the health check:
+   `Invoke-ScheduledTask.ps1 -Action Run -Name estate-health-check`.
+
+**At the beat**, open the three threads. The health check gives one verdict per area
+with the query or command behind each (a parked Arc estate reads Parked, which is the
+right answer). The drift scan reports one Benign, one Risky and one Critical
+difference, each with the revert it proposes and did not run. For the deck, ask your
+AI tool to fetch the file with `Export-SreAgentFiles.ps1 -Source Thread -ThreadId`
+and the thread's ID, into a folder outside the repository, and open it. Check the
+file first: the download worked live (a six-slide `.pptx` of about 37 KB), but if
+there is no file the agent gives you the same slides as Markdown.
+
+**Say:** "Nothing was broken, and it still earned its keep. These are scheduled
+tasks, and I ran them by hand a few minutes ago so you'd see the results. Each one
+looks at the estate, compares it with what we declared, and reports. It proposes
+fixes. A person decides."
+
+Say "read-only by design", never "it can't change anything". The two agents have no
+Azure write tool and no GitHub tool, but the deck builder runs Python to build the
+file, and Review mode governs the Azure write tool, not Python. What holds is the
+instructions and the agent's grants, which the trust beat explains.
+
+**After the beat**, ask your AI tool to run `Invoke-DriftDemo.ps1 -Action Reset`
+and then `-Action Status`, which should show all three settings as declared.
+<!-- PROACTIVE:END -->
 
 ## 7. Close
 

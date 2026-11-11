@@ -22,6 +22,7 @@ top to bottom after the Arc section in the companion repo.
   - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
 - Optional T12 ("The Friday release"): a small ticketing web app on App Service in its own resource group, with a checkout-failure alert and one new Website Contributor grant for the agent identity, scoped to that web app (its other grants are unchanged). It is deployed by `Deploy-TicketingWorkload.ps1` before the paid parent and removed by `Remove-TicketingWorkload.ps1`; see [`docs\t12-friday-release.md`](docs/t12-friday-release.md).
+- Optional acts, turned on by adding `ASK`, `MEMORY` or `PROACTIVE` to `sre.requiredScenarios`: skills, two read-only custom agents, three scheduled tasks (paused, so none runs by itself) and a seeded notes overview, all on the agent itself. They add no Azure resource, no grant and no GitHub permission, and `PROACTIVE` also needs T12. See [Act 1](docs/ask-anything.md), [Act 3](docs/it-remembers.md) and [Act 4](docs/proactive-checks.md).
 
 The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
@@ -76,6 +77,7 @@ config/
   demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
   t12/                       # optional T12 instructions, skills, Stop hook, GitHub guard and tool policy
+  acts/                      # optional ASK, MEMORY and PROACTIVE skills, agents, tasks and the seed overview
 samples/
   lob-arc-app/               # Local T11 app; optional repository context you supply
 scripts/
@@ -95,6 +97,9 @@ scripts/
   Remove-TicketingWorkload.ps1 # T12: deletes the ticketing group (refuses while the agent exists)
   Invoke-FridayRelease.ps1   # T12: Start (release the bad version), Status and Reset
   Send-ReleaseTraffic.ps1    # T12: background checkout traffic the run starts and stops
+  Invoke-ScheduledTask.ps1   # PROACTIVE: Status, Run, Enable and Disable for the three scheduled tasks
+  Invoke-DriftDemo.ps1       # PROACTIVE: Start, Status and Reset three harmless drifts on the ticketing web app
+  Export-SreAgentFiles.ps1   # MEMORY and PROACTIVE: list or download the agent's notes or a thread's files
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
 docs/                        # start at docs/README.md; images/ holds the README screenshots
@@ -524,6 +529,9 @@ automatic demo downgrade. Leave a demo you are still using running.
 - `docs\sre-response-plan-automation.md` - Canonical setup, lifecycle and protocol-pin reference; start at its "Setup path at a glance".
 - `docs\t11-lob-app-on-arc-bridge.md` - How to deploy the LOB app on an Arc server, create its alert and break it.
 - `docs\t12-friday-release.md` - The Friday release: deploy a small web app, release a bad version and watch the agent propose the redeploy-previous fix.
+- `docs\ask-anything.md` - Act 1: the question bank and limits for asking the agent about your estate.
+- `docs\it-remembers.md` - Act 3: the seeded overview, the warm-up flow and keeping the agent's notes across a rebuild.
+- `docs\proactive-checks.md` - Act 4: the scheduled health check, the Bicep drift scan, the governance deck and the drift demo.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
@@ -535,7 +543,8 @@ instance; record current readiness and incident evidence separately.
 - **T10 Arc server:** live validated for SRE-assisted diagnosis and Arc Run Command viability. Autonomous / SRE-executed Arc server repair is **not currently demo-ready**; treat it as possible future capability.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and Arc Run Command recovery that you run yourself. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.
 - **T12 Friday release:** run live twice on 2026-11-11 against a `B1` web app in Australia Southeast. The package swap from a release URL, the cooldown switch, the Stop hook, the `deny` rules, the approved card running under the agent's identity and the Copilot hand-off all worked; [what is proven](docs/t12-friday-release.md#what-is-proven-and-what-isnt) has the numbers. Not yet shown live: the `-SwapRules` rule update and the skill's new limit on the issue body's size.
+- **Acts 1, 3 and 4 (`ASK`, `MEMORY`, `PROACTIVE`):** run live once on 2026-11-11, on a build from zero with the Arc estate parked. The seeded overview answered a new chat in 10 seconds with no tool calls; the agent wrote its own notes during a Friday release and two new chats cited that incident; and all three scheduled tasks ran by hand to a useful report (the drift scan found the three drifts, and the deck downloaded as a valid six-slide `.pptx`). The platform starts a new scheduled task Active, so the apply now pauses each one; that pause-on-create path, a schedule firing by itself and the Arc questions have not been shown live. Each page's "what is proven" section has the numbers.
 
 ## Notices
 
-A few T12 files are adapted from Microsoft's MIT-licensed `microsoft/sre-agent` labs; [`NOTICE.md`](NOTICE.md) lists them and carries the license text.
+A few T12 and act files are adapted from Microsoft's MIT-licensed `microsoft/sre-agent` labs; [`NOTICE.md`](NOTICE.md) lists them and carries the license text.

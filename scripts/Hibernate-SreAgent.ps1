@@ -76,6 +76,7 @@ if ($removing) {
     Write-Host "Dedicated group: $($before.groupId). Shared Arc resources and private exports are excluded."
 }
 Write-Verbose $target
+Write-Host 'Deleting the agent deletes its memory notes with it. To keep them, run Export-SreAgentFiles.ps1 -Source Notes -OutputPath <a folder outside the repository> first (docs/it-remembers.md).'
 if (-not $PSCmdlet.ShouldProcess($target, "$DesiredState SRE; parent deletion loses native history/memory")) { return }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 function Assert-RemainingScope {

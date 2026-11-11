@@ -6,6 +6,7 @@ Import-Module (Join-Path $PSScriptRoot 'SreLifecycle.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRelease.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreDataPlane.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreReleaseExtras.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreActsExtras.psm1')
 
 function Get-SreSqlAlertQuery {
     param([string]$MachineResourceId)
@@ -158,6 +159,8 @@ function Get-SreReadinessReport {
             $missing = @($expectedManaged | Where-Object { $_ -notin $p.knowledgeGraphConfiguration.managedResources })
             Add-Check 'managed-resources' $agentId $(if ($missing.Count) { 'fail' } else { 'pass' }) $expectedManaged $p.knowledgeGraphConfiguration.managedResources "Missing managed IDs: $($missing -join ', ')"
             foreach ($scenario in $scenarios) {
+                # The ASK, MEMORY and PROACTIVE modules have no Arc host or alert of their own; Get-SreActsDataChecks reports on them.
+                if ($scenario -in 'ASK', 'MEMORY', 'PROACTIVE') { continue }
                 if ($scenario -eq 'T09') {
                     $appId = "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault"
                     try {
@@ -262,10 +265,17 @@ function Get-SreReadinessReport {
                 $owned = @($desired.plans | ForEach-Object { $_.name })
                 $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $owned } | ForEach-Object { $_.name })
                 Add-Check 'routing-conflicts' $agentId $(if ($extra.Count) { 'fail' } else { 'pass' }) 'No unreviewed enabled extra plans' $extra 'Conservatively requires review of every enabled unowned plan; never deletes quickstart automatically.'
-                if ($desired.release) {
+                if ($desired.release -or $desired.acts) {
                     $dataContext = ConvertTo-SreDataContext -Session $session -SubscriptionId $SubscriptionId -TenantId $TenantId
-                    foreach ($check in @(Get-SreReleaseDataChecks -Context $dataContext -Desired $desired)) {
-                        Add-Check $check.id $check.resourceId $check.status $check.expected $check.observed $check.message $check.required
+                    if ($desired.release) {
+                        foreach ($check in @(Get-SreReleaseDataChecks -Context $dataContext -Desired $desired)) {
+                            Add-Check $check.id $check.resourceId $check.status $check.expected $check.observed $check.message $check.required
+                        }
+                    }
+                    if ($desired.acts) {
+                        foreach ($check in @(Get-SreActsDataChecks -Context $dataContext -Desired $desired)) {
+                            Add-Check $check.id $check.resourceId $check.status $check.expected $check.observed $check.message $check.required
+                        }
                     }
                 }
             } catch {

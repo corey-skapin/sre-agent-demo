@@ -284,4 +284,4 @@ function Get-SreReleaseDataChecks {
     )
 }
 
-Export-ModuleMember -Function Get-SreReleaseObserved, Get-SreReleaseGuardInstruction, Get-SreReleaseExtrasPlan, Wait-SreGitHubSignIn, Invoke-SreReleaseExtras, Get-SreReleaseDataChecks
+Export-ModuleMember -Function ConvertTo-SreLf, ConvertTo-SreHashtable, Read-SreItem, Get-SreReleaseObserved, Get-SreReleaseGuardInstruction, Get-SreReleaseExtrasPlan, Wait-SreGitHubSignIn, Invoke-SreReleaseExtras, Get-SreReleaseDataChecks
