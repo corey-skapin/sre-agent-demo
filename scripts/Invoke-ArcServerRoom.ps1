@@ -192,6 +192,10 @@ switch ($Action) {
         } while ($true)
         Format-ArcRun -Run $run | ForEach-Object { Write-Output $_ }
         foreach ($card in $waiting) {
+            if ($card.ContainsKey('authorization') -and $card.authorization) {
+                Write-Warning 'The thread waits on an authorization card, which is NOT the Approve card. The platform held a read the agent made (in the run seen, a read of the run command seconds after it was created, which answered 404) until a person authorizes it, and that read then runs as whoever authorizes it, not as the agent. docs/arc-server-room.md says more.'
+                continue
+            }
             if ($card.ok) { Write-Output 'An Approve card is waiting and it is the allowed repair: one PUT of a run command on the server that runs the installed script. A person clicks Approve in the SRE portal. This script never approves.' }
             else { Write-Warning "An Approve card is waiting and it is NOT the allowed repair ($(@($card.reasons) -join '; ')). Do not relay an approval: tell the agent to stop, or reset and delete the thread." }
         }

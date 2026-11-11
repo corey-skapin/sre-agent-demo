@@ -75,7 +75,8 @@ try {
     # --- The skill ----------------------------------------------------------------------------------------------------------------------
     $skill = $desired.skills[0]
     Check ($skill.description.Length -ge 40 -and $skill.description.Length -le 400 -and $skill.content -notmatch '\{[A-Za-z][A-Za-z0-9]*\}' -and $skill.content -notmatch "`r" -and $skill.content -notmatch '<!--') 'The skill has a description, no unfilled token, no CR and no comment marker'
-    Check ($skill.content -notmatch '[$]' -and $skill.content -match 'never add an expand option' -and $skill.content -match 'plain GET') 'The skill has no dollar sign and says why a read is plain'
+    Check ($skill.content -notmatch '[$]' -and $skill.content -match 'never add an expand option') 'The skill has no dollar sign and says never to expand a read'
+    Check ($skill.content -match 'Do not read the new run command by its own URL' -and $skill.content -match 'HCRP404' -and $skill.content -match [regex]::Escape('value[?name==') -and $skill.content -notmatch 'plain GET' -and $skill.content -notmatch 'Wait about 30 seconds') 'The skill reads the new run command back from the list, never by name: a GET seconds after the PUT answered 404 and held the thread for authorization'
     $guids = @([regex]::Matches($skill.content + $desired.arc.repairScript, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}') | ForEach-Object { $_.Value } | Where-Object { $_ -notmatch '^00000000-0000-0000-0000-0000000000\d\d$' })
     Check ($guids.Count -eq 0) 'No real GUID in the skill or the script'
     Check ($skill.content -match [regex]::Escape($config.machineId) -and $skill.content -match 'ArcLobBridgeApp' -and $skill.content -match 'ArcSreLobApp' -and $skill.content -match [regex]::Escape($config.repairPath)) 'The skill names the server, the event source, the task and the script path'
@@ -281,6 +282,21 @@ try {
     $badRun = Initialize-ArcRun -Settings $config
     $null = Sync-ArcRun -Run $badRun -Settings $config -Alerts $null -Thread $thread -Messages @($deleteCard) -MachineLocation 'australiaeast'
     Check ((@(Format-ArcRun -Run $badRun) -join "`n") -match 'card \[Pending\] NOT the allowed repair: ') 'A card that is not the repair is called that in the report'
+
+    # A read the platform held for authorization: a GET of the run command seconds after the PUT answered 404 and the thread stopped (seen live). It keeps requiredScopes after someone authorizes it.
+    $heldCard = {
+        param([string]$Status)
+        $held = & $card 'held-1' $Status "az rest --method get --url `"https://management.azure.com$($config.machineId)/runCommands/sre-repair-lob-202611111200?api-version=2024-11-10-preview`"" 320
+        $held.azCliExecution.description = 'Authorization required: please grant access to the requested Azure resources.'
+        $held.azCliExecution.requiredScopes = 'https://management.azure.com/.default'
+        $held
+    }
+    $heldRun = Initialize-ArcRun -Settings $config
+    $heldNew = @(Sync-ArcRun -Run $heldRun -Settings $config -Alerts $null -Thread $thread -Messages @($goodDone, (& $heldCard 'PendingAuthorization')) -RepairRun $null -MachineLocation 'australiaeast' -ObservedUtc (& $at 330))
+    Check (($heldNew -join ',') -ceq 'threadCreated,firstAgentMessage,cardPending,cardCompleted,authorizationPending' -and $heldRun.cards['held-1'].authorization -and $null -eq $heldRun.cards['held-1'].finalStatus -and $heldRun.events.authorizationPending -ceq (& $at 320)) 'A read held for authorization is recorded as its own event and card, not as a repair or an Approve card'
+    $heldReport = @(Format-ArcRun -Run $heldRun) -join "`n"
+    Check ($heldReport -match 'authorization card pending\s+00:05:20Z' -and $heldReport -match 'card \[PendingAuthorization\] a read the platform held for authorization, not the Approve card') 'The report says the thread waits on an authorization card and that it is not the Approve card'
+    Check (@(Sync-ArcRun -Run $heldRun -Settings $config -Alerts $null -Thread $thread -Messages @($goodDone, (& $heldCard 'Completed')) -RepairRun $null -ObservedUtc (& $at 400)).Count -eq 0 -and $heldRun.cards['held-1'].finalStatus -ceq 'Completed' -and @($heldRun.cards.Values | Where-Object { $_.pendingUtc -and -not $_.finalStatus }).Count -eq 0) 'Once a person authorizes it, the card is final (still marked as an authorization) and nothing is left waiting'
 
     # --- Rows of Check, the install marker, and the run command calls ---------------------------------------------------------------------
     $sha = $desired.arc.repairSha256

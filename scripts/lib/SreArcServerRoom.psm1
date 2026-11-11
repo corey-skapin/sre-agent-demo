@@ -7,10 +7,11 @@ Import-Module (Join-Path $PSScriptRoot 'SreFridayRelease.psm1')
 # the LOB app (Start), Status and Reset. Pure helpers take data in and return data out so the offline tests can feed them recorded shapes; the few Azure
 # calls are small and named. Nothing here approves a card: a person clicks Approve in the SRE portal.
 
-$script:EventOrder = @('faultInduced', 'alertFired', 'threadCreated', 'firstAgentMessage', 'cardPending', 'cardCompleted', 'repairStarted', 'repairEnded', 'alertResolved')
+$script:EventOrder = @('faultInduced', 'alertFired', 'threadCreated', 'firstAgentMessage', 'cardPending', 'cardCompleted', 'authorizationPending', 'repairStarted', 'repairEnded', 'alertResolved')
 $script:EventLabels = @{
     faultInduced = 'fault induced on the server'; alertFired = 'alert fired'; threadCreated = 'investigation thread created'; firstAgentMessage = 'first agent message'
-    cardPending = 'Approve card pending'; cardCompleted = 'card completed (first seen)'; repairStarted = 'repair run command started'; repairEnded = 'repair run command ended'
+    cardPending = 'Approve card pending'; cardCompleted = 'card completed (first seen)'; authorizationPending = 'authorization card pending'
+    repairStarted = 'repair run command started'; repairEnded = 'repair run command ended'
     alertResolved = 'alert resolved'
 }
 
@@ -212,8 +213,9 @@ function Test-ArcRepairCommand {
 function Get-ArcRepairCard {
     <#
     .SYNOPSIS
-    Every Azure CLI write card in a thread that waits for a person or touches a run command, with its status, when it was created, and whether its
-    command is the one the ARC module allows. A card for anything else is listed too, as not allowed. Reads only.
+    Every Azure CLI card in a thread that waits for a person or touches a run command, with its status, when it was created, and whether its command is
+    the one the ARC module allows. A card for anything else is listed too, as not allowed. A read that the platform stopped to ask a person for
+    authorization is listed with authorization set, not as a repair. Reads only.
     #>
     param([AllowNull()][object[]]$Messages, [Parameter(Mandatory)][Collections.IDictionary]$Settings, [string]$MachineLocation = '')
     foreach ($message in @($Messages)) {
@@ -221,14 +223,17 @@ function Get-ArcRepairCard {
         if (-not $cli) { continue }
         $command = Get-ArcCardCommand (Get-SreProperty $cli 'originalFunctionCall')
         $status = [string](Get-SreProperty $cli 'status')
-        # A read (no method, or GET) never waits for a person. Only a pending card, or a write on a run command, is a card to judge.
+        # A read (no method, or GET) never waits for an Approve click. Only a pending card, or a write on a run command, is a card to judge. The exception is a
+        # read the platform held for authorization (a 404 on a run command that did not exist yet did that): it has requiredScopes, which it keeps after a
+        # person authorizes it, and it is listed so that Status can say the thread is waiting.
         $isRead = $command -notmatch '(?i)(^|\s)(--method|-m)[ =]' -or $command -match '(?i)(^|\s)(--method|-m)[ =]+get(\s|$)'
-        if ($status -ne 'Pending' -and ($isRead -or $command -notmatch 'runCommands')) { continue }
+        $authorization = $status -eq 'PendingAuthorization' -or -not [string]::IsNullOrWhiteSpace([string](Get-SreProperty $cli 'requiredScopes'))
+        if ($status -ne 'Pending' -and -not $authorization -and ($isRead -or $command -notmatch 'runCommands')) { continue }
         $verdict = Test-ArcRepairCommand -Command $command -Settings $Settings -MachineLocation $MachineLocation
         [pscustomobject]@{
             id = [string](Get-SreProperty $cli 'id'); status = $status
             createdUtc = (ConvertTo-FridayUtc (Get-SreProperty $cli 'createdTimestamp')); startedUtc = (ConvertTo-FridayUtc (Get-SreProperty $cli 'startedTimestamp'))
-            command = (Get-ArcClip $command 400); ok = $verdict.ok; reasons = @($verdict.reasons); runName = $verdict.runName
+            command = (Get-ArcClip $command 400); ok = $verdict.ok; reasons = @($verdict.reasons); runName = $verdict.runName; authorization = $authorization
         }
     }
 }
@@ -271,6 +276,16 @@ function Sync-ArcRun {
         if ($agentMessages.Count) { & $note 'firstAgentMessage' (ConvertTo-FridayUtc (Get-SreProperty $agentMessages[0] 'timeStamp')) }
         foreach ($card in @(Get-ArcRepairCard -Messages $Messages -Settings $Settings -MachineLocation $MachineLocation)) {
             if (-not $card.id) { continue }
+            if ($card.authorization) {
+                # A read the platform held for authorization. The thread waits for a person to answer it, it is not the Approve card, and it has no verdict.
+                if (-not $Run.cards.ContainsKey($card.id)) {
+                    $Run.cards[$card.id] = @{ command = $card.command; pendingUtc = $(if ($card.createdUtc) { $card.createdUtc } else { $ObservedUtc }); finalStatus = $null; finalUtc = $null; ok = $true; reasons = @(); authorization = $true }
+                }
+                $held = $Run.cards[$card.id]
+                & $note 'authorizationPending' $held.pendingUtc
+                if ($card.status -ne 'PendingAuthorization' -and -not $held.finalUtc) { $held.finalStatus = $(if ($card.status) { $card.status } else { 'Unknown' }); $held.finalUtc = $ObservedUtc }
+                continue
+            }
             if (-not $Run.cards.ContainsKey($card.id)) { $Run.cards[$card.id] = @{ command = $card.command; pendingUtc = $null; finalStatus = $null; finalUtc = $null; ok = $card.ok; reasons = @($card.reasons) } }
             $record = $Run.cards[$card.id]
             $record.command = $card.command; $record.ok = $card.ok; $record.reasons = @($card.reasons)
@@ -313,8 +328,9 @@ function Format-ArcRun {
     }
     foreach ($id in $Run.cards.Keys) {
         $card = $Run.cards[$id]
-        $state = if ($card.finalStatus) { $card.finalStatus } else { 'Pending' }
-        $verdict = if ($card.ok) { 'the command is the allowed repair' } else { "NOT the allowed repair: $(@($card.reasons) -join '; ')" }
+        $held = $card.ContainsKey('authorization') -and $card.authorization
+        $state = if ($card.finalStatus) { $card.finalStatus } elseif ($held) { 'PendingAuthorization' } else { 'Pending' }
+        $verdict = if ($held) { 'a read the platform held for authorization, not the Approve card' } elseif ($card.ok) { 'the command is the allowed repair' } else { "NOT the allowed repair: $(@($card.reasons) -join '; ')" }
         $lines.Add("  card [$state] $verdict")
         $lines.Add("    $($card.command)")
     }
