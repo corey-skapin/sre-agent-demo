@@ -22,7 +22,7 @@ top to bottom after the Arc section in the companion repo.
   - `High` access (default): Reader + Log Analytics Contributor + Contributor, preserving the existing lab profile for governed Review-mode remediation.
   - `Low` access: Reader + Log Analytics Reader for observe-only demos.
 - Optional T12 ("The Friday release"): a small ticketing web app on App Service in its own resource group, with a checkout-failure alert and one new Website Contributor grant for the agent identity, scoped to that web app (its other grants are unchanged). It is deployed by `Deploy-TicketingWorkload.ps1` before the paid parent and removed by `Remove-TicketingWorkload.ps1`; see [`docs\t12-friday-release.md`](docs/t12-friday-release.md).
-- Optional acts, turned on by adding `ASK`, `MEMORY` or `PROACTIVE` to `sre.requiredScenarios`: skills, two read-only custom agents, three scheduled tasks (paused, so none runs by itself) and a seeded notes overview, all on the agent itself. They add no Azure resource, no grant and no GitHub permission, and `PROACTIVE` also needs T12. See [Act 1](docs/ask-anything.md), [Act 3](docs/it-remembers.md) and [Act 4](docs/proactive-checks.md).
+- Optional acts, turned on by adding `ASK`, `MEMORY`, `PROACTIVE` or `ARC` to `sre.requiredScenarios`: skills, two read-only custom agents, three scheduled tasks (paused, so none runs by itself) and a seeded notes overview, all on the agent itself, plus one repair script on your Arc server for `ARC`. They add no Azure resource, no grant and no GitHub permission. `PROACTIVE` also needs T12, and `ARC` also needs T11 and the `High` access level. See [Act 1](docs/ask-anything.md), [Act 3](docs/it-remembers.md), [Act 4](docs/proactive-checks.md) and [Act 6](docs/arc-server-room.md).
 
 The Bicep uses the published [Microsoft.App/agents schema](https://learn.microsoft.com/azure/templates/microsoft.app/2026-01-01/agents).
 
@@ -77,7 +77,7 @@ config/
   demo-context.example.json  # fictional presenter context; copy to .local/demo-context.json
   sre-handler.instructions.txt, sre-sql.instructions.txt, sre-parent-settings.json # versioned agent instructions and parent settings
   t12/                       # optional T12 instructions, skills, Stop hook, GitHub guard and tool policy
-  acts/                      # optional ASK, MEMORY and PROACTIVE skills, agents, tasks and the seed overview
+  acts/                      # optional ASK, MEMORY, PROACTIVE and ARC skills, agents, tasks, the Arc repair script and the seed overview
 samples/
   lob-arc-app/               # Local T11 app; optional repository context you supply
 scripts/
@@ -100,6 +100,7 @@ scripts/
   Invoke-ScheduledTask.ps1   # PROACTIVE: Status, Run, Enable and Disable for the three scheduled tasks
   Invoke-DriftDemo.ps1       # PROACTIVE: Start, Status and Reset three harmless drifts on the ticketing web app
   Export-SreAgentFiles.ps1   # MEMORY and PROACTIVE: list or download the agent's notes or a thread's files
+  Invoke-ArcServerRoom.ps1   # ARC: Prepare, Check, Start, Status and Reset the server-room scenario (Act 6)
   lib/                       # shared modules for the scripts above
 tests/                       # offline tests; run .\tests\Invoke-Tests.ps1
 docs/                        # start at docs/README.md; images/ holds the README screenshots
@@ -532,6 +533,7 @@ automatic demo downgrade. Leave a demo you are still using running.
 - `docs\ask-anything.md` - Act 1: the question bank and limits for asking the agent about your estate.
 - `docs\it-remembers.md` - Act 3: the seeded overview, the warm-up flow and keeping the agent's notes across a rebuild.
 - `docs\proactive-checks.md` - Act 4: the scheduled health check, the Bicep drift scan, the governance deck and the drift demo.
+- `docs\arc-server-room.md` - Act 6: the Arc server's app fails, the agent proposes one repair as a Review card and you approve it.
 - `docs\reskin-guide.md` - Skin variables schema, swap-list, and retargeting steps.
 
 ## Current validation stance
@@ -544,6 +546,7 @@ instance; record current readiness and incident evidence separately.
 - **T11 LOB app on Arc:** live validated for Arc app fault signal, Log Analytics Event ID `4100`, Azure Monitor alerting, SRE incident creation, and Arc Run Command recovery that you run yourself. In the latest run, SRE RCA generation stalled before final diagnostic output, so do not present T11 as a proven SRE RCA or autonomous Arc app repair path. The sample is local; optionally provide your own source repository and commit.
 - **T12 Friday release:** run live twice on 2026-11-11 against a `B1` web app in Australia Southeast. The package swap from a release URL, the cooldown switch, the Stop hook, the `deny` rules, the approved card running under the agent's identity and the Copilot hand-off all worked; [what is proven](docs/t12-friday-release.md#what-is-proven-and-what-isnt) has the numbers. Not yet shown live: the `-SwapRules` rule update and the skill's new limit on the issue body's size.
 - **Acts 1, 3 and 4 (`ASK`, `MEMORY`, `PROACTIVE`):** run live once on 2026-11-11, on a build from zero with the Arc estate parked. The seeded overview answered a new chat in 10 seconds with no tool calls; the agent wrote its own notes during a Friday release and two new chats cited that incident; and all three scheduled tasks ran by hand to a useful report (the drift scan found the three drifts, and the deck downloaded as a valid six-slide `.pptx`). The platform starts a new scheduled task Active, so the apply now pauses each one; that pause-on-create path, a schedule firing by itself and the Arc questions have not been shown live. Each page's "what is proven" section has the numbers.
+- **Act 6 (`ARC`):** built and tested offline only; it has not run live. A test on 2026-11-10 proved its risky part: the agent listed the Arc machines, ran the Log Analytics queries, and creating a Run Command with `az rest` raised one Review card that ran under the agent's own identity with the grants it already had. Not yet shown: the whole act from fault to closing summary, the repair script on the real server, and the agent reproducing the Run Command body exactly. [What is proven](docs/arc-server-room.md#what-is-proven-and-what-is-not) has the list.
 
 ## Notices
 

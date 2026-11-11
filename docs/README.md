@@ -33,6 +33,7 @@ generated from. If the local guide is missing,
 | [Act 1: ask it anything](ask-anything.md) | Let your audience question the agent about the estate, from a question bank |
 | [Act 3: it remembers](it-remembers.md) | Seed the agent's notes, run the warm-up, and keep the notes across a rebuild |
 | [Act 4: it works when nothing is broken](proactive-checks.md) | Run the scheduled health check, the Bicep drift scan and the governance deck |
+| [Act 6: the server room (Arc)](arc-server-room.md) | Break the LOB app on the Arc server and let the agent propose one repair for you to approve |
 | [Cost and fidelity](sre-cost-and-demo-fidelity.md) | See what the SRE layer costs and how parking changes it |
 | [Reskinning](reskin-guide.md) | Change the names, labels and region in your private skin |
 | [Sales guidance](sre-sales-rollout-guidance.md) | Plan a workshop or PoC around the demo |

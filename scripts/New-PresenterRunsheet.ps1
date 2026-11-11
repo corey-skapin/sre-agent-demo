@@ -122,9 +122,9 @@ $actModules = @()
 if ($context.Contains('acts')) {
     $actModules = @($context.acts)
     if ($context.acts -isnot [Collections.IList] -or $actModules.Count -lt 1 -or
-        @($actModules | Where-Object { $_ -isnot [string] -or $_ -cnotin @('ASK', 'MEMORY', 'PROACTIVE') }).Count -or
+        @($actModules | Where-Object { $_ -isnot [string] -or $_ -cnotin @('ASK', 'MEMORY', 'PROACTIVE', 'ARC') }).Count -or
         @($actModules | Select-Object -Unique).Count -ne $actModules.Count) {
-        throw 'acts must be a list of one or more of ASK, MEMORY and PROACTIVE, each once.'
+        throw 'acts must be a list of one or more of ASK, MEMORY, PROACTIVE and ARC, each once.'
     }
     if ('PROACTIVE' -in $actModules -and -not $context.Contains('release')) {
         throw 'PROACTIVE needs the release (T12) section: the drift scan reads the ticketing web app.'
@@ -213,13 +213,15 @@ if ($context.Contains('release')) {
 $values.askGuideUrl = Get-RelativeLink (Join-Path $root 'docs\ask-anything.md')
 $values.memoryGuideUrl = Get-RelativeLink (Join-Path $root 'docs\it-remembers.md')
 $values.proactiveGuideUrl = Get-RelativeLink (Join-Path $root 'docs\proactive-checks.md')
+$values.arcGuideUrl = Get-RelativeLink (Join-Path $root 'docs\arc-server-room.md')
 $values.costGuideUrl = Get-RelativeLink (Join-Path $root 'docs\sre-cost-and-demo-fidelity.md')
 $configured = { param($on) if ($on) { 'configured' } else { 'not configured' } }
 $values.askStatus = & $configured ('ASK' -in $actModules)
 $values.memoryStatus = & $configured ('MEMORY' -in $actModules)
 $values.proactiveStatus = & $configured ('PROACTIVE' -in $actModules)
+$values.arcStatus = & $configured ('ARC' -in $actModules)
 $values.releaseStatus = & $configured ($context.Contains('release'))
-$actNames = @{ ASK = 'Act 1 (ask it anything)'; MEMORY = 'Act 3 (it remembers)'; PROACTIVE = 'Act 4 (it works when nothing is broken)' }
+$actNames = @{ ASK = 'Act 1 (ask it anything)'; MEMORY = 'Act 3 (it remembers)'; PROACTIVE = 'Act 4 (it works when nothing is broken)'; ARC = 'Act 6 (the server room)' }
 if ($context.Contains('acts')) {
     $template = [regex]::Replace($template, '(?m)^<!-- ACTS:(START|END) -->\r?\n?', '')
     if ('PROACTIVE' -in $actModules) {
@@ -228,7 +230,7 @@ if ($context.Contains('acts')) {
         $template = [regex]::Replace($template, '(?s)<!-- CUT:START -->.*?<!-- CUT:END -->',
             'There is no executive cut in this saved guide. It is built from the Friday release and the governance deck, so it needs the Friday release and the `PROACTIVE` module.')
     }
-    foreach ($module in @('ASK', 'MEMORY', 'PROACTIVE')) {
+    foreach ($module in @('ASK', 'MEMORY', 'PROACTIVE', 'ARC')) {
         if ($module -in $actModules) {
             $template = [regex]::Replace($template, "(?m)^<!-- ${module}:(START|END) -->\r?\n?", '')
         } else {
@@ -237,7 +239,7 @@ if ($context.Contains('acts')) {
         }
     }
 } else {
-    foreach ($block in @('ACTS', 'ASK', 'MEMORY', 'PROACTIVE')) {
+    foreach ($block in @('ACTS', 'ASK', 'MEMORY', 'PROACTIVE', 'ARC')) {
         $template = [regex]::Replace($template, "(?s)<!-- ${block}:START -->.*?<!-- ${block}:END -->\r?\n\r?\n", '')
     }
 }

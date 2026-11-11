@@ -92,11 +92,11 @@ change: 4 AAUs per agent-hour from creation until deletion, plus active work.
   every repository your GitHub account can reach, which is why the `ask` policy is
   applied before anything GitHub is connected.
 
-## Acts 1, 3 and 4: ask, remember and scheduled work
+## Acts 1, 3, 4 and 6: ask, remember, scheduled work and the server room
 
-The `ASK`, `MEMORY` and `PROACTIVE` modules add no resource, no second parent and no
-grant, so the SRE parent's cost doesn't change: 4 AAUs per agent-hour from creation
-until deletion, plus active work.
+The `ASK`, `MEMORY`, `PROACTIVE` and `ARC` modules add no resource, no second parent
+and no grant, so the SRE parent's cost doesn't change: 4 AAUs per agent-hour from
+creation until deletion, plus active work.
 
 - **Ask it anything.** No scheduled work. Each question is active work whose AAUs
   can't be read back. Questions about the Arc servers need that estate awake, which
@@ -114,6 +114,11 @@ until deletion, plus active work.
 - **No per-run figure.** The active-flow AAUs of a run can't be read back (the same
   limit as T12), so no run has a measured price. Use hours at 4 AAUs as your
   estimate, and don't quote a price per run.
+- **The server room.** The act needs the Arc estate awake for at least 30 minutes
+  before the beat, which has its own cost in the Arc repository, and the agent up
+  for the whole fault: start it about 15 minutes before the beat, so budget that
+  lead at 4 AAUs per hour. It creates one run command on the server and removes it
+  on reset. See [Act 6](arc-server-room.md).
 
 ## Preserve evidence instead of guessing at telemetry savings
 

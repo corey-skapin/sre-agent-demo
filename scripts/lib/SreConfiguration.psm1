@@ -31,6 +31,16 @@ function Get-SreDesiredConfiguration {
         $tokens.sqlEventSource = $skin.labels.sqlEventSource
         $instructions += "`n" + (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\sre-sql.instructions.txt') -Raw)
     }
+    if ('ARC' -in $scenarios) {
+        # The base text keeps Windows investigations read-only. With the ARC module the agent may also propose one Run Command, so the sentence after
+        # the read-only rule names the one exception and a closing paragraph holds the policy. A skin without ARC gets the base text unchanged.
+        $anchor = 'Recommend human checks, not unapproved actions.'
+        if (-not $instructions.Contains($anchor)) { throw 'The base handler no longer has the governance sentence the ARC module extends. Update Get-SreDesiredConfiguration.' }
+        $instructions = $instructions.Replace($anchor, 'The one exception to this read-only rule is the Arc application recovery policy below. ' + $anchor)
+        $eol = if ($instructions.Contains("`r`n")) { "`r`n" } else { "`n" }
+        $tokens.arcMachineName = [string]$skin.sre.targetArcMachine
+        $instructions += "`n" + ((Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\config\acts\arc\handler.instructions.txt') -Raw) -replace "`r?`n", $eol)
+    }
     foreach ($key in $tokens.Keys) { $instructions = $instructions.Replace("{$key}", $tokens[$key]) }
     $plans = @()
     foreach ($scenario in $scenarios) {
@@ -38,13 +48,15 @@ function Get-SreDesiredConfiguration {
         $name = switch ($scenario) { 'T09' { $skin.labels.containerResponsePlan }; 'T11' { $skin.labels.lobResponsePlan }; 'SQL' { $skin.labels.sqlResponsePlan } }
         $title = switch ($scenario) { 'T09' { 'containerapp-restarts' }; 'T11' { $skin.labels.lobAlertTitleContains }; 'SQL' { $skin.labels.sqlAlertTitleContains } }
         $service = if ($scenario -eq 'T09') { 'Azure Container Apps' } else { 'Azure Arc' }
+        # With ARC the LOB plan runs with the cooldown off, like T12's, so a rehearsal's repeat fault opens a new thread instead of merging into a resolved one.
+        $merge = -not ($scenario -eq 'T11' -and 'ARC' -in $scenarios)
         $plans += @{
             scenario = $scenario; name = $name; type = 'IncidentFilter'; tags = @()
             properties = @{
                 incidentPlatform = 'AzMonitor'; priorities = @('Sev2'); titleContains = $title
                 impactedService = $service; handlingAgent = $skin.labels.agentName
                 agentMode = 'Review'; isEnabled = $true
-                mergeEnabled = $true; mergeWindowHours = 3
+                mergeEnabled = $merge; mergeWindowHours = 3
             }
         }
         if (@($plans | ForEach-Object { $_.name } | Select-Object -Unique).Count -ne $plans.Count) { throw 'Required scenarios must use distinct response-plan names.' }
