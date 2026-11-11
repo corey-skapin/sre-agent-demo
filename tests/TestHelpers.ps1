@@ -80,6 +80,11 @@ while ($listener.IsListening) {
                         $item = $item | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable -Depth 20
                         $null = $item.properties.Remove('tools')
                     }
+                    if ($kind -eq 'hooks') {
+                        # A live agent stores a hook but never returns properties.enabled.
+                        $item = $item | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable -Depth 20
+                        $null = $item.properties.Remove('enabled')
+                    }
                     Send-Reply $context 200 $item
                 } else { Send-Reply $context 404 @{ error = 'not found' } }
             } else {

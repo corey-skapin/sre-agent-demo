@@ -121,8 +121,9 @@ function Get-SreReleaseExtrasPlan {
         $hook = $release.hook
         $hookProperties = if ($Observed.hook -and $Observed.hook['properties']) { $Observed.hook['properties'] } else { @{} }
         $hookBody = if ($hookProperties['hook']) { $hookProperties['hook'] } else { @{} }
+        # A live agent stores the hook but never returns properties.enabled, so only an explicit false counts as drift.
         $hookSame = $Observed.hook -and [string]$hookProperties['eventType'] -ceq $hook.eventType -and [string]$hookProperties['activationMode'] -ceq $hook.activationMode -and
-            [string]$hookProperties['description'] -ceq $hook.description -and $hookProperties['enabled'] -eq $true -and [string]$hookBody['type'] -ceq 'prompt' -and
+            [string]$hookProperties['description'] -ceq $hook.description -and ($null -eq $hookProperties['enabled'] -or $hookProperties['enabled'] -eq $true) -and [string]$hookBody['type'] -ceq 'prompt' -and
             (ConvertTo-SreLf $hookBody['prompt']) -ceq $hook.prompt -and $hookBody['timeout'] -eq $hook.timeout -and $hookBody['maxRejections'] -eq $hook.maxRejections
         if (-not $hookSame) {
             $operations.Add(@{ name = "hook:$($hook.name)"; reason = $(if ($Observed.hook) { 'update' } else { 'create' }); method = 'Put'; path = "/api/v2/extendedAgent/hooks/$([uri]::EscapeDataString($hook.name))"
@@ -277,7 +278,7 @@ function Get-SreReleaseDataChecks {
     @(
         (& $row 'T12-github-guard' $before.guardInPlace 'GitHub ask rules and the repository-only instruction present' $guardPending 'Review mode gates Azure writes only. GitHub writes stop for approval because of these ask rules; they must be in place before any GitHub connection.' $true)
         (& $row 'T12-skills' ($skillsPending.Count -eq 0) 'Both T12 skills present and current' $skillsPending 'Compares each skill file with the agent.' $true)
-        (& $row 'T12-hook' ($hookPending.Count -eq 0) 'The Stop hook present, enabled and current' $hookPending 'Compares the closing-check hook with the agent.' $true)
+        (& $row 'T12-hook' ($hookPending.Count -eq 0) 'The Stop hook present, not disabled and current' $hookPending 'Compares the closing-check hook with the agent.' $true)
         @{ id = 'T12-github-signin'; resourceId = $Context.resourceId; required = $false; status = $(if ($signedIn) { 'pass' } else { 'pending' }); expected = 'GitHub sign-in present'; observed = $domainCount; message = 'The one human step per agent build. Without it the agent cannot read the repository or open the follow-up issue; the rollback still works.' }
         @{ id = 'T12-repository'; resourceId = $Context.resourceId; required = $false; status = $(if ($repositoryReady) { 'pass' } else { 'pending' }); expected = 'Repository connected and cloned'; observed = [bool]$repositoryReady; message = 'Needs the GitHub sign-in. Optional for the rollback; needed for code-level findings.' }
     )

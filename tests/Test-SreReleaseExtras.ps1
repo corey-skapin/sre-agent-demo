@@ -111,6 +111,9 @@ try {
     $disabled.hook.properties.enabled = $false
     $hookPlan = Get-SreReleaseExtrasPlan -Desired $desired -Observed $disabled -Stage Before
     Check ($hookPlan.operations.Count -eq 1 -and $hookPlan.operations[0].name -ceq "hook:$hookName" -and $hookPlan.operations[0].body.properties.enabled -eq $true -and $hookPlan.operations[0].body.type -ceq 'GlobalHook') 'A disabled hook is enabled again'
+    $noEnabled = New-Observed -Applied
+    $null = $noEnabled.hook.properties.Remove('enabled')
+    Check ((Get-SreReleaseExtrasPlan -Desired $desired -Observed $noEnabled -Stage Before).operations.Count -eq 0) 'A hook the service returns without an enabled flag is not drift, so the apply converges'
     $partial = New-Observed -Applied
     $partial.policy = @{ allow = @('MyAllow') + @($release.policy.allow[0]); ask = @('MyAsk'); deny = @('MyDeny'); etag = '"e1"' }
     $policyPlan = Get-SreReleaseExtrasPlan -Desired $desired -Observed $partial -Stage Before
