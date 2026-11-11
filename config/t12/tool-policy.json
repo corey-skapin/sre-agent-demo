@@ -1,0 +1,22 @@
+{
+  "_comment": "Merged into the agent's tool policy additively; nothing is removed. Allow beats ask, so allow holds GitHub reads only. Review mode gates Azure writes; GitHub writes are gated by the ask rules below.",
+  "allow": [
+    "FetchGithubIssue",
+    "FetchGithubIssues",
+    "FetchGithubIssuesLimited",
+    "FetchGithubIssueComments",
+    "FindConnectedGitHubRepo"
+  ],
+  "ask": [
+    "*Github*",
+    "*PullRequest*",
+    "*pull_request*",
+    "bash(git push*)",
+    "bash(gh *)",
+    "bash(*api.github.com*)"
+  ],
+  "deny": [
+    "RunAzCliWriteCommands(az group delete *)",
+    "RunAzCliWriteCommands(az webapp delete *)"
+  ]
+}

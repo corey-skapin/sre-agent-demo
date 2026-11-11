@@ -127,6 +127,7 @@ Inspect these existing entries without editing:
 | {{containerResponsePlan}} | Container App restart alert | On, Azure Monitor, Sev2, Review, three-hour cooldown |
 | {{lobResponsePlan}} | {{lobAlertTitleContains}} | On, Azure Monitor, Sev2, Review, three-hour cooldown |
 | {{sqlPlanRow}} | {{sqlPlanSignal}} | {{sqlPlanCheck}} |
+| {{releasePlanRow}} | Checkout failures on the ticketing web app | On, Azure Monitor, Sev2, Review, cooldown off |
 
 These plans use **{{agentName}}** as the handling agent. To show its instructions,
 which hold the narrow app reset and the boundary that Arc recovery is yours to run,
@@ -374,6 +375,91 @@ under **Live faults**).
 After execution, verify the false fault flag, serving revision and HTTP 200.
 Check the alert's Monitor condition separately from its workflow status.
 Describe a manual reset as a manual reset, not agent repair, if you needed one.
+
+<!-- T12:START -->
+### The Friday release (T12)
+
+Use this as the live incident instead of the Container App reset above, or after it.
+A ticketing web app ([{{releaseAppName}}]({{releaseAppResourceIdUrl}})) gets a release
+that reads like an ordinary change and breaks checkout. The agent finds the release,
+the file and the line, counts the failed checkouts and proposes redeploying the last
+good version, and you click **Approve**. Your AI tool can run every command here;
+[the T12 runbook]({{releaseGuideUrl}}) has the setup and the details. The only things
+you do are the **Approve** clicks on the cards described below.
+
+**Before you present.** `Test-SreReadiness.ps1 -DesiredState Active` passes,
+including its `T12-` rows, and [the app]({{releaseAppUrl}}) serves
+{{releaseGoodVersion}}. Open the agent once and let its welcome thread finish.
+Rehearse the beat once first: the package swap, the cooldown switch, the Stop hook
+and the Copilot hand-off all worked live on 11 November 2026, and the agent's notes
+from a rehearsal change what it says in the next run
+([what is proven]({{releaseGuideUrl}}#what-is-proven-and-what-isnt)).
+
+**About 12 minutes before the beat**, ask your AI tool to run
+`Invoke-FridayRelease.ps1 -Action Start`. It sends checkout traffic, waits five
+minutes on {{releaseGoodVersion}}, then releases {{releaseBadVersion}}. The Review
+card appears four to six minutes after the release (4 min 19 s and 5 min 33 s
+measured). Keep
+`Invoke-FridayRelease.ps1 -Action Status -Wait` running: it records when each step
+happened and says when the card is waiting.
+
+**Say:** "It's Friday, 5:40 pm, and a release has just gone out. I haven't told the
+agent anything. Watch what it does with the alert."
+
+1. Open the new incident thread (its alert is named for the ticketing checkout
+   failures). Follow the evidence as it arrives: failed checkouts per minute by
+   release, the `ReleaseStarted` event, the exception and its top stack frame, and
+   the code if the repository is connected. It should end with the release, the
+   file and the line, and "about N failed checkouts in M minutes". Check each claim
+   against the evidence on screen; don't repeat a cause the thread didn't show.
+2. Open the Azure card, not just the prose. It must be one `az webapp config
+   appsettings set` on {{releaseAppName}} that sets `WEBSITE_RUN_FROM_PACKAGE` to
+   the package URL of {{releaseGoodVersion}} and changes nothing else. If it
+   proposes anything different, don't approve it. Click **Approve**.
+3. The app restarts: about two minutes until the first healthy request. This is
+   your talking time for the trust beat below.
+4. Say that a person approved it, never that the audit proves it. Check that the
+   thread's closing summary says so and doesn't predict when the alert clears (it
+   resolves by itself about 15 to 17 minutes after the last failed request). The
+   Stop hook may send the agent back once, for a confidence level, the affected
+   resources or a next step, so the summary can arrive a minute after the recovery.
+5. Offer the follow-up: ask the agent for a GitHub issue assigned to Copilot in
+   {{releaseRepository}}. Creating it stops for a second **Approve**; check the
+   repository, title and assignee, then click. In the live test Copilot's draft pull
+   request opened 8 seconds after the click and settled about five minutes later.
+   The platform adds a footer to the issue with a link to your SRE portal thread,
+   and that link holds your subscription ID: edit it out afterwards
+   ([why]({{releaseGuideUrl}}#what-you-can-and-cant-claim)).
+6. Run `Invoke-FridayRelease.ps1 -Action Status` once more and show its timeline:
+   release, first failure, alert, thread, card, approval, healthy again. That is
+   the stopwatch.
+
+#### Why you can trust it
+
+**Say:** "Three things kept this safe. The response plan is in Review, so every
+change to Azure waited for a person, and I read the card before I clicked. This
+scenario added one permission, to change this web app; the agent's other
+permissions are the ones it already had. And Review only governs Azure changes, so
+we also told the agent to ask before any GitHub write: that's why creating the issue
+stopped for a second click. Without that rule it would have been created without
+one."
+
+Show only what you rehearsed: the Review plan ({{releaseResponsePlan}} in the plan
+list in step 3), the two cards that waited and the thread's tool calls. The rules
+that deny `az group delete` and `az webapp delete` blocked both commands in a live
+test (the agent reports the tool is blocked by a permission rule), but promise
+nothing beyond those two commands: every other write waits for your click. The
+GitHub sign-in is wider than the demo
+repository (it reaches every repository the signed-in account can reach), so say so
+if you're asked. So is the agent's Azure access: at the default `High` level it also
+holds Contributor on the Arc resource groups and Monitoring Contributor on the
+subscription. Review mode is what makes any write with those wait for a person, so
+never say the agent can only change this one web app.
+
+When you're done, ask your AI tool to run
+`Invoke-FridayRelease.ps1 -Action Reset -DeleteThreads`. If you reset the app
+yourself before approving, don't approve the old card afterwards.
+<!-- T12:END -->
 
 ## 7. Close
 

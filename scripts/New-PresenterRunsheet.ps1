@@ -24,7 +24,7 @@ $required = @(
 )
 if ($context -isnot [System.Collections.IDictionary]) { throw 'Context must be a JSON object.' }
 foreach ($key in $context.Keys) {
-    if ($key -notin ($required + @('companionArcRunsheetPath', 'sql'))) {
+    if ($key -notin ($required + @('companionArcRunsheetPath', 'sql', 'release'))) {
         throw "Unsupported context field '$key'. Store only the documented nonsecret presenter fields."
     }
 }
@@ -89,6 +89,35 @@ if ($context.Contains('sql')) {
     $resources.sqlMachineResourceId = @('arc', 'Microsoft.HybridCompute/machines')
     $resources.sqlAlertResourceId = @('arc', 'Microsoft.Insights/scheduledQueryRules')
 }
+if ($context.Contains('release')) {
+    $release = $context.release
+    $releaseFields = @('appResourceId', 'appUrl', 'repository', 'goodVersion', 'badVersion', 'responsePlan')
+    if ($release -isnot [Collections.IDictionary] -or @($release.Keys | Where-Object { $_ -notin $releaseFields }).Count) {
+        throw 'release must contain only the documented nonsecret T12 presenter fields.'
+    }
+    foreach ($key in $releaseFields) {
+        if (-not $release.Contains($key) -or $release[$key] -isnot [string] -or [string]::IsNullOrWhiteSpace($release[$key])) {
+            throw "Missing or invalid release.$key."
+        }
+    }
+    $siteScope = "/subscriptions/$($context.subscriptionId)/resourceGroups/"
+    if ($release.appResourceId -notmatch ('^' + [regex]::Escape($siteScope) + '[A-Za-z0-9][A-Za-z0-9._-]{0,89}/providers/Microsoft\.Web/sites/[A-Za-z0-9][A-Za-z0-9-]{0,59}$')) {
+        throw 'Invalid releaseAppResourceId; resource must match the explicit subscription and be a web app.'
+    }
+    $releaseUri = $null
+    if (-not [Uri]::TryCreate($release.appUrl, [UriKind]::Absolute, [ref]$releaseUri) -or $releaseUri.Scheme -ne 'https' -or $releaseUri.UserInfo -or
+        $releaseUri.Query -or $releaseUri.Fragment -or $releaseUri.AbsolutePath -ne '/' -or $releaseUri.Host -notlike '*.azurewebsites.net' -or
+        $release.appUrl -match '[\s()<>"''`]' -or $release.appUrl -match '(?i)(token|secret|password|signature|access_key)=') {
+        throw 'Invalid releaseAppUrl; use the web app''s https address on azurewebsites.net without credentials, a path or query parameters.'
+    }
+    if ($release.repository -notmatch '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' -or
+        $release.goodVersion -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $release.badVersion -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or
+        $release.responsePlan -notmatch '^[a-z][a-z0-9-]{1,79}$' -or
+        $release.responsePlan -in @($context.containerResponsePlan, $context.lobResponsePlan) -or
+        ($context.Contains('sql') -and $release.responsePlan -ceq $context.sql.responsePlan)) {
+        throw 'Invalid T12 repository, version or response plan contract.'
+    }
+}
 foreach ($key in $resources.Keys) {
     $scope = "/subscriptions/$($context.subscriptionId)/resourceGroups/$($context.resourceGroups[$resources[$key][0]])/providers/$($resources[$key][1])/"
     if ($context[$key] -notmatch ('^' + [regex]::Escape($scope) + '[A-Za-z0-9][A-Za-z0-9._-]*$')) {
@@ -151,6 +180,22 @@ if ($context.Contains('sql')) {
     $template = [regex]::Replace($template, '(?m)^\| \{\{sqlPlanRow\}\}.*\r?\n', '')
     $template = [regex]::Replace($template, '(?s)<!-- SQL:START -->.*?<!-- SQL:END -->',
         'SQL is not configured in this saved guide. Skip the SQL scene until setup has verified its engine, signal and SRE route; do not infer readiness from source defaults.')
+}
+if ($context.Contains('release')) {
+    $values.releasePlanRow = $release.responsePlan
+    $values.releaseAppName = ($release.appResourceId -split '/')[-1]
+    $values.releaseAppResourceIdUrl = 'https://portal.azure.com/#resource' + $release.appResourceId
+    $values.releaseAppUrl = $release.appUrl
+    $values.releaseRepository = $release.repository
+    $values.releaseGoodVersion = $release.goodVersion
+    $values.releaseBadVersion = $release.badVersion
+    $values.releaseResponsePlan = $release.responsePlan
+    $values.releaseGuideUrl = Get-RelativeLink (Join-Path $root 'docs\t12-friday-release.md')
+    $template = [regex]::Replace($template, '(?m)^<!-- T12:(START|END) -->\r?\n?', '')
+} else {
+    $template = [regex]::Replace($template, '(?m)^\| \{\{releasePlanRow\}\}.*\r?\n', '')
+    $template = [regex]::Replace($template, '(?s)<!-- T12:START -->.*?<!-- T12:END -->',
+        'The Friday release (T12) is not configured in this saved guide. Skip it until setup has deployed the ticketing workload and readiness passes its T12 rows; do not infer readiness from source defaults.')
 }
 $rendered = [regex]::Replace($template, '\{\{([A-Za-z]+)\}\}', {
     param($match)

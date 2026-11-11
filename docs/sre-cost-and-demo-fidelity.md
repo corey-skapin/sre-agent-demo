@@ -15,7 +15,8 @@ SRE-owned VMs, managed disks or SSD/HDD settings to downgrade.
 Keep T09's real Monitor -> investigation -> Review approval -> repair -> recovery
 story. T10/T11 remain hybrid evidence plus Arc Run Command recovery that you run, not
 autonomous Arc repair or reliably demonstrated T11 RCA. Preserve scoped Sev2
-routes, enabled three-hour cooldown, Review and the stable-identity lifecycle.
+routes, enabled three-hour cooldown (T12's plan turns it off on purpose, so a repeat
+run opens a new thread), Review and the stable-identity lifecycle.
 `High` is the action identity's permission profile, **not a billable service tier**;
 changing it to `Low` is not a documented pricing discount and can prevent repair.
 
@@ -63,6 +64,33 @@ returned `$-` price placeholders during review: **that is an unavailable quote,
 not zero**. No actual invoice, negotiated rate or token usage was established.
 Do not assume evaluation eligibility or that recreating an agent grants a fresh
 evaluation. Check current offer terms; these examples assume no waiver.
+
+## T12: the Friday release
+
+T12 adds one small workload and no second parent, so the SRE parent's cost doesn't
+change: 4 AAUs per agent-hour from creation until deletion, plus active work.
+
+- **The workload.** One Linux App Service plan (`B1` by default), one web app and
+  a little workspace-based Application Insights telemetry, in their own group. The
+  public [Azure Retail Prices API](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices)
+  listed "Azure App Service Basic Plan - Linux", SKU `B1`, in `australiasoutheast`
+  at about AUD 0.03 per hour on 2026-11-10 (the Windows plan for the same SKU was
+  listed at AUD 0.13, so keep the Linux one). It's a retail list price, not an
+  invoice or an agreement rate: look up your region and currency before you quote
+  it. The plan bills for as long as it exists, whether or not the parent does.
+  Parking doesn't stop it; `Remove-TicketingWorkload.ps1` does.
+- **A window.** The build takes about 5.5 minutes, and a new role can take far
+  longer to work, which is why the workload and its grant are deployed before the
+  parent. A run then needs four to six minutes to the Review card and about two
+  more to recovery (measured on 2026-11-11), plus your presenting time. Every hour
+  the parent exists is 4 baseline AAUs. The active-flow AAUs for one T12
+  investigation can't be read back: Azure Resource Manager has no platform metrics
+  for the agent resource (the metric-definitions call answers 400 "not a supported
+  platform metric namespace"), so use hours at 4 AAUs as your estimate and check
+  the bill.
+- **What the GitHub sign-in costs.** Nothing in Azure, but the OAuth grant reaches
+  every repository your GitHub account can reach, which is why the `ask` policy is
+  applied before anything GitHub is connected.
 
 ## Preserve evidence instead of guessing at telemetry savings
 

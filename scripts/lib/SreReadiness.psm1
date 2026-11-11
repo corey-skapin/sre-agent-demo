@@ -3,6 +3,9 @@ Import-Module (Join-Path $PSScriptRoot 'DemoSkin.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreConfiguration.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreLifecycle.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreRelease.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreDataPlane.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreReleaseExtras.psm1')
 
 function Get-SreSqlAlertQuery {
     param([string]$MachineResourceId)
@@ -67,6 +70,13 @@ function Get-SreReadinessReport {
         Assert-SreContext -SubscriptionId $SubscriptionId -TenantId $TenantId | Out-Null
         $prefix = $skin.azure.namePrefix
         $groups = @("rg-$prefix-sre", "rg-$prefix", "rg-$prefix-infra")
+        $release = $null
+        $releaseGrants = @()
+        if (Test-SreReleaseScenario -Skin $skin) {
+            $release = Get-SreReleaseSettings -Skin $skin -SubscriptionId $SubscriptionId
+            $releaseGrants = @(Get-SreReleaseKnownGrants -Settings $release)
+            $groups += $release.resourceGroup
+        }
         $base = "/subscriptions/$SubscriptionId/resourceGroups"
         $sreGroupId = "$base/$($groups[0])"
         $agentId = "$sreGroupId/providers/Microsoft.App/agents/$($skin.labels.agentName)"
@@ -94,7 +104,7 @@ function Get-SreReadinessReport {
         if ($DesiredState -in @('Hibernated', 'Removed')) {
             $lifecycle = Get-SreLifecycleInventory -SubscriptionId $SubscriptionId -SreResourceGroupName $groups[0] `
                 -AgentName $skin.labels.agentName -ArcResourceGroupName $groups[1] -InfraResourceGroupName $groups[2] `
-                -PreviousIdentityPrincipalId $PreviousIdentityPrincipalId
+                -PreviousIdentityPrincipalId $PreviousIdentityPrincipalId -KnownGrants $releaseGrants
             $principalId = $lifecycle.principalId
             if ($DesiredState -eq 'Removed') {
                 Add-Check 'sre-group-absent' $sreGroupId $(if ($exists) { 'pending' } else { 'pass' }) 'Dedicated SRE group absent' $exists 'Shared Arc groups and private exports are outside Removed scope.'
@@ -106,7 +116,8 @@ function Get-SreReadinessReport {
                 $diagnosticIds = @("$sreGroupId/providers/Microsoft.Insights/components/$($skin.labels.agentName)-appi", "$sreGroupId/providers/Microsoft.Insights/actionGroups/Application Insights Smart Detection")
                 $presentIds = @($lifecycle.resources | ForEach-Object { $_.id })
                 Add-Check 'retained-diagnostics' $sreGroupId $(if (@($diagnosticIds | Where-Object { $_ -notin $presentIds }).Count) { 'pending' } else { 'pass' }) $diagnosticIds $presentIds 'Existing diagnostics are retained, not created by Hibernate. Missing legacy diagnostics are wake information, not a cost-state failure.' $false
-                $expectedGrantKeys = @(foreach ($rg in $groups[1..2]) { foreach ($role in $expectedRoles) { "$base/$rg|$role" } })
+                $expectedGrantKeys = @(foreach ($rg in $groups[1..2]) { foreach ($role in $expectedRoles) { "$base/$rg|$role" } }) +
+                    @($releaseGrants | ForEach-Object { "$($_.scope)|$($_.roleId)" })
                 $platformGrants = @($lifecycle.externalAssignments | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
                 $observedGrantKeys = @($lifecycle.externalAssignments | Where-Object { -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) } | ForEach-Object { "$($_.scope)|$(($_.roleDefinitionId -split '/')[-1])" })
                 $extra = @($observedGrantKeys | Where-Object { $_ -notin $expectedGrantKeys })
@@ -143,6 +154,7 @@ function Get-SreReadinessReport {
             if ('SQL' -in $scenarios -and "$base/$($groups[1])" -notin $p.knowledgeGraphConfiguration.managedResources) {
                 $expectedManaged += "$base/$($groups[1])/providers/Microsoft.HybridCompute/machines/$($skin.sre.sqlTargetArcMachine)"
             }
+            if ($release) { $expectedManaged += $release.groupId }
             $missing = @($expectedManaged | Where-Object { $_ -notin $p.knowledgeGraphConfiguration.managedResources })
             Add-Check 'managed-resources' $agentId $(if ($missing.Count) { 'fail' } else { 'pass' }) $expectedManaged $p.knowledgeGraphConfiguration.managedResources "Missing managed IDs: $($missing -join ', ')"
             foreach ($scenario in $scenarios) {
@@ -170,6 +182,10 @@ function Get-SreReadinessReport {
                     Add-Check 'T09-alert' $alert.id $(if ($alertHealthy) { 'pass' } else { 'fail' }) 'Enabled Sev2, Container App scope' $alert.enabled 'Azure Monitor signal configuration, not firing-state proof.'
                     } catch {
                         Add-Check 'T09-alert' $alertId 'fail' 'Readable enabled Sev2 metric alert' $null $_.Exception.Message
+                    }
+                } elseif ($scenario -eq 'T12') {
+                    foreach ($check in @(Get-SreReleaseReadinessChecks -SubscriptionId $SubscriptionId -Settings $release)) {
+                        Add-Check $check.id $check.resourceId $check.status $check.expected $check.observed $check.message $check.required
                     }
                 } else {
                     $machineName = if ($scenario -eq 'SQL') { $skin.sre.sqlTargetArcMachine } else { $skin.sre.targetArcMachine }
@@ -212,10 +228,17 @@ function Get-SreReadinessReport {
                 $desired = Get-SreDesiredConfiguration -SubscriptionId $SubscriptionId -TenantId $TenantId -SkinPath $SkinPath
                 $session = New-SreConfigurationSession -Desired $desired
                 $snapshot = Get-SreConfigurationSnapshot $session
-                $handlers = @($snapshot.subagents | Where-Object name -CEQ $desired.handler.name)
-                $handlerValid = $handlers.Count -eq 1 -and (Test-SreProperties $handlers[0].properties $desired.handler.properties)
-                if ($handlerValid -and $handlers[0].properties.Contains('instructionsOverride') -and $handlers[0].properties.instructionsOverride) { $handlerValid = $false }
-                Add-Check 'handler-instructions' $agentId $(if ($handlerValid) { 'pass' } else { 'fail' }) 'Versioned handler instructions and tools, no instructionsOverride' @($handlers | ForEach-Object { $_.name }) 'Full custom-agent read via pinned official export protocol; names alone are insufficient.'
+                $desiredHandlers = @(@($desired.handler) + @($desired.extraHandlers) | Where-Object { $_ })
+                $handlerValid = $true
+                $handlerNames = @()
+                foreach ($desiredHandler in $desiredHandlers) {
+                    $found = @($snapshot.subagents | Where-Object name -CEQ $desiredHandler.name)
+                    $oneValid = $found.Count -eq 1 -and (Test-SreProperties $found[0].properties $desiredHandler.properties)
+                    if ($oneValid -and $found[0].properties.Contains('instructionsOverride') -and $found[0].properties.instructionsOverride) { $oneValid = $false }
+                    $handlerValid = $handlerValid -and $oneValid
+                    $handlerNames += @($found | ForEach-Object { $_.name })
+                }
+                Add-Check 'handler-instructions' $agentId $(if ($handlerValid) { 'pass' } else { 'fail' }) 'Versioned handler instructions and tools, no instructionsOverride' $handlerNames 'Full custom-agent read via pinned official export protocol; names alone are insufficient.'
                 $modeValid = $true
                 $filtersValid = $true
                 $observedPlans = @()
@@ -234,11 +257,17 @@ function Get-SreReadinessReport {
                     ($_.customInstructions -or @($_.tools).Count -or @($_.incidentProcessingGuide).Count)
                 } | ForEach-Object { $_.id })
                 Add-Check 'plan-status-review' $agentId $(if ($modeValid) { 'pass' } else { 'fail' }) 'Each required existing plan enabled and Review' $observedPlans 'Reads actual plan properties, not MCP summary or parent mode.'
-                Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service/custom agent, mergeEnabled=true/window=3h' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2. Cooldown is explicitly repo-managed.'
+                Add-Check 'plan-filters-handler' $agentId $(if ($filtersValid) { 'pass' } else { 'fail' }) 'AzMonitor, Sev2, single title, intended service/custom agent, merge setting as each plan declares it (cooldown on for the Arc plans, off for T12)' $observedPlans 'P1/P2 are invalid for AzMonitor; legacy MCP high is not Sev2. Cooldown is explicitly repo-managed.'
                 Add-Check 'legacy-response-settings' $agentId $(if ($legacyHandlers.Count) { 'fail' } else { 'pass' }) @() $legacyHandlers 'Active routing must not depend on legacy response settings. Retired disabled plans and their history may remain untouched.'
                 $owned = @($desired.plans | ForEach-Object { $_.name })
                 $extra = @($snapshot.filters | Where-Object { $_.properties.isEnabled -and $_.name -notin $owned } | ForEach-Object { $_.name })
                 Add-Check 'routing-conflicts' $agentId $(if ($extra.Count) { 'fail' } else { 'pass' }) 'No unreviewed enabled extra plans' $extra 'Conservatively requires review of every enabled unowned plan; never deletes quickstart automatically.'
+                if ($desired.release) {
+                    $dataContext = ConvertTo-SreDataContext -Session $session -SubscriptionId $SubscriptionId -TenantId $TenantId
+                    foreach ($check in @(Get-SreReleaseDataChecks -Context $dataContext -Desired $desired)) {
+                        Add-Check $check.id $check.resourceId $check.status $check.expected $check.observed $check.message $check.required
+                    }
+                }
             } catch {
                 Add-Check 'data-plane-inspection' $agentId 'fail' 'Successful supported full configuration read' $null $_.Exception.Message
             } finally {
@@ -254,9 +283,10 @@ function Get-SreReadinessReport {
                 $platformGrants = @($allAssignments | Where-Object { Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId })
                 $excess = @($allAssignments | Where-Object {
                     -not (Test-SreAzMonitorPlatformGrant $_ $SubscriptionId $principalId) -and
+                    -not (Test-SreKnownGrant $_ $releaseGrants) -and
                     ($_.principalId -ne $principalId -or $_.scope -notin $expectedScopes -or ($_.roleDefinitionId -split '/')[-1] -notin $expectedRoles)
                 })
-                Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count -or $platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'Requested workload-group profile plus at most one exact AzMonitor platform grant' @($excess | ForEach-Object { $_.id }) "Exact AzMonitor platform grants: $($platformGrants.Count); excess grants: $($excess.Count). Exact retained subscription Monitoring Contributor is permitted with or without a parent or connected incident platform. No role is created or revoked."
+                Add-Check 'identity-grant-boundary' $identityId $(if ($excess.Count -or $platformGrants.Count -gt 1) { 'fail' } else { 'pass' }) 'Requested workload-group profile plus at most one exact AzMonitor platform grant, and the known T12 grants when T12 is required' @($excess | ForEach-Object { $_.id }) "Exact AzMonitor platform grants: $($platformGrants.Count); excess grants: $($excess.Count). Exact retained subscription Monitoring Contributor is permitted with or without a parent or connected incident platform. No role is created or revoked."
                 Add-Check 'azure-monitor-alert-access' $identityId $(if (-not $monitorConnected) { 'skipped' } elseif ($platformGrants.Count -eq 1) { 'pass' } else { 'fail' }) 'One exact platform grant when AzMonitor is selected' @($platformGrants | ForEach-Object { $_.id }) 'Azure Monitor scanning requires subscription Monitoring Contributor. Pass -GrantAzureMonitorAlertAccess to confirm you want that IAM grant; IaC supplies platform selection, not this grant.' $monitorConnected
             }
             foreach ($rg in $groups[1..2]) {

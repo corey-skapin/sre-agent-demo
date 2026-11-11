@@ -11,7 +11,8 @@ This repo layers Azure SRE Agent on an existing `arc-demo` environment. Keep the
 | `azure.location` | Azure region for the SRE Agent resource group. | `australiaeast` |
 | `sre.accessLevel` | RBAC profile for the SRE Agent identity. | `High` |
 | `sre.targetArcMachine` | Default Arc machine for T10/T11 helpers. | `win-app-01` |
-| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. Add `SQL` once the Arc estate's SQL engine and alert are ready, to enable the optional [SQL scenario](sre-response-plan-automation.md#optional-sql-scenario). | `T09`, `T11` |
+| `sre.requiredScenarios` | Required baseline/resource/plan gates; not a fault trigger. Add `SQL` once the Arc estate's SQL engine and alert are ready, to enable the optional [SQL scenario](sre-response-plan-automation.md#optional-sql-scenario). Add `T12` and a `release` section to enable the [Friday release](t12-friday-release.md); `["T12"]` alone is allowed. | `T09`, `T11` |
+| `release.*` | The optional T12 workload and its versions: `location`, `appRepository` (`<OWNER>/<REPOSITORY>`), `goodVersion` and `badVersion` (`vX.Y.Z`) are required once `T12` is listed; `resourceGroup`, `appServiceSku` (`B1`, `B2`, `B3`), `handlerName` and `responsePlan` are optional. | No tracked default; add it to your private skin |
 | `sre.sqlTargetArcMachine` | Arc machine hosting the SQL Server for the optional SQL scenario; dormant unless `SQL` is required. | `win-sql-01` |
 | `sre.*Scenario` / `sre.*Fault*` | Default helper scenario and fault modes. | Heartbeat / CrashOnProcessing |
 | `labels.*` | Agent name, response-plan labels, LOB app event source/task/app names. | Generic Arc demo labels |
@@ -31,6 +32,8 @@ Change per customer:
   A URL is optional evidence context, not connector authentication or proof of
   repository access. The handler explicitly reports when none is configured.
 - Pick the T10/T11 target Arc machine if the fleet mix changes.
+- For T12, set `release.appRepository` to your copy of the app repository and
+  `release.location` to a region where your subscription has App Service quota.
 
 Keep constant:
 

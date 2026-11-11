@@ -32,6 +32,11 @@ the section holding its commands and rules.
   surfaces only later as a failed `T11-alert` or `SQL-alert` readiness check,
   after the paid parent exists, and readiness does not check that the LOB app
   itself is installed.
+- For the optional T12 scenario: `T12` and a `release` section in the private skin,
+  a published copy of the app repository, and the ticketing workload deployed
+  **before** the parent with `Deploy-TicketingWorkload.ps1`, so a new role has time
+  to work while nothing bills ([T12 runbook](t12-friday-release.md)). Deploy stops
+  at its ticketing lookup if the workload is missing.
 
 | Step | Do this | Details |
 | --- | --- | --- |
@@ -205,13 +210,21 @@ RBAC and your approval in the SRE portal. No connector or new RBAC grant is crea
 | T09 | `labels.containerResponsePlan` | `AzMonitor` / `["Sev2"]` | `containerapp-restarts` | `labels.agentName` / `Review` |
 | T11 | `labels.lobResponsePlan` | `AzMonitor` / `["Sev2"]` | `labels.lobAlertTitleContains` | `labels.agentName` / `Review` |
 | SQL (opt-in) | `labels.sqlResponsePlan` | `AzMonitor` / `["Sev2"]` | exact `Arc SQL lock timeout` | `labels.agentName` / `Review` |
+| T12 (opt-in) | `release.responsePlan` | `AzMonitor` / `["Sev2"]` | `ticketing-checkout-failures` | `release.handlerName` / `Review`, cooldown off |
 
 Filters are enabled. The literal title is one keyword, never an `OR` expression.
 The default impacted services remain `Azure Container Apps` and `Azure Arc`;
 verify actual incident matching when you run an incident.
 The renderer explicitly sets `mergeEnabled=true` and `mergeWindowHours=3` on
-all configured modern routes, for fresh creation and reconciliation. This matches the
-validated live settings; they are no longer left to service defaults.
+all configured modern routes except T12's, for fresh creation and reconciliation.
+This matches the validated live settings; they are no longer left to service
+defaults. T12's plan sets `mergeEnabled=false` so a repeat run starts a new
+thread: Learn documents the cooldown as a plan setting, on by default, counted from
+when the thread is resolved or closed, and a fire inside it reopens the resolved
+thread. That switch worked live on 11 November 2026: a second run's alert, 15
+minutes after the first run's thread was resolved and well inside the default
+three hours, started a new thread without deleting anything
+([T12 runbook](t12-friday-release.md#what-is-proven-and-what-isnt)).
 Inspect actual cooldown before a repeat. Azure Monitor's scanner also
 [merges firings from the same rule with a seven-day lookback](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
 That scanner rule identity is separate from the filter's three-hour cooldown:
@@ -268,6 +281,45 @@ and `observedAtUtc`. The timeout setting must be observed from SQL, not inserted
 as a predetermined event value. The owned row is `dbo.OrderProcessingCheckpoint`
 (renamed from `dbo.IncidentProbe`), and `ARCDEMO` and `ArcDemoOrders` remain actual
 evidence identities. The alert description is neutral and its title is unchanged.
+
+### Optional T12 scenario
+
+T12 (the Friday release) is enabled only by adding `T12` to `sre.requiredScenarios`
+with a `release` section ([T12 runbook](t12-friday-release.md)). A skin that lists
+only `T12` renders just the T12 handler and plan, with no T09, T11 or SQL objects.
+`Initialize-SreConfiguration.ps1 -Apply` then applies, in this fixed order, reading
+back each stage before the next one and never replaying a write that timed out:
+
+1. The tool policy from `config\t12\tool-policy.json`: `ask` for the GitHub tools,
+   pull-request names and shell calls to GitHub, `allow` for five GitHub read
+   tools only, and `deny` for `az group delete` and `az webapp delete`. It is
+   merged into the agent's policy; nothing already there is removed. Both deny
+   rules blocked the command outright in a live test (the agent reports the tool is
+   blocked by a permission rule and no card appears).
+2. The repository-only paragraph from `config\t12\github-guard.txt`, added to or
+   refreshed inside the agent's custom instructions.
+3. The two skills and the Stop hook in `config\t12\`.
+4. The T12 handler and response plan, in Review mode with the reinvestigation
+   cooldown off.
+5. The code repository, only when steps 1 and 2 are in place and a GitHub sign-in
+   exists. Without them the apply reports why and connects nothing. The sign-in
+   link is not even fetched unless the guard is in place.
+
+Review mode gates Azure writes only; the `ask` rules are what stop a GitHub write.
+The OAuth sign-in uses the `repo` scope, so it reaches every repository the
+signed-in account can reach, and it is a once-per-agent-build step for a person:
+`Initialize-SreConfiguration.ps1 -Apply -GitHubSignIn -BackupPath <NEW_PATH>`
+prints the link and waits. Backups of what each stage read go to
+`<BackupPath>.release-before.json` and `<BackupPath>.release-after.json`; they
+must be new files in an existing directory outside the repository.
+
+Readiness adds required rows `T12-web-app`, `T12-release`, `T12-alert`,
+`T12-github-guard`, `T12-skills` and `T12-hook`, and optional rows
+`T12-github-signin` and `T12-repository` that stay `pending` until the sign-in.
+The agent identity's only new standing grant is Website Contributor on the
+ticketing web app: it is a known grant, so Active readiness doesn't flag it, and
+Hibernate retains it with the identity. Parking leaves the workload running; remove
+it afterwards with `Remove-TicketingWorkload.ps1` ([teardown order](t12-friday-release.md#teardown)).
 
 ## Reset between demo runs
 
@@ -737,7 +789,11 @@ grants, named parent/diagnostics and UAMI. It deletes the dedicated group only
 after resources/grants are absent. Unknown resources, IAM roles/scopes or other
 SRE-group assignments block the full-removal preview; find out what they are
 rather than deleting the group broadly. Other principals' workload grants, shared Arc/Monitor
-resources and private exports are outside the removal boundary.
+resources and private exports are outside the removal boundary. With a T12 skin, the
+Website Contributor grant on the ticketing web app is a known identity-owned grant and
+goes with the identity; the ticketing group isn't touched, so park the agent and run
+`Remove-TicketingWorkload.ps1` first ([teardown order](t12-friday-release.md#teardown)).
+Without the T12 skin the same grant blocks removal as an unexpected one.
 
 For an independently verified extra UAMI grant, such as a portal-created
 Monitoring Reader assignment, pass `-AdditionalOwnedRoleAssignmentIds` with its

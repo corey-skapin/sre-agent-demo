@@ -32,10 +32,17 @@ jobs:
         shell: pwsh
         run: |
           $compiled = Join-Path $env:RUNNER_TEMP 'sre-template.json'
+          $ticketing = Join-Path $env:RUNNER_TEMP 'ticketing-template.json'
+          $probe = Join-Path $env:RUNNER_TEMP 'ticketing-probe.json'
           try {
             az bicep build --file .\infra\main.bicep --outfile $compiled --only-show-errors
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             .\tests\Test-SreTemplate.ps1 -TemplatePath $compiled
+            az bicep build --file .\infra\ticketing\main.bicep --outfile $ticketing --only-show-errors
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            az bicep build --file .\infra\ticketing\quota-probe.bicep --outfile $probe --only-show-errors
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            .\tests\Test-TicketingTemplate.ps1 -TemplatePath $ticketing -ProbeTemplatePath $probe
           } finally {
-            if (Test-Path -LiteralPath $compiled) { Remove-Item -LiteralPath $compiled -Force }
+            foreach ($path in @($compiled, $ticketing, $probe)) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force } }
           }

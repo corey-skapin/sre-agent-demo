@@ -29,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'lib\DemoSkin.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreRuntime.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'lib\SreLifecycle.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'lib\SreRelease.psm1') -Force
 $skin = Get-DemoSkin -Path $SkinPath
 if (-not $PSBoundParameters.ContainsKey('NamePrefix')) { $NamePrefix = $skin.azure.namePrefix }
 if (-not $AgentName) { $AgentName = $skin.labels.agentName }
@@ -45,6 +46,7 @@ $inventoryParameters = @{
     PreviousIdentityPrincipalId = $PreviousIdentityPrincipalId
     DesiredState = $DesiredState
     AdditionalOwnedRoleAssignmentIds = $AdditionalOwnedRoleAssignmentIds
+    KnownGrants = @(Get-SreReleaseGrantsForSkin -Skin $skin -SubscriptionId $SubscriptionId)
 }
 $before = Get-SreLifecycleInventory @inventoryParameters
 $removing = $DesiredState -eq 'Removed'
