@@ -22,6 +22,7 @@ A person wrote this when the agent was built. It is not something the agent lear
 ## Habits
 - Say which command or query gave each fact. Judge "stopped reporting" by TimeGenerated, not by when a row arrived.
 - Never print subscription, tenant or principal IDs.
+- Keep this file under 2,000 characters: about that much loads into every chat. Put detail in a topic file and add one index line here.
 
 ## Topic files
 architecture.md, debugging.md, deployment.md and logs.md are written by the agent. Read them first. Merge new facts into them; do not replace them.
