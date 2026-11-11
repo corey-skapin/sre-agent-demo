@@ -81,9 +81,13 @@ change: 4 AAUs per agent-hour from creation until deletion, plus active work.
   Parking doesn't stop it; `Remove-TicketingWorkload.ps1` does.
 - **A window.** The build takes about 5.5 minutes, and a new role can take far
   longer to work, which is why the workload and its grant are deployed before the
-  parent. A run then needs about seven minutes to the Review card and four more to
-  recovery, plus your presenting time. Every hour the parent exists is 4 baseline
-  AAUs; the active-flow AAUs for one T12 investigation haven't been measured.
+  parent. A run then needs four to six minutes to the Review card and about two
+  more to recovery (measured on 2026-11-11), plus your presenting time. Every hour
+  the parent exists is 4 baseline AAUs. The active-flow AAUs for one T12
+  investigation can't be read back: Azure Resource Manager has no platform metrics
+  for the agent resource (the metric-definitions call answers 400 "not a supported
+  platform metric namespace"), so use hours at 4 AAUs as your estimate and check
+  the bill.
 - **What the GitHub sign-in costs.** Nothing in Azure, but the OAuth grant reaches
   every repository your GitHub account can reach, which is why the `ask` policy is
   applied before anything GitHub is connected.

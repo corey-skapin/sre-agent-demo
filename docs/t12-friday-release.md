@@ -47,16 +47,32 @@ Say these plainly; the scripts and the agent's instructions are written to match
 - **A completed card means a person approved it.** The card's command runs under
   the agent's own identity, not yours. The handler's instructions and a Stop hook
   ask the agent to say "approved by a person and applied" and not to predict when
-  the alert clears. Both are untested until you rehearse; see
+  the alert clears. The hook did block a draft that made that prediction; see
   [what is proven](#what-is-proven-and-what-isnt).
 - **T12 adds one write grant, and Review mode is what holds every write.** The new
   grant is Website Contributor on the web app, so an approved card can change the
-  app's settings. The agent's other grants don't change: at the default `High`
+  app's settings, and the role can also delete the app and read its publishing
+  profile (the Activity Log shows the agent doing the read when it inspects the
+  app). The tool policy's `deny`
+  rules block `az webapp delete` and `az group delete` outright (measured on 11
+  November: the agent reports the tool is blocked by a permission rule and no card
+  appears, while any other write still raises a card). The agent's other grants
+  don't change: at the default `High`
   access level it also has Contributor on the Arc resource groups, and the
   Monitoring Contributor grant alert access needs (which can write alert rules and
   reads the rest of the subscription). So don't say the agent can only change this
   app. Say that any change it proposes waits for your click in Review mode, and
   read the card before you approve it.
+- **An issue the agent creates carries a link to your SRE portal.** The platform
+  appends a footer to every issue the agent creates ("This issue was created by"
+  the agent, and "Tracked by the SRE agent here"). The link holds your
+  subscription ID, resource group, agent name and thread ID, and the platform also
+  adds the GitHub account that signed in as a second assignee. The repository has
+  to be public because the release packages download anonymously. After the demo,
+  edit the issue to remove the footer; the issue's edit history keeps the old text
+  until you delete those revisions in the GitHub interface. Don't ask the agent to
+  edit it: that is another GitHub write with its own card, and the platform may
+  add the footer again.
 
 ## Resource map
 
@@ -248,6 +264,19 @@ the GitHub account that owns your app repository and approve the SRE Agent app
 up). It then connects the repository, waits for the clone and tests the
 connection. The response carries no token.
 
+If the five minutes pass before you approve, the script exits with a warning and
+nothing is lost but the link: a link left unused for a long time stops working. Run
+the same command again with another new `-BackupPath` for a fresh link. Once the
+sign-in exists the apply skips the link and connects the repository, so you can also
+approve first and run the apply without `-GitHubSignIn` (measured on 2026-11-11:
+about three minutes from opening a fresh link to the sign-in showing up, then 50
+seconds to connect, clone and test the repository). The clone appears only in
+threads that start afterwards, so connect the repository before you start a run.
+
+Some AI tools hide the `state=` value of the link in what they show you, which leaves
+a link that doesn't work. The script's full output has the real one: save it to a
+file and open the link from there instead of copying it from the screen.
+
 If the link doesn't come back, the portal does the same job: from Learn, not
 exercised here, open the agent's **Build + setup** > **Context** > **Code access**,
 choose the service tab, select **Add repository** and sign in with **OAuth**. Do
@@ -313,11 +342,12 @@ alert fired, thread created, first agent message, card pending, card completed,
 healthy again and alert resolved. `-Wait` keeps polling until an Approve card is
 pending (default 30 minutes, `-TimeoutMinutes`). It never approves anything.
 
-From the release, budget about seven minutes to the card, measured on a spike app:
-about four minutes for the app to restart, the alert 45 to 85 seconds after that,
-the thread 47 to 91 seconds after the alert and the card about 36 seconds later.
-Start the run about 12 minutes before you need the card: five of those are the
-baseline.
+From the release, the card took 4 min 19 s in one run and 5 min 33 s in the next
+(measured on 2026-11-11 on `B1` in Australia Southeast with a two-minute baseline).
+The bad version was serving 1 min 47 s and 2 min 21 s after the setting changed, the
+alert fired 2 min 35 s and 3 min 41 s after the release, the thread about 50 seconds
+after the alert and the card about a minute after the thread. Start the run about 12
+minutes before you need the card: five of those are the default baseline.
 
 ### The cards
 
@@ -338,8 +368,9 @@ can't click for you. If you'd rather not wait, reset the app yourself
 (`-Action Reset`, below) and treat the old card as stale: never approve it
 afterwards. Reset with `-DeleteThreads` removes it.
 
-After your click, the first healthy request takes about four minutes (the app
-restarts again). Verify:
+After your click, the new version was serving about two minutes later in the
+measured run (the app restarts again: 2 min 5 s from the click, and the runner saw
+healthy traffic at 2 min 12 s). Verify:
 
 ```powershell
 .\scripts\Invoke-FridayRelease.ps1 `
@@ -348,8 +379,8 @@ restarts again). Verify:
 ```
 
 Expect `healthy again` after the card completed. The alert resolves by itself about
-15 to 17 minutes after the last failed request; read its Monitor condition
-separately from the thread and from the app.
+15 to 17 minutes after the last failed request (16 min 28 s measured); read its
+Monitor condition separately from the thread and from the app.
 
 ### Reset
 
@@ -377,7 +408,8 @@ this one app. There are no deployment slots to swap on `B1` (slots start at the
 Standard tier), no build step and no deploy credentials: the app has basic
 publishing credentials disabled.
 
-Each change restarts the app, which takes about four minutes on `B1`.
+Each change restarts the app, which takes about two minutes on `B1` (1 min 47 s and
+2 min 21 s measured for the bad release, 2 min 5 s for the fix).
 
 If run-from-package from a GitHub release URL doesn't work on your plan (the URL
 redirects to an asset host), two fallbacks use the same two zips: `az webapp deploy
@@ -403,7 +435,7 @@ Everything else runs from scripts your AI tool can run for you.
 - The paid parent bills 4 AAUs per hour from creation until you delete it
   ([cost reference](sre-cost-and-demo-fidelity.md#t12-the-friday-release)). The
   build takes about 5.5 minutes, plus the role wait if you skipped step 2's lead
-  time, plus the run: about seven minutes to the card, four to recovery.
+  time, plus the run: about five minutes to the card, two to recovery.
 - The workload is one `B1` plan, one Linux web app and a little telemetry. The
   retail price of a Linux `B1` plan is in the cost reference. Park the parent when
   you're done; the workload keeps running until you remove it.
@@ -451,6 +483,9 @@ web-app grant; without one it stops on it as an unexpected grant.
 | No alert, though checkouts fail | The app reports failures only when it receives `POST /checkout`; check the traffic log in `.local\friday-release\`, and that the alert rule is enabled |
 | A card from an earlier run is still pending | It's stale: never approve it. Reset with `-DeleteThreads` |
 | The card proposes something other than one `WEBSITE_RUN_FROM_PACKAGE` change | Don't approve it. Reset the app with `-Action Reset` |
+| The agent says "An error occurred while creating the approval record" for the GitHub issue, and no card appears | The issue body is too long: no card can be made when the escaped body is longer than about 4,000 characters, and each backtick, quotation mark or apostrophe counts as six. Ask the agent to retry once with a body under 2,500 characters and few backticks; the skill tells it to. Links and labels were not the cause |
+| The sign-in wait ends with "No GitHub sign-in appeared in time" | The link wasn't approved within five minutes. Approve it if it still works, or run the apply again for a fresh link ([step 4](#4-sign-in-to-github)) |
+| `Test-SreReadiness.ps1` fails `T12-release` | Expected while the bad release is serving. Run it again after recovery or after `-Action Reset` |
 
 ## What is proven and what isn't
 
@@ -462,9 +497,43 @@ creation stops for approval while an allow-listed GitHub read runs without a car
 that the agent's issue assigned to Copilot produced a draft pull request nine
 seconds later; and the 141-second sign-in.
 
-Not yet shown live, so rehearse before you present: the package swap from a GitHub
-release URL and its restart time; the cooldown switch (`mergeEnabled` false) on a
-repeat run; the Stop hook and its latency; the closing-summary wording; the shape
-of the GitHub card; the `deny` rule syntax for Azure CLI commands; and the
-`-SwapRules` rule update. The runner (`Invoke-FridayRelease.ps1`) is covered by
-offline tests against a fake agent; its first live run is the rehearsal.
+Measured on 2026-11-11 against this workload, in two full runs and some separate
+tests:
+
+- **The package swap from a GitHub release URL works on `B1`.** The bad version
+  served 1 min 47 s and 2 min 21 s after the setting changed, and the fix 2 min 5 s
+  after the click.
+- **The cooldown switch works.** The second run's alert fired 15 minutes after the
+  first run's thread was resolved, well inside the default three hours, and started
+  a new thread. Nothing was deleted and no rule was swapped.
+- **The Stop hook runs after every reply (1.4 to 2.3 seconds) and it can reject.**
+  It blocked a closing draft that predicted when the alert would clear. Its first
+  wording also demanded the approver's name and time, which the agent can't know,
+  so the agent hedged; the shipped prompt requires only that a person approved the
+  card. A hook that is a language model needs a rehearsal: watch what it asks for.
+- **The `deny` rules work.** For `az webapp delete` and `az group delete` the agent
+  reports that the tool is blocked by a permission rule and no card appears, while
+  any other write still raises one.
+- **A card waits as long as nobody clicks.** The first run's waited 14 min 42 s
+  and never expired.
+- **The approved write ran under the agent's identity.** The Activity Log caller is
+  that identity, not yours.
+- **A GitHub issue body that is too long can't get a card.** The agent reports "An
+  error occurred while creating the approval record" and nothing appears. The
+  platform stores the call's parameters escaped, and each backtick, quotation mark
+  or apostrophe then counts as six characters. Escaped bodies of 3,410, 3,807 and
+  3,833 characters got a card; 4,087, 4,273 and 4,448 did not, whatever the links,
+  the labels or a link to the SRE portal. The skill now keeps the body under 2,500
+  characters, but that rule hasn't been through a live incident yet.
+- **The Copilot hand-off works on this app.** The approved issue was created, and
+  Copilot's draft pull request opened 8 seconds later and had its final title and
+  four changed files about five minutes after the issue.
+- **The agent reads the repository only in threads that start after the sign-in
+  has connected it.** An earlier thread sees an empty clone.
+- **The agent keeps notes between threads.** The second run's thread read what the
+  first run taught it, so a rehearsal changes what the agent says in the next run.
+
+Not yet shown live, so rehearse before you present: the closing summary after the
+hook and handler wording was fixed; the GitHub card and the Copilot hand-off on
+this app; and the `-SwapRules` rule update. The runner (`Invoke-FridayRelease.ps1`)
+is covered by offline tests against a fake agent and has run live twice.

@@ -391,13 +391,15 @@ you do are the **Approve** clicks on the cards described below.
 including its `T12-` rows, and [the app]({{releaseAppUrl}}) serves
 {{releaseGoodVersion}}. Open the agent once and let its welcome thread finish.
 Rehearse the beat once first: the package swap, the cooldown switch, the Stop hook
-and the Copilot hand-off aren't yet shown live
+and the Copilot hand-off all worked live on 11 November 2026, and the agent's notes
+from a rehearsal change what it says in the next run
 ([what is proven]({{releaseGuideUrl}}#what-is-proven-and-what-isnt)).
 
 **About 12 minutes before the beat**, ask your AI tool to run
 `Invoke-FridayRelease.ps1 -Action Start`. It sends checkout traffic, waits five
 minutes on {{releaseGoodVersion}}, then releases {{releaseBadVersion}}. The Review
-card appears about seven minutes after the release. Keep
+card appears four to six minutes after the release (4 min 19 s and 5 min 33 s
+measured). Keep
 `Invoke-FridayRelease.ps1 -Action Status -Wait` running: it records when each step
 happened and says when the card is waiting.
 
@@ -414,15 +416,20 @@ agent anything. Watch what it does with the alert."
    appsettings set` on {{releaseAppName}} that sets `WEBSITE_RUN_FROM_PACKAGE` to
    the package URL of {{releaseGoodVersion}} and changes nothing else. If it
    proposes anything different, don't approve it. Click **Approve**.
-3. The app restarts: about four minutes until the first healthy request. This is
+3. The app restarts: about two minutes until the first healthy request. This is
    your talking time for the trust beat below.
 4. Say that a person approved it, never that the audit proves it. Check that the
    thread's closing summary says so and doesn't predict when the alert clears (it
-   resolves by itself about 15 to 17 minutes after the last failed request).
+   resolves by itself about 15 to 17 minutes after the last failed request). The
+   Stop hook may send the agent back once, for a confidence level, the affected
+   resources or a next step, so the summary can arrive a minute after the recovery.
 5. Offer the follow-up: ask the agent for a GitHub issue assigned to Copilot in
    {{releaseRepository}}. Creating it stops for a second **Approve**; check the
-   repository, title and assignee, then click. In a live test Copilot's draft pull
-   request appeared nine seconds after the assignment.
+   repository, title and assignee, then click. In the live test Copilot's draft pull
+   request opened 8 seconds after the click and settled about five minutes later.
+   The platform adds a footer to the issue with a link to your SRE portal thread,
+   and that link holds your subscription ID: edit it out afterwards
+   ([why]({{releaseGuideUrl}}#what-you-can-and-cant-claim)).
 6. Run `Invoke-FridayRelease.ps1 -Action Status` once more and show its timeline:
    release, first failure, alert, thread, card, approval, healthy again. That is
    the stopwatch.
@@ -438,9 +445,11 @@ stopped for a second click. Without that rule it would have been created without
 one."
 
 Show only what you rehearsed: the Review plan ({{releaseResponsePlan}} in the plan
-list in step 3), the two cards that waited and the thread's tool calls. Don't
-promise a blocked delete: the rule that denies `az group delete` and
-`az webapp delete` hasn't been tried live. The GitHub sign-in is wider than the demo
+list in step 3), the two cards that waited and the thread's tool calls. The rules
+that deny `az group delete` and `az webapp delete` blocked both commands in a live
+test (the agent reports the tool is blocked by a permission rule), but promise
+nothing beyond those two commands: every other write waits for your click. The
+GitHub sign-in is wider than the demo
 repository (it reaches every repository the signed-in account can reach), so say so
 if you're asked. So is the agent's Azure access: at the default `High` level it also
 holds Contributor on the Arc resource groups and Monitoring Contributor on the

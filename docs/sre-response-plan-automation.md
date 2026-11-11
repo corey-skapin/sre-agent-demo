@@ -221,7 +221,10 @@ This matches the validated live settings; they are no longer left to service
 defaults. T12's plan sets `mergeEnabled=false` so a repeat run starts a new
 thread: Learn documents the cooldown as a plan setting, on by default, counted from
 when the thread is resolved or closed, and a fire inside it reopens the resolved
-thread. That switch isn't proven live yet ([T12 runbook](t12-friday-release.md#what-is-proven-and-what-isnt)).
+thread. That switch worked live on 11 November 2026: a second run's alert, 15
+minutes after the first run's thread was resolved and well inside the default
+three hours, started a new thread without deleting anything
+([T12 runbook](t12-friday-release.md#what-is-proven-and-what-isnt)).
 Inspect actual cooldown before a repeat. Azure Monitor's scanner also
 [merges firings from the same rule with a seven-day lookback](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts).
 That scanner rule identity is separate from the filter's three-hour cooldown:
@@ -290,8 +293,9 @@ back each stage before the next one and never replaying a write that timed out:
 1. The tool policy from `config\t12\tool-policy.json`: `ask` for the GitHub tools,
    pull-request names and shell calls to GitHub, `allow` for five GitHub read
    tools only, and `deny` for `az group delete` and `az webapp delete`. It is
-   merged into the agent's policy; nothing already there is removed. The deny
-   syntax for Azure CLI commands isn't proven live.
+   merged into the agent's policy; nothing already there is removed. Both deny
+   rules blocked the command outright in a live test (the agent reports the tool is
+   blocked by a permission rule and no card appears).
 2. The repository-only paragraph from `config\t12\github-guard.txt`, added to or
    refreshed inside the agent's custom instructions.
 3. The two skills and the Stop hook in `config\t12\`.
