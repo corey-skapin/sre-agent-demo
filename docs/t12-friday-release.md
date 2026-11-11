@@ -532,8 +532,24 @@ tests:
   has connected it.** An earlier thread sees an empty clone.
 - **The agent keeps notes between threads.** The second run's thread read what the
   first run taught it, so a rehearsal changes what the agent says in the next run.
+- **The hook is a nudge, not a gate.** In a third run (the Act 3 warm-up on
+  2026-11-11), the closing draft was blocked for having no confidence level or
+  validation step, the redraft was blocked for a next step that implied when the
+  alert would clear ("check at 06:45"), and the thread then went idle with the second
+  draft. A recall chat did the same, and a status question was blocked once and then
+  allowed. Read the closing summary before you show it, and expect the first draft to
+  be imperfect and the last one to stand.
+- **The hook judges chats too.** It blocked two chats whose answers read like incident
+  summaries (the recall question and "how is the ticketing app doing" while the alert
+  was still Fired), and it allowed the three scheduled tasks and the other estate
+  answers.
+- **That third run's timings**, from the setting change: the bad version served
+  after 1 min 04 s, the alert fired at 1 min 55 s, the thread started at 2 min 05 s
+  and the card was pending at 4 min 02 s. The person clicked 9 min 10 s later; the
+  write was applied 6 seconds after the click and checkouts were healthy 58
+  seconds after it. The alert took 16 min 43 s from the click to resolve.
 
-Not yet shown live, so rehearse before you present: the closing summary after the
-hook and handler wording was fixed; the GitHub card and the Copilot hand-off on
-this app; and the `-SwapRules` rule update. The runner (`Invoke-FridayRelease.ps1`)
-is covered by offline tests against a fake agent and has run live twice.
+Not yet shown live, so rehearse before you present: a closing summary that passes
+the hook on its first draft; the skill's new limit on the issue body's size; and the
+`-SwapRules` rule update. The runner (`Invoke-FridayRelease.ps1`) is covered by
+offline tests against a fake agent and has run live three times.

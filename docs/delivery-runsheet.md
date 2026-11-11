@@ -528,10 +528,12 @@ Needs the `MEMORY` module, the agent up and one earlier investigation on this ag
 so there is something to remember ([how the notes work]({{memoryGuideUrl}})). The
 Friday release is the easiest one to repeat.
 
-1. About 90 minutes before, run one incident to the end and let the thread finish:
+1. About 30 minutes before, run one incident to the end and let the thread finish:
    the Friday release if it is configured here, or the Container App reset from step
-   6. The agent saves notes while it works, so leave time, then ask your AI tool to
-   check that they exist with `Export-SreAgentFiles.ps1 -Source Notes -List`.
+   6. The agent writes its notes while it works (about 3 minutes after the approved
+   fix, measured), and the Friday alert takes about 17 minutes to resolve, so a
+   chat asked sooner is told the alert is still Fired. Then ask your AI tool to check
+   that the notes exist with `Export-SreAgentFiles.ps1 -Source Notes -List`.
 2. At the beat, open a new chat and ask: "Have we had an incident on this estate
    before? What was the cause and what fixed it?" It should cite the warm-up
    incident: what broke, why, and the change that fixed it. If it doesn't, say so:
@@ -542,22 +544,24 @@ Friday release is the easiest one to repeat.
 
 Rehearsals teach the agent: a second run reads the first run's notes and counts its
 failures. For a clean first look, rebuild the agent; there is no way to clear the
-notes in place.
+notes in place. A rebuild doesn't clear Log Analytics or the Activity Log, so the
+agent can still find earlier releases there, as it did on 2026-11-11.
 <!-- MEMORY:END -->
 
 <!-- PROACTIVE:START -->
 ### Act 4: it works when nothing is broken
 
 Needs the `PROACTIVE` module (which needs the Friday release), the agent up and the
-ticketing app serving. The three scheduled tasks are created Off, so nothing here
-runs by itself: you run each one now ([the details]({{proactiveGuideUrl}})). How
-long each run takes isn't measured yet, so rehearse once and write your own numbers
-down.
+ticketing app serving. The three scheduled tasks are paused, so nothing here
+runs by itself: you run each one now ([the details]({{proactiveGuideUrl}})). On
+2026-11-11 the runs took 1 minute 45 seconds (health check), about 1 minute 30
+seconds (drift scan) and 2 minutes 42 seconds (deck), so start them ten minutes
+before the beat, and rehearse once anyway.
 
 **Before the beat**, ask your AI tool to:
 
-1. Start the deck first, since building a file is the run most likely to take
-   longest: `Invoke-ScheduledTask.ps1 -Action Run -Name governance-deck`.
+1. Start the deck first, since it is the longest run:
+   `Invoke-ScheduledTask.ps1 -Action Run -Name governance-deck`.
 2. Put the three drifts on the web app with `Invoke-DriftDemo.ps1 -Action Start`,
    then run the scan: `Invoke-ScheduledTask.ps1 -Action Run -Name bicep-drift-scan`.
 3. Run the health check:
@@ -569,8 +573,8 @@ right answer). The drift scan reports one Benign, one Risky and one Critical
 difference, each with the revert it proposes and did not run. For the deck, ask your
 AI tool to fetch the file with `Export-SreAgentFiles.ps1 -Source Thread -ThreadId`
 and the thread's ID, into a folder outside the repository, and open it. Check the
-file first: the download hasn't been tested live, and if there is no file the agent
-gives you the same slides as Markdown.
+file first: the download worked live (a six-slide `.pptx` of about 37 KB), but if
+there is no file the agent gives you the same slides as Markdown.
 
 **Say:** "Nothing was broken, and it still earned its keep. These are scheduled
 tasks, and I ran them by hand a few minutes ago so you'd see the results. Each one

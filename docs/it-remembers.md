@@ -17,8 +17,8 @@ commands, or follow them yourself.
    of about 2,000 characters ([memory](https://learn.microsoft.com/azure/sre-agent/memory)).
    The file says at the top that a person wrote it, so the agent doesn't present it
    as something it learned.
-2. **The warm-up.** Run one incident to the end well before the act, so the agent
-   writes its own topic files beside the overview.
+2. **The warm-up.** Run one incident to the end about 30 minutes before the act, so
+   the agent writes its own topic files beside the overview.
 3. **The check.** In a new chat, ask whether the estate has had an incident before.
    It should cite the warm-up one.
 
@@ -59,11 +59,17 @@ would be seeded before anything is written.
 
 ## The warm-up flow
 
-1. About 90 minutes before the act, run one incident to the end and let the thread
-   finish: the Friday release if you have it, or the Container App reset. The agent
-   saves notes while it works, and Microsoft documents a further learning pass about
-   30 minutes after a thread goes quiet, so leave time: 90 minutes is a margin, not
-   a measurement.
+1. About 30 minutes before the act, run one incident to the end and let the thread
+   finish: the Friday release if you have it, or the Container App reset. Measured
+   on 2026-11-11: the agent wrote its notes inside the incident thread, about 3
+   minutes after the approved fix, and a new chat cited the incident 8 minutes after
+   the click. The alert took about 17 minutes to resolve, and a chat asked before
+   that is told the alert is still Fired, so don't ask sooner. Microsoft documents a
+   further learning pass about 30 minutes after a thread goes quiet. The notes did
+   not change in the 43 minutes after this thread went quiet, apart from what later
+   chats wrote themselves, so don't wait for it
+   (on 2026-11-10 the platform rewrote the notes about an hour and a half after an
+   incident).
 2. Check that they exist:
 
    ```powershell
@@ -103,12 +109,31 @@ agent and building it again without a seed path.
 ## What you can and can't claim
 
 - **The overview is hand-written.** Say so. It was seeded, not learned, and it is
-  labelled that way in the file.
+  labelled that way in the file. The agent keeps the file up to date itself: on
+  2026-11-11 it added a map of the ticketing app and an index line for each new note,
+  and the file grew from 1,527 to 2,044 characters, over the budget of about 2,000
+  that Microsoft documents. The label at the top stayed.
 - **The topic files are the agent's own.** It wrote them while it worked. Say what
   you did: you ran the warm-up, and it carried over.
-- **Notes can be wrong.** They are an agent's summary of one run. A second run reads
-  the first run's notes, so a rehearsal changes what the agent says. If a run is
-  meant to be a first look, rebuild first.
+- **Notes can be wrong.** They are an agent's summary of one run. The runbook note
+  from 2026-11-11 says the restart took about 10 minutes. It dated the change at about
+  06:00, when the fix card appeared, but the person clicked Approve 9 minutes later and
+  the app restarted about a minute after the click. A second run reads the first run's
+  notes, so a rehearsal changes what the agent says, and a later thread can rewrite a
+  note (one did, and said it hadn't read the file first). If a run is meant to be a
+  first look, rebuild first.
+- **The hook's feedback becomes a note.** The Stop hook's message reaches the agent as
+  a user message, and the agent saved it as `behavior-expectations.md`, "user
+  feedback" that incident summaries need a confidence level, no prediction of when an
+  alert clears, and validation steps. The next recall chat was allowed on its first
+  try (one run, not a guarantee). Say that plainly if you show it: the rule came from
+  the hook, and after one block it lives in the notes too. An export of the notes
+  carries it into a rebuilt agent.
+- **A rebuild clears the notes, not the telemetry.** Log Analytics and the Activity
+  Log keep earlier runs, so on a rebuilt agent with no notes at all the recall chat
+  can still find them (it counted three failed releases on 2026-11-11, two from
+  earlier rehearsals). Judge the act by what the thread read: the portal shows each
+  tool call, including the notes files it opened.
 - **Don't say it remembers everything.** It keeps what it wrote down. A thread that
   finished a long time ago has to have been written up to count.
 
@@ -126,14 +151,16 @@ every conversation, so it adds a little to each; the AAUs can't be read back.
 |---|---|
 | The apply says the agent already has notes and leaves them | Expected after a first run. The seed goes only into an empty folder; there is no clear, so rebuild if you want the seed |
 | The apply says the notes folder couldn't be read | Nothing was written. Try `Initialize-SreConfiguration.ps1 -Inspect` again, then apply |
-| The apply warns that the upload was accepted but no file appeared | The seed route is untested live. List the notes with `Export-SreAgentFiles.ps1 -Source Notes -List` before you rely on the seed. The upload isn't repeated |
+| The apply warns that the upload was accepted but no file appeared | The seed upload worked live (HTTP 200 in 2.2 seconds, and the file was listed straight away), so this is unexpected. List the notes with `Export-SreAgentFiles.ps1 -Source Notes -List` before you rely on the seed. The upload isn't repeated |
 | `memory.seedPath` is refused | It must be a full path to an existing folder outside the repository, holding 1 to 40 `.md` files with plain names, each at most 64 KB |
 | `Export-SreAgentFiles.ps1` says the agent has no notes yet | The folder doesn't exist until a seed or an incident writes to it |
 | The new chat doesn't know the estate | Run the canary test below. If it fails, the overview isn't loaded; list the notes and check the seed |
+| A chat stops at "pending authorization" on `az ad` lookups | The agent's own runbook note can tell it to resolve a caller with `az ad sp show`. Send "skip the name lookups" in the same thread ([Act 1](ask-anything.md#questions-that-name-people)) |
 
 **Canary test for the seed.** In a new chat, ask: "What is this estate's customer
 name, and how do rollbacks work? Don't run any commands." A correct answer comes
-from the overview alone. Run it before the first time you present.
+from the overview alone. Run it before the first time you present. Measured on
+2026-11-11, on a fresh build: the answer came back in 10 seconds with no tool calls.
 
 ## What is proven and what isn't
 
@@ -152,15 +179,34 @@ about two hours, all for conversation threads and 34 to 130 minutes after the
 thread started; none appeared for an incident thread in the time watched. Rating a
 response (the API call works) doesn't create one.
 
+Measured on 2026-11-11, on a build from zero with the Arc estate parked (Phase 2):
+
+- **The seed works.** The upload took 2.2 seconds (HTTP 200), and a new chat answered
+  from it alone in 10 seconds with no tool calls.
+- **The agent writes notes inside the thread, not after it.** The drift scan wrote
+  its own note while it ran. The incident thread wrote `architecture.md`,
+  `deployment.md` and `logs.md` about 3 minutes after the approved fix, a rewritten
+  `overview.md` 16 seconds later, then `debugging.md` and the runbook 14 seconds
+  after that, and went idle about 4 minutes 30 seconds after the click.
+- **Recall works in a new chat.** The first one started 8 minutes after the click and
+  answered in 71 seconds, citing the cause (v1.3.0 has no `PAYMENT_GATEWAY_URL`) and
+  the fix (a rollback through `WEBSITE_RUN_FROM_PACKAGE`). A second, 34 minutes after
+  the click, answered in 1 minute 45 seconds with the same cause and fix, a confidence
+  level and a list of what it hadn't verified.
+- **No learning pass appeared.** A listing 43 minutes after the incident thread went
+  quiet, and 33 minutes after the last chat that wrote a note went quiet, matched the
+  one before it. Only chats changed the notes: a recall chat added four lines to the
+  runbook, and a status question added `behavior-expectations.md` and rewrote
+  `overview.md`.
+- **The folder stays small.** It held 8 files, 15,956 bytes, at the end.
+
 Not run yet:
 
-- The seed upload (`POST /api/v1/WorkspaceMemory/synthesized-knowledge`, a gzip tar).
-  It is covered by offline tests against a fake agent only.
-- Whether the seeded `overview.md` reaches a new conversation as documented. The
-  canary test checks it.
-- The warm-up flow's timing: how soon after a thread the notes are complete.
 - Restoring an exported folder through `memory.seedPath`.
 - A listing that the agent's file API truncates when a folder holds many files.
+- What the platform does with an `overview.md` over its budget (the agent's rewrite
+  reached 2,044 characters).
+- Clearing the notes in place: nothing here deletes a note, and nothing was tried.
 
 A different route exists and isn't used here. A hand-written document uploaded to
 the agent's knowledge store was indexed within seconds and found by its memory

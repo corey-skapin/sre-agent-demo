@@ -3,8 +3,8 @@
 A person wrote this when the agent was built. It is not something the agent learned from an incident. The agent adds topic files beside it as it learns.
 
 ## Estate
-- Arc-enabled Windows servers (also Azure VMs) in {arcGroup}. Their Heartbeat, Perf and Event data is in the Log Analytics workspace {arcWorkspaceName}.
-- Shared infrastructure is in {infraGroup}.
+- Arc-enabled Windows servers are Arc machine resources in {arcGroup}; the Azure VMs behind them are in {infraGroup}. Their Heartbeat, Perf and Event data is in the Log Analytics workspace {arcWorkspaceName}.
+- Shared infrastructure, including those VMs, is in {infraGroup}.
 <!-- T09 -->
 - The Container App {containerApp} is in {infraGroup}.
 <!-- /T09 -->

@@ -104,15 +104,16 @@ until deletion, plus active work.
 - **It remembers.** The seed is one call at apply time. The overview is loaded into
   every conversation, so it adds a little to each. The warm-up is a full incident,
   so budget its hours at 4 AAUs each.
-- **Scheduled work.** The three tasks are created Off, so they cost nothing until you
-  run one or turn its schedule on. Each run is one agent thread of active work. With
-  all three schedules On, the agent would start 11 threads a week (five health
-  checks, five drift scans and one deck). The tasks live on the parent, so parking
-  deletes them and applying again recreates them Off.
+- **Scheduled work.** The three tasks are paused, so they cost nothing until you run
+  one or resume its schedule. Each run is one agent thread of active work; measured
+  on 2026-11-11, the health check took 1 minute 45 seconds, the drift scan about
+  1 minute 30 seconds and the deck 2 minutes 42 seconds. With all three schedules
+  resumed, the agent would start 11 threads a week (five health checks, five drift
+  scans and one deck). The tasks live on the parent, so parking deletes them and
+  applying again recreates them paused.
 - **No per-run figure.** The active-flow AAUs of a run can't be read back (the same
-  limit as T12), and none of these runs has been measured live. Use hours at 4 AAUs
-  as your estimate, run each task once while you watch the bill, and don't quote a
-  price per run.
+  limit as T12), so no run has a measured price. Use hours at 4 AAUs as your
+  estimate, and don't quote a price per run.
 
 ## Preserve evidence instead of guessing at telemetry savings
 

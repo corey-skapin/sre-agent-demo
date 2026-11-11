@@ -12,10 +12,11 @@ commands, or follow them yourself.
 ## What it does
 
 Two custom agents hold the work. Neither has an Azure write tool or a GitHub tool.
-Every task is created in Review mode and **Off**: nothing runs until you run it or
-turn its schedule on.
+Every task is in Review mode and **Paused**: nothing runs until you run it or resume
+its schedule. (The platform starts every new task Active whatever the create call
+says, so the apply pauses each task it creates.)
 
-| Task | Agent | Schedule when On (UTC, assumed) | What it reports |
+| Task | Agent | Schedule when Active (UTC) | What it reports |
 |---|---|---|---|
 | `estate-health-check` | `estate-auditor` | `0 8 * * 1-5` | One verdict per area (Healthy, Degraded, Down, Parked or Unknown) with the query behind it: the ticketing web app and its checkout success rate, the two alert rules (exactly one should be enabled), the Arc estate (Parked when every VM is deallocated) and, with T09, the Container App |
 | `bicep-drift-scan` | `estate-auditor` | `30 8 * * 1-5` | Each difference between the live ticketing workload and its Bicep, graded Benign, Risky or Critical, with the revert it proposes and did not run |
@@ -39,11 +40,11 @@ check refuses `PROACTIVE` without it. There is nothing else to fill in. Then:
   `Initialize-SreConfiguration.ps1 -Inspect`, then apply with a new `-BackupPath`
   outside the repository. The acts stage writes its own backup beside it, named
   `<your path>.acts.json`. Nothing is deleted, and a task that exists keeps whatever
-  On or Off setting it has.
+  Active or Paused setting it has.
 
 `Test-SreReadiness.ps1 -DesiredState Active` then has two required rows,
 `ACTS-skills` and `ACTS-tasks` (every task present, current and in Review mode), and
-an informational row, `ACTS-schedules`, that shows each task as Off or On. Add
+an informational row, `ACTS-schedules`, that shows each task as Paused or Active. Add
 `PROACTIVE` to the `acts` list in your presenter context to put the act in your
 guide. No grant or GitHub permission changes: the agents use the identity's
 existing read access.
@@ -56,8 +57,9 @@ existing read access.
   -Action Status
 ```
 
-`Status` shows each task as Off or On, its schedule, how many times it has run, when
-it last ran and runs next, and its mode. To run one now, add `-Action Run -Name <task>`:
+`Status` shows each task as Paused or Active, its schedule, how many times it has run,
+when it last ran and runs next (a paused task shows "not scheduled"), and its mode.
+To run one now, add `-Action Run -Name <task>`:
 
 ```powershell
 .\scripts\Invoke-ScheduledTask.ps1 `
@@ -65,18 +67,19 @@ it last ran and runs next, and its mode. To run one now, add `-Action Run -Name 
   -Action Run -Name estate-health-check
 ```
 
-It starts one agent thread and prints its ID. Add `-Wait` to follow the thread until
+It starts one agent thread and prints its ID; the agent runs a paused task without
+resuming it, and the task stays paused. Add `-Wait` to follow the thread until
 the agent is idle (15 minutes at most, or set `-TimeoutMinutes`). Nothing waits for
 a click, because neither agent has a write tool. Open the thread in the SRE portal to
 read the result. `-WhatIf` shows what Run, Enable or Disable would do.
 
-To turn a schedule on or off, use `-Action Enable` or `-Action Disable` with `-Name`.
-A schedule that is On starts agent threads by itself, and each one spends AAUs, so
-turn it off again when you're done. The apply never changes this setting after a task
-exists.
+To resume or pause a schedule, use `-Action Enable` (resume) or `-Action Disable`
+(pause) with `-Name`. A schedule that is Active starts agent threads by itself, and
+each one spends AAUs, so pause it again when you're done. The apply never changes
+this setting after a task exists.
 
-If the agent refuses to run a task that is Off, run `-Action Enable`, then `-Action
-Run`, then `-Action Disable`. The script says so when the call fails.
+If a future platform version refuses to run a paused task, run `-Action Enable`, then
+`-Action Run`, then `-Action Disable`. The script says so when the call fails.
 
 ## The drift demo
 
@@ -89,8 +92,10 @@ own credentials, so the drift scan finds one of each grade:
 | FTP state | `Disabled` | `FtpsOnly` | Risky |
 | HTTPS only | `true` | `false` | Critical |
 
-Nothing should restart, and the app should keep serving; that hasn't been confirmed
-live yet. The agent never makes this change or reverts it.
+Start takes about 50 seconds and Reset about 45. The web app kept answering: baseline
+traffic began 14 seconds after a Reset and its first 27 checkouts all returned 200.
+Nobody sent traffic during the drift itself, so "no restart" is not proven. The agent
+never makes this change or reverts it.
 
 ```powershell
 .\scripts\Invoke-DriftDemo.ps1 `
@@ -119,10 +124,14 @@ that Run printed:
   -Source Thread -ThreadId <thread ID> -OutputPath <a new folder outside the repository>
 ```
 
-Check the file before you present it. A PowerPoint file hasn't been downloaded
-through the agent's file API yet, and that API may return it as text. The script
-warns when a downloaded `.pptx` doesn't start like a zip file. If there is no file,
-the deck builder reports the same slides as Markdown in the thread.
+On the live agent the deck took 2 minutes 42 seconds, `python-pptx` 1.0.2 was
+already in the sandbox, and the download took 22 seconds: a 36,596-byte file that
+starts with `PK`, opens as a zip and holds six slides (Governance review, Posture,
+Findings, How this agent is governed, Recommendations, and a closing slide). The
+agent says it checked the file opens but didn't render it, so look at it before you
+present it: a long table can wrap. The script warns when a downloaded `.pptx` doesn't
+start like a zip file. If there is no file, the deck builder reports the same slides
+as Markdown in the thread.
 
 ## What you can and can't claim
 
@@ -136,19 +145,21 @@ the deck builder reports the same slides as Markdown in the thread.
   table in the drift-scan skill, against what the repository's Bicep declares. They
   aren't a compliance verdict, and a check the agent couldn't read is reported as
   unknown, not as no drift.
-- **You ran them.** The tasks are Off. If you ran them by hand, say so: "these are
+- **You ran them.** The tasks are Paused. If you ran them by hand, say so: "these are
   scheduled tasks; I ran them a few minutes ago." Don't say it ran by itself unless
-  you turned a schedule on and it fired.
-- **A parked Arc estate reads Parked.** That's the right answer, not a failure.
+  you resumed a schedule and it fired.
+- **A parked Arc estate reads Parked.** That's the right answer, not a failure. The
+  health check found all eight VMs deallocated and the nine Arc machines
+  Disconnected, and said so without calling it a fault.
 - **The agent proposes, a person decides.** The drift scan prints the revert and
   marks it "proposed, not run". Its last slide says nothing in the deck was changed.
 
 ## Keep it out of the incident story
 
-- The T12 Stop hook checks the closing summary of an investigation. Its prompt now
-  says that scheduled reports, drift scans, governance reports, deck notes and
-  estate answers aren't investigation summaries, so it should let them through. That
-  wording hasn't been through a live scheduled run yet.
+- The T12 Stop hook checks the closing summary of an investigation. Its prompt says
+  that scheduled reports, drift scans, governance reports, deck notes and estate
+  answers aren't investigation summaries. Measured: the hook ran after each of the
+  three task threads and allowed all three (about 1.3 to 1.5 seconds each).
 - Don't ask a task to create a GitHub issue. An agent-created issue body over about
   4,000 escaped characters gets no approval card
   ([T12](t12-friday-release.md#troubleshooting)), and these tasks hold no GitHub
@@ -156,17 +167,26 @@ the deck builder reports the same slides as Markdown in the thread.
 - A scheduled thread that fires while a Friday release incident is running is a
   second thread on the same agent. Run the tasks before the incident, not during
   it, so you can tell their threads from the incident's in the portal.
+- A task thread runs without a signed-in person, so it never waits for an
+  authorization. The same questions asked in a chat can
+  ([Act 1](ask-anything.md#questions-that-name-people)).
+- **The health check reports the last 24 hours.** After a Friday release run it says
+  so plainly: on 2026-11-11 it reported the app healthy now, with 1,011 failed
+  checkouts in the last 24 hours (59.6% success), all on v1.3.0, and three resolved
+  alerts still Acknowledged. That's the release you just showed, not a fault; say it
+  before the audience asks, or run this act before the incident.
 
 ## Time and cost
 
 Nothing here adds a resource or a second parent: the tasks live on the agent and go
-away with it. Applying the configuration again recreates them Off. The parent bills
+away with it. Applying the configuration again recreates them Paused. The parent bills
 4 AAUs per hour from creation until deletion, plus active work
 ([cost reference](sre-cost-and-demo-fidelity.md#acts-1-3-and-4-ask-remember-and-scheduled-work)).
 Each run is one agent thread of active work whose AAUs can't be read back. If you
-turned all three schedules on, that would be 11 threads a week (five health checks,
-five drift scans and one deck). How long each task takes to finish isn't measured:
-rehearse once and write your own numbers down.
+resumed all three schedules, that would be 11 threads a week (five health checks,
+five drift scans and one deck). One run each took: the health check 1 minute 45
+seconds, the drift scan 1 minute 30 seconds and the deck 2 minutes 42 seconds, with
+the drift scan finding all three drifts.
 
 ## Troubleshooting
 
@@ -174,7 +194,8 @@ rehearse once and write your own numbers down.
 |---|---|
 | `Invoke-ScheduledTask.ps1` says the skin doesn't turn on `PROACTIVE` | Add `PROACTIVE` (and `T12`) to `sre.requiredScenarios`, then apply |
 | Status says a task is "not on the agent" | The apply hasn't run since you turned the module on. Run `Initialize-SreConfiguration.ps1 -Apply` |
-| Run fails and the message says the task is Off | Enable it, run it, then disable it again (above) |
+| Status says a task is Active and you didn't resume it | An older copy of the scripts created it: the platform starts new tasks Active. Run `-Action Disable -Name <task>` |
+| Run fails and the message says the task is Paused | The platform refused a paused task, which it didn't do when measured. Enable it, run it, then disable it again (above) |
 | Run says the thread wasn't named in the answer | Look in the SRE portal under the agent's threads for the newest one |
 | The drift scan reports no drift | Start the drift first: `Invoke-DriftDemo.ps1 -Action Start`. If you did, check `-Action Status` and that the scan ran after it |
 | The drift scan reports drift you didn't make | The web app really differs from the Bicep. Read the table, then decide: that's the finding |
@@ -184,22 +205,31 @@ rehearse once and write your own numbers down.
 
 ## What is proven and what isn't
 
-Proven live (2026-11-10 and 2026-11-11): a scheduled task can be created over REST in
-Review mode and run now; a task thread started that way ran with the agent's tools
-and read the notes written by an earlier incident; and the Stop hook runs after
-every reply and can reject one.
+Proven live (2026-11-10 and 2026-11-11), on a build from zero:
 
-Written offline and covered by tests against a fake agent, but **not run live**:
+- Tasks are created over REST in Review mode. The platform ignores `isEnabled` and
+  starts each new task **Active**; `POST /api/v1/scheduledtasks/{id}/pause` pauses it
+  (HTTP 200) and `/resume` resumes it. A PUT on a paused task keeps it paused.
+- The cron time zone is UTC: `0 8 * * 1-5` gave a next run of 08:00:00Z.
+- Run now works on a paused task (HTTP 200 in under 2 seconds, one thread, the task
+  stays paused). The thread's first message is `[SCHEDULED_TASK_EXECUTION]` and its
+  caller is "no interactive caller".
+- All three tasks ran to a useful report, the Stop hook allowed all three, and the
+  drift scan found exactly the three drifts, graded Critical, Risky and Benign, with
+  the revert it proposed and did not run.
+- The health check's first run looked for the VMs in the Arc group and had to find
+  them by another route; the skill now says they are in the infrastructure group, and
+  a second run (2 minutes 31 seconds) read all eight there and reported the estate
+  Parked.
+- `ExecutePythonCode` is accepted as a tool name, `python-pptx` 1.0.2 is importable,
+  and the binary `.pptx` downloads through the file API intact.
+- `Invoke-DriftDemo.ps1` Start and Reset on the real web app.
 
-- Creating the three tasks Off, and the platform honouring Off at create time.
-- Run now on a task that is Off.
-- The cron time zone (UTC is assumed) and the `ACTS-schedules` row for a task that
-  is On.
-- The two read-only agents' output: the verdict table, the drift grades, and the
-  scan's result against the three live drifts.
-- `Invoke-DriftDemo.ps1` on a real web app (it is tested with a mocked Azure CLI),
-  including that the three changes don't restart the app.
-- `ExecutePythonCode` as a tool name the platform accepts, `python-pptx` being
-  importable in the sandbox, and downloading a binary `.pptx` through the file API.
-- The Stop hook's exclusion for scheduled reports.
-- How long each task takes, and what it costs.
+Written offline and covered by tests against a fake agent, but **not run live yet**:
+
+- The apply pausing a task it has just created (the same pause call was made by hand
+  and worked). The next build from zero proves it: `Status` should show all three
+  Paused right after the build.
+- A task firing by itself at its cron time (nobody waited for one).
+- The `ACTS-schedules` row for a task that is Active, and what a run costs in AAUs.
+- Whether the three drift changes restart the web app (no traffic ran during them).
