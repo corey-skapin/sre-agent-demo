@@ -508,7 +508,7 @@ try {
     $sinkContext = New-TestDataContext -Agent $sink -SubscriptionId $subscription -TenantId $tenant
     $sent = Send-SreNotes -Context $sinkContext -Files ([ordered]@{ 'overview.md' = "Hello`n"; 'sub/b.md' = 'x'; 'sub/deeper/c.md' = ('y' * 700) })
     Check ($sent.Status -eq 200 -and (@($sink.state.uploads[0]) -join ',') -ceq 'overview.md,sub/b.md,sub/deeper/c.md' -and [Text.Encoding]::UTF8.GetString([byte[]]$sink.state.files["$notesFolder/sub/deeper/c.md"]) -ceq ('y' * 700) -and [Text.Encoding]::UTF8.GetString([byte[]]$sink.state.files["$notesFolder/overview.md"]) -ceq "Hello`n") 'The stand-in agent unpacks the archive: checksums valid, nested files in place, text exact'
-    $tarCommand = Get-Command tar -CommandType Application -ErrorAction SilentlyContinue
+    $tarCommand = Get-Command tar -CommandType Application -TotalCount 1 -ErrorAction SilentlyContinue
     if ($tarCommand) {
         $archivePath = New-TempPath '.tar.gz'
         [IO.File]::WriteAllBytes($archivePath, $archive)
