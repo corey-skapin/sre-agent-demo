@@ -603,7 +603,8 @@ least 30 minutes and the repair script installed on the server
 `{{arcMachineResourceIdName}}` breaks, the agent diagnoses it and proposes one
 repair, and a person approves it.
 
-**Before the beat**, about 15 minutes before (a budget, not a measurement, so
+**Before the beat**, about 15 minutes before (one run took 6 minutes 51 seconds from
+the fault to the card, and the alert's five-minute check can add up to five more, so
 rehearse once), ask your AI tool to:
 
 1. Check the estate with `Invoke-ArcServerRoom.ps1 -Action Check`. Every row should
@@ -617,10 +618,21 @@ rehearse once), ask your AI tool to:
 `{{lobEventSource}}`), what shows the server itself is fine (heartbeat and host
 counters), the one change it proposes (a Run Command that runs the repair script
 installed in advance) and the statement that it waits for a person. Open the card,
-read its URL and body, and click **Approve**. About half a minute later the agent reads
-the run command back: it should report `was=CrashOnProcessing now=Healthy
-state=Running`, then check the app's heartbeat. Say a person approved it, never that
-the audit proves who.
+read its URL and body, and click **Approve**. About 35 seconds later the repair has
+run (20 seconds for the script to start, 15 to run). The agent reads the run command
+back and should report `was=CrashOnProcessing now=Healthy state=Running`, then check
+the app's heartbeat. Say a person approved it, never that the audit proves who. Don't
+offer the alert's clearing as proof of recovery: it clears by itself, before the
+repair, once the one failure event leaves its window.
+
+**If the thread stops after the click**, `Status` says an authorization card is
+waiting, and the thread shows a card titled "Authorization required: please grant
+access to the requested Azure resources". It is not the Approve card. In the one run
+the agent read the new run command too early, got a 404 and the platform held that read
+for a person. Authorizing it makes that one read run as you, not as the agent, so say
+so; the repair itself already ran as the agent. The skill now reads the list of run
+commands to avoid this, but that is not yet proven live, and what happens if nobody
+authorizes the card is unknown.
 
 **Say:** "A server fails, and the agent finds it in the telemetry we already collect.
 It proposes one change, a script we installed in advance, and it waits. I decide. It

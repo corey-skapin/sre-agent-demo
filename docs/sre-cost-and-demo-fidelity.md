@@ -116,9 +116,11 @@ creation until deletion, plus active work.
   estimate, and don't quote a price per run.
 - **The server room.** The act needs the Arc estate awake for at least 30 minutes
   before the beat, which has its own cost in the Arc repository, and the agent up
-  for the whole fault: start it about 15 minutes before the beat, so budget that
-  lead at 4 AAUs per hour. It creates one run command on the server and removes it
-  on reset. See [Act 6](arc-server-room.md).
+  for the whole fault: start it about 15 minutes before the beat (one run took 6
+  minutes 51 seconds to the card), so budget that lead at 4 AAUs per hour. It creates
+  one run command on the server and removes it on reset. The whole 2026-11-12 run,
+  with the agent waiting 22 minutes for the click, kept the parent up for 1 hour 10
+  minutes. See [Act 6](arc-server-room.md).
 
 ## Preserve evidence instead of guessing at telemetry savings
 
