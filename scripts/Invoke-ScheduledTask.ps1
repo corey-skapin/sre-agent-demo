@@ -1,18 +1,18 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-    Lists, runs, turns on and turns off the three PROACTIVE scheduled tasks: the estate health check, the Bicep drift scan and the governance deck.
+    Lists, runs, resumes and pauses the three PROACTIVE scheduled tasks: the estate health check, the Bicep drift scan and the governance deck.
 
 .DESCRIPTION
-    Status    Shows each task: Off or On, its schedule, how many times it has run, when it last ran and runs next, and its mode.
+    Status    Shows each task: Paused or Active, its schedule, how many times it has run, when it last ran and runs next, and its mode.
     Run       Runs one task now (-Name) with the agent's run-now call and prints the thread it started. With -Wait it follows that thread until
-              the agent is idle. The task's agent is read-only, so nothing waits for a click.
+              the agent is idle. The task's agent is read-only, so nothing waits for a click. Run works on a Paused task and leaves it Paused.
     Enable / Disable
-              Turns one task's schedule on or off, keeping its schedule and prompt as they are on the agent. The apply never changes this once
-              a task exists. A schedule that is On starts agent threads by itself, and each thread spends AAUs.
+              Resumes (Enable) or pauses (Disable) one task's schedule, keeping its schedule and prompt as they are on the agent. The apply never
+              changes this once a task exists. An Active schedule starts agent threads by itself, and each thread spends AAUs. Cron times are UTC.
 
-    The tasks are created Off by Initialize-SreConfiguration.ps1. Whether run-now works on an Off task is not proven live: if the agent refuses,
-    run -Action Enable, then -Action Run, then -Action Disable.
+    The tasks are created Paused by Initialize-SreConfiguration.ps1: the platform starts a new task Active, so the apply pauses it right after
+    it writes it. You don't need Enable to run a task by hand.
 
     Use -WhatIf on Run, Enable or Disable to see what would happen without changing anything.
 #>

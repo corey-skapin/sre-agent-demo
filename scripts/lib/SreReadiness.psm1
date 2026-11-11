@@ -159,6 +159,8 @@ function Get-SreReadinessReport {
             $missing = @($expectedManaged | Where-Object { $_ -notin $p.knowledgeGraphConfiguration.managedResources })
             Add-Check 'managed-resources' $agentId $(if ($missing.Count) { 'fail' } else { 'pass' }) $expectedManaged $p.knowledgeGraphConfiguration.managedResources "Missing managed IDs: $($missing -join ', ')"
             foreach ($scenario in $scenarios) {
+                # The ASK, MEMORY and PROACTIVE modules have no Arc host or alert of their own; Get-SreActsDataChecks reports on them.
+                if ($scenario -in 'ASK', 'MEMORY', 'PROACTIVE') { continue }
                 if ($scenario -eq 'T09') {
                     $appId = "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault"
                     try {

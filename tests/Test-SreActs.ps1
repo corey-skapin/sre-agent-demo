@@ -86,7 +86,7 @@ try {
     Check ((@($all.skills | ForEach-Object { $_.name }) -join ',') -ceq 'estate-query,estate-health-check,bicep-drift-scan,governance-deck') 'Four skills: the question skill and the three proactive ones'
     Check ((@($all.agents | ForEach-Object { $_.name }) -join ',') -ceq 'estate-auditor,deck-builder') 'Two read-only agents'
     Check ((@($all.tasks | ForEach-Object { $_.name }) -join ',') -ceq 'estate-health-check,bicep-drift-scan,governance-deck') 'Three scheduled tasks'
-    Check (@($all.tasks | Where-Object { $_.enabled -or $_.agentMode -cne 'Review' -or $_.cronExpression -notmatch '^\S+( \S+){4}$' }).Count -eq 0) 'Every task is Off, in Review mode and has a five-field schedule'
+    Check (@($all.tasks | Where-Object { $_.enabled -or $_.agentMode -cne 'Review' -or $_.cronExpression -notmatch '^\S+( \S+){4}$' }).Count -eq 0) 'Every task is wanted Paused, in Review mode and has a five-field schedule'
     Check (@($all.tasks | Where-Object { $_.agent -notin @($all.agents | ForEach-Object { $_.name }) }).Count -eq 0) 'Every task runs one of the two agents'
     Check ($all.seed.source -ceq 'repo' -and (@($all.seed.files.Keys) -join ',') -ceq 'overview.md' -and $all.seed.files['overview.md'].Length -le 2000 -and $all.seed.files['overview.md'] -notmatch "`r") 'The seed is the repo overview.md, in at most 2,000 characters, with LF line endings'
     foreach ($agent in $all.agents) {
@@ -239,8 +239,7 @@ try {
                 $observed.skills[$skill.name] = @{ name = $skill.name; type = 'Skill'; properties = @{ name = $skill.name; description = $skill.description; tools = @(); skillContent = (& $live $skill.content); additionalFiles = @() } }
             }
             foreach ($task in $desired.acts.tasks) {
-                $flat = @{ id = "id-$($task.name)"; name = $task.name; description = $task.description; cronExpression = $task.cronExpression; agentPrompt = (& $live $task.agentPrompt); agent = $task.agent; agentMode = 'Review' }
-                if ($Envelope) { $flat.isEnabled = [bool]$On } else { $flat.status = $(if ($On) { 'Active' } else { 'Paused' }) }
+                $flat = @{ id = "id-$($task.name)"; name = $task.name; description = $task.description; cronExpression = $task.cronExpression; agentPrompt = (& $live $task.agentPrompt); agent = $task.agent; agentMode = 'Review'; status = $(if ($On) { 'Active' } else { 'Paused' }) }
                 $observed.tasks[$task.name] = if ($Envelope) { @{ name = $task.name; type = 'ScheduledTask'; properties = $flat } } else { $flat }
             }
             $observed.notes = [pscustomobject]@{ exists = $true; path = $notesFolder; files = @([pscustomobject]@{ path = "$notesFolder/overview.md"; relativePath = 'overview.md'; size = 10; modified = '' }) }
@@ -252,7 +251,7 @@ try {
     $empty = Get-SreActsPlan -Desired $desired -Observed (New-Observed)
     Check ((@($empty.operations | ForEach-Object { $_.name }) -join ',') -ceq ((@($skillNames | ForEach-Object { "skill:$_" }) + @($taskNames | ForEach-Object { "task:$_" }) + 'seed:notes') -join ',')) 'An empty agent needs the skills, then the tasks, then the seed'
     $taskOperation = $empty.operations | Where-Object { $_.name -ceq "task:$($taskNames[0])" }
-    Check ($taskOperation.reason -ceq 'create (Off)' -and $taskOperation.body.type -ceq 'ScheduledTask' -and $taskOperation.body.properties.isEnabled -eq $false -and $taskOperation.body.properties.agentMode -ceq 'Review' -and $taskOperation.body.properties.agent -ceq 'estate-auditor' -and $taskOperation.path -ceq "/api/v2/extendedAgent/scheduledtasks/$($taskNames[0])") 'A new task is one REST PUT, created Off, in Review mode, for its agent'
+    Check ($taskOperation.reason -ceq 'create (then paused)' -and $taskOperation.enabled -eq $false -and $taskOperation.body.type -ceq 'ScheduledTask' -and $taskOperation.body.properties.isEnabled -eq $false -and $taskOperation.body.properties.agentMode -ceq 'Review' -and $taskOperation.body.properties.agent -ceq 'estate-auditor' -and $taskOperation.path -ceq "/api/v2/extendedAgent/scheduledtasks/$($taskNames[0])") 'A new task is one REST PUT, created in Review mode for its agent, and is to end up Paused'
     $skillOperation = $empty.operations | Where-Object { $_.name -ceq "skill:$($skillNames[0])" }
     Check ($skillOperation.reason -ceq 'create' -and $skillOperation.body.type -ceq 'Skill' -and @($skillOperation.body.properties.tools).Count -eq 0 -and $skillOperation.body.properties.skillContent -ceq $desired.acts.skills[0].content) 'A new skill carries its text and no tool list'
     $seedOperation = $empty.operations | Where-Object { $_.name -ceq 'seed:notes' }
@@ -260,11 +259,13 @@ try {
     $applied = Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied)
     Check ($applied.operations.Count -eq 0 -and $applied.notes.Count -eq 1 -and $applied.notes[0] -match 'already has 1 notes file') 'An applied agent needs no writes, and a notes folder that has files is left alone'
     Check ((Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied -Eol "`r`n")).operations.Count -eq 0) 'Text the service returns with CRLF is not drift'
-    Check ((Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied -Envelope -On)).operations.Count -eq 0 -and (Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied -On)).operations.Count -eq 0) 'A task the agent returns wrapped in name, type and properties, or one that is On, is not drift: on or off is yours'
+    Check ((Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied -Envelope -On)).operations.Count -eq 0 -and (Get-SreActsPlan -Desired $desired -Observed (New-Observed -Applied -On)).operations.Count -eq 0) 'A task the agent returns wrapped in name, type and properties, or one that is Active, is not drift: Active or Paused is yours'
     $view = Get-SreActsTaskView $null
     Check ($null -eq $view) 'No task reads as no view'
     $flatView = Get-SreActsTaskView @{ id = 'x'; status = 'Active'; cronExpression = '0 8 * * *'; agentPrompt = "a`r`nb"; agent = 'estate-auditor'; agentMode = 'Review'; executionCount = 3; lastExecutionTime = 't1'; nextExecutionTime = 't2' }
-    Check ($flatView.enabled -and $flatView.agentPrompt -ceq "a`nb" -and $flatView.runs -ceq '3' -and $flatView.lastRun -ceq 't1' -and -not (Get-SreActsTaskView @{ status = 'Paused'; isEnabled = $true }).enabled -and (Get-SreActsTaskView @{ properties = @{ isEnabled = $true } }).enabled -and -not (Get-SreActsTaskView @{ name = 'x' }).enabled) 'A task view is Active or Paused by its status, else by isEnabled, else Off, with CRLF removed from the prompt'
+    Check ($flatView.enabled -and $flatView.agentPrompt -ceq "a`nb" -and $flatView.runs -ceq '3' -and $flatView.lastRun -ceq 't1' -and -not (Get-SreActsTaskView @{ status = 'Paused'; isEnabled = $true }).enabled -and (Get-SreActsTaskView @{ properties = @{ isEnabled = $true } }).enabled -and -not (Get-SreActsTaskView @{ name = 'x' }).enabled) 'A task view is Active or Paused by its status, else by isEnabled, else Paused, with CRLF removed from the prompt'
+    $liveShape = Get-SreActsTaskView @{ name = 'x'; type = 'ScheduledTask'; properties = @{ status = 'Paused'; cronExpression = '0 9 * * 1'; agentMode = 'Review' } } ([pscustomobject]@{ id = 'abc-1'; name = 'x'; status = 'Active'; executionCount = 2; lastExecutionTime = [datetime]::new(2026, 11, 12, 8, 0, 5, [DateTimeKind]::Utc); nextExecutionTime = [datetime]::new(2026, 11, 16, 9, 0, 0, [DateTimeKind]::Utc) })
+    Check ($liveShape.id -ceq 'abc-1' -and $liveShape.enabled -and $liveShape.runs -ceq '2' -and $liveShape.lastRun -ceq '2026-11-12 08:00Z' -and $liveShape.nextRun -ceq '2026-11-16 09:00Z' -and $liveShape.cronExpression -ceq '0 9 * * 1') 'The live shape has no ID or run times in the task itself: the task list supplies them, with times shown in UTC'
     $edited = New-Observed -Applied
     $edited.skills[$skillNames[1]].properties.skillContent += ' edited'
     $editedPlan = Get-SreActsPlan -Desired $desired -Observed $edited
@@ -278,10 +279,10 @@ try {
     $moved = New-Observed -Applied -On
     $moved.tasks[$taskNames[1]].cronExpression = '0 1 * * *'
     $movedPlan = Get-SreActsPlan -Desired $desired -Observed $moved
-    Check ($movedPlan.operations.Count -eq 1 -and $movedPlan.operations[0].name -ceq "task:$($taskNames[1])" -and $movedPlan.operations[0].reason -match '^update' -and $movedPlan.operations[0].body.properties.isEnabled -eq $true -and $movedPlan.operations[0].body.properties.cronExpression -ceq $desired.acts.tasks[1].cronExpression) 'A task with another schedule is put back, and a task you turned On stays On'
+    Check ($movedPlan.operations.Count -eq 1 -and $movedPlan.operations[0].name -ceq "task:$($taskNames[1])" -and $movedPlan.operations[0].reason -match '^update' -and $movedPlan.operations[0].body.properties.isEnabled -eq $true -and $movedPlan.operations[0].body.properties.cronExpression -ceq $desired.acts.tasks[1].cronExpression)     'A task with another schedule is put back, and a task you resumed stays Active'
     $movedOff = New-Observed -Applied
     $movedOff.tasks[$taskNames[1]].cronExpression = '0 1 * * *'
-    Check ((Get-SreActsPlan -Desired $desired -Observed $movedOff).operations[0].body.properties.isEnabled -eq $false) 'A task that is Off stays Off when it is corrected'
+        Check ((Get-SreActsPlan -Desired $desired -Observed $movedOff).operations[0].body.properties.isEnabled -eq $false) 'A task that is Paused stays Paused when it is corrected'
     $autonomous = New-Observed -Applied
     $autonomous.tasks[$taskNames[2]].agentMode = 'Autonomous'
     $reviewCase = New-Observed -Applied
@@ -314,10 +315,12 @@ try {
     $output = @(Invoke-SreActs -Context $context -Desired $desired -BackupPath $base 6>&1)
     $result = $output | Where-Object { $_ -is [hashtable] } | Select-Object -First 1
     Check ($result.changed -and $result.verified -and $result.seed -ceq 'verified' -and @($result.operations).Count -eq 8) 'The apply writes the eight settings and verifies them by reading back'
-    $expectedWrites = @($skillNames | ForEach-Object { "PUT /api/v2/extendedAgent/skills/$_" }) + @($taskNames | ForEach-Object { "PUT /api/v2/extendedAgent/scheduledtasks/$_" }) + 'POST /api/v1/WorkspaceMemory/synthesized-knowledge'
-    Check (((Get-FakeAgentWrites -Agent $agent) -join '|') -ceq ($expectedWrites -join '|')) 'One write each: the skills, then the tasks, then the notes'
-    Check (@($agent.state.tasks.Values | Where-Object { $_.status -ne 'Paused' }).Count -eq 0 -and @($agent.state.tasks.Values | Where-Object { $_.agentMode -cne 'Review' }).Count -eq 0 -and $agent.state.tasks.Count -eq 3) 'Three tasks exist, all Off and in Review mode'
+    $expectedWrites = @($skillNames | ForEach-Object { "PUT /api/v2/extendedAgent/skills/$_" }) +
+        @($taskNames | ForEach-Object { "PUT /api/v2/extendedAgent/scheduledtasks/$_"; "POST /api/v1/scheduledtasks/$($agent.state.tasks[$_].id)/pause" }) + 'POST /api/v1/WorkspaceMemory/synthesized-knowledge'
+    Check (((Get-FakeAgentWrites -Agent $agent) -join '|') -ceq ($expectedWrites -join '|')) 'One write each: the skills, then each task followed by its pause, then the notes'
+    Check (@($agent.state.tasks.Values | Where-Object { $_.status -ne 'Paused' }).Count -eq 0 -and @($agent.state.tasks.Values | Where-Object { $_.agentMode -cne 'Review' }).Count -eq 0 -and $agent.state.tasks.Count -eq 3) 'The service starts each new task Active; the apply pauses all three, and they are in Review mode'
     Check ((@($agent.state.log | Where-Object { $_.method -eq 'PUT' -and $_.path -like '*scheduledtasks*' } | ForEach-Object { $_.body.properties.isEnabled }) -join ',') -ceq 'False,False,False') 'Each task PUT says isEnabled false'
+    Check ((@($agent.state.log | Where-Object { $_.method -eq 'POST' -and $_.path -like '*scheduledtasks*' } | ForEach-Object { $_.path -replace '^.*/', '' }) -join ',') -ceq 'pause,pause,pause') 'Pausing uses the pause call, once per task, and never the run-now call'
     Check (@($agent.state.log | Where-Object { $_.path -like '*github*' -or $_.path -like '*repos*' -or $_.path -like '*settings*' -or $_.path -like '*hooks*' -or $_.path -like '*customInstructions*' -or $_.path -like '*/agents/*' }).Count -eq 0) 'The acts touch no GitHub, repository, tool policy, hook, instruction or agent route'
     $seedFile = "$notesFolder/overview.md"
     Check ($agent.state.files.ContainsKey($seedFile) -and [Text.Encoding]::UTF8.GetString([byte[]]$agent.state.files[$seedFile]) -ceq $desired.acts.seed.files['overview.md'] -and (@($agent.state.uploads[0]) -join ',') -ceq 'overview.md') 'The seed arrives as one tar.gz and unpacks to overview.md with the exact text'
@@ -333,12 +336,17 @@ try {
     $mark = $agent.state.log.Count
     $fixed = Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null
     $fixPut = @($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.method -eq 'PUT' })
-    Check ($fixed.changed -and $fixPut.Count -eq 1 -and $fixPut[0].path -ceq "/api/v2/extendedAgent/scheduledtasks/$($taskNames[1])" -and $fixPut[0].body.properties.isEnabled -eq $true -and $agent.state.tasks[$taskNames[1]].status -ceq 'Active' -and $agent.state.tasks[$taskNames[1]].cronExpression -ceq $desired.acts.tasks[1].cronExpression) 'A task you turned On has its schedule corrected and stays On'
+    Check ($fixed.changed -and $fixPut.Count -eq 1 -and $fixPut[0].path -ceq "/api/v2/extendedAgent/scheduledtasks/$($taskNames[1])" -and $fixPut[0].body.properties.isEnabled -eq $true -and $agent.state.tasks[$taskNames[1]].status -ceq 'Active' -and $agent.state.tasks[$taskNames[1]].cronExpression -ceq $desired.acts.tasks[1].cronExpression) 'A task you resumed has its schedule corrected and stays Active'
+    Check (@($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.path -like '*/pause' -or $_.path -like '*/resume' }).Count -eq 0) 'Correcting a task that already is Active or Paused calls neither pause nor resume'
+    $agent.state.tasks[$taskNames[2]].cronExpression = '5 5 * * *'
+    $mark = $agent.state.log.Count
+    $null = Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null
+    Check ($agent.state.tasks[$taskNames[2]].status -ceq 'Paused' -and $agent.state.tasks[$taskNames[2]].cronExpression -ceq $desired.acts.tasks[2].cronExpression -and @(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 1) 'A Paused task that is corrected stays Paused, with one write'
     $readiness = @(Get-SreActsDataChecks -Context $context -Desired $desired)
     $byId = @{}
     foreach ($row in $readiness) { $byId[$row.id] = $row }
     Check (@($readiness | Where-Object { $_.required -and $_.status -ne 'pass' }).Count -eq 0 -and $byId['ACTS-skills'].required -and $byId['ACTS-tasks'].required -and -not $byId['ACTS-schedules'].required -and -not $byId['ACTS-notes'].required -and $byId['ACTS-notes'].status -ceq 'pass') 'Readiness: skills and tasks pass and are required; schedules and notes are informational'
-    Check ($byId['ACTS-schedules'].observed[$taskNames[1]] -ceq 'On' -and $byId['ACTS-schedules'].observed[$taskNames[0]] -ceq 'Off' -and $byId['ACTS-schedules'].status -ceq 'pass') 'The schedules row shows which task you turned On, and never fails'
+    Check ($byId['ACTS-schedules'].observed[$taskNames[1]] -ceq 'Active' -and $byId['ACTS-schedules'].observed[$taskNames[0]] -ceq 'Paused' -and $byId['ACTS-schedules'].status -ceq 'pass') 'The schedules row shows which task you resumed, and never fails'
 
     $empty = New-Agent
     $emptyContext = New-TestDataContext -Agent $empty -SubscriptionId $subscription -TenantId $tenant
@@ -358,35 +366,35 @@ try {
     $context = New-TestDataContext -Agent $agent -SubscriptionId $subscription -TenantId $tenant
     $agent.state.failPut = "scheduledtasks/$($taskNames[1])$"
     Throws { Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null } "Apply task:$($taskNames[1]) failed: HTTP 400"
-    Check ((@(Get-FakeAgentWrites -Agent $agent).Count) -eq 6 -and $agent.state.tasks.Count -eq 1 -and $agent.state.files.Count -eq 0) 'A rejected write stops the apply: it is not retried and nothing after it is attempted'
+    Check ((@(Get-FakeAgentWrites -Agent $agent).Count) -eq 7 -and $agent.state.tasks.Count -eq 1 -and $agent.state.files.Count -eq 0) 'A rejected write stops the apply: it is not retried and nothing after it is attempted'
     $agent.state.failPut = $null
     $retry = Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null
-    Check ($retry.changed -and $retry.verified -and @($retry.operations).Count -eq 3 -and $agent.state.tasks.Count -eq 3) 'A later apply converges and writes only what is still missing'
+    Check ($retry.changed -and $retry.verified -and @($retry.operations).Count -eq 3 -and $agent.state.tasks.Count -eq 3 -and @($agent.state.tasks.Values | Where-Object { $_.status -ne 'Paused' }).Count -eq 0) 'A later apply converges, writes only what is still missing, and leaves every task Paused'
     $agent = New-Agent
     $context = New-TestDataContext -Agent $agent -SubscriptionId $subscription -TenantId $tenant
     $agent.state.ignoreUpload = $true
     $softOutput = @(Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) -ReadBackSeconds 1 *>&1)
     $soft = $softOutput | Where-Object { $_ -is [hashtable] } | Select-Object -First 1
     Check ($soft.changed -and $soft.seed -ceq 'unverified' -and (Get-WarningText $softOutput) -match 'upload was accepted but no notes file appeared' -and (Get-WarningText $softOutput) -match 'was not repeated') 'A notes upload that does not show up is a warning, never a reason to fail the skills and tasks'
-    Check (@(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST *' }).Count -eq 1) 'The unverified upload was sent once'
+    Check (@(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST /api/v1/WorkspaceMemory/*' }).Count -eq 1) 'The unverified upload was sent once'
 
     # --- The notes folder is only seeded when it is empty ------------------------------------------------------------------------------------
     $agent = New-Agent
     $context = New-TestDataContext -Agent $agent -SubscriptionId $subscription -TenantId $tenant
     $agent.state.files["$notesFolder/learned.md"] = [Text.Encoding]::UTF8.GetBytes("learned`n")
     $noSeed = Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null
-    Check ($noSeed.changed -and @($noSeed.operations).Count -eq 7 -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST *' }).Count -eq 0 -and $noSeed.notes[0] -match 'already has 1 notes file') 'A notes folder that already has files is not seeded, and the rest still applies'
+    Check ($noSeed.changed -and @($noSeed.operations).Count -eq 7 -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST /api/v1/WorkspaceMemory/*' }).Count -eq 0 -and $noSeed.notes[0] -match 'already has 1 notes file') 'A notes folder that already has files is not seeded, and the rest still applies'
     $agent = New-Agent
     $context = New-TestDataContext -Agent $agent -SubscriptionId $subscription -TenantId $tenant
     $agent.state.listStatus = 500
     $unreadOutput = @(Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>&1)
     $unread = $unreadOutput | Where-Object { $_ -is [hashtable] } | Select-Object -First 1
-    Check ($unread.changed -and @($unread.operations).Count -eq 7 -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST *' }).Count -eq 0 -and (Get-HostText $unreadOutput) -match 'could not be read') 'A notes folder that cannot be read is never seeded: it is not taken for empty'
+    Check ($unread.changed -and @($unread.operations).Count -eq 7 -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST /api/v1/WorkspaceMemory/*' }).Count -eq 0 -and (Get-HostText $unreadOutput) -match 'could not be read') 'A notes folder that cannot be read is never seeded: it is not taken for empty'
     $agent = New-Agent
     $context = New-TestDataContext -Agent $agent -SubscriptionId $subscription -TenantId $tenant
     $agent.state.dirs = @("$workspaceRoot/memories", $notesFolder)
     $seeded = Invoke-SreActs -Context $context -Desired $desired -BackupPath (New-BackupBase) 6>$null
-    Check ($seeded.seed -ceq 'verified' -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST *' }).Count -eq 1) 'A notes folder that exists and is empty is seeded'
+    Check ($seeded.seed -ceq 'verified' -and @(Get-FakeAgentWrites -Agent $agent | Where-Object { $_ -like 'POST /api/v1/WorkspaceMemory/*' }).Count -eq 1) 'A notes folder that exists and is empty is seeded'
 
     # --- Backups ------------------------------------------------------------------------------------------------------------------------------
     $agent = New-Agent
@@ -419,7 +427,7 @@ try {
     Throws { Wait-SreThreadIdle -Context $context -ThreadId 'x' -TimeoutSeconds 0 } 'Cannot validate|range'
 
     $status = Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Status 6>&1)
-    Check (@($status -split "`n" | Where-Object { $_ -match ' Off ' -and $_ -match "schedule '" -and $_ -match 'mode Review' }).Count -eq 3 -and $status -match 'not scheduled') 'Status shows each task Off, with its schedule and mode'
+    Check (@($status -split "`n" | Where-Object { $_ -match ' Paused ' -and $_ -match "schedule '" -and $_ -match 'mode Review' }).Count -eq 3 -and $status -match 'not scheduled') 'Status shows each task Paused, with its schedule and mode'
     $none = New-Agent
     $noneContext = New-TestDataContext -Agent $none -SubscriptionId $subscription -TenantId $tenant
     Check ((Get-HostText (Invoke-SreActsTask -Context $noneContext -TaskNames $taskNames -Action Status 6>&1)) -match 'not on the agent') 'Status says so when the tasks are not on the agent'
@@ -435,35 +443,40 @@ try {
     $run = $runOutput | Where-Object { $_.PSObject.Properties['threadId'] } | Select-Object -First 1
     $taskId = $agent.state.tasks[$taskNames[0]].id
     Check ($run.task -ceq $taskNames[0] -and $run.status -eq 200 -and $run.threadId -and $run.waited.idle -and (Get-FakeAgentWrites -Agent $agent -Since $mark) -contains "POST /api/v1/scheduledtasks/$taskId/execute" -and (Get-HostText $runOutput) -match 'Started' -and (Get-HostText $runOutput) -match 'The agent is idle after') 'Run starts the task by its ID, prints the thread and follows it until the agent is idle'
-    Check ($agent.state.tasks[$taskNames[0]].status -ceq 'Paused') 'Running a task does not turn its schedule On'
+    Check ($agent.state.tasks[$taskNames[0]].status -ceq 'Paused') 'Running a task does not resume its schedule'
     $deckRun = @(Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Run -Name 'governance-deck' -Wait -PollSeconds 1 6>&1)
     Check ((Get-HostText $deckRun) -match 'Export-SreAgentFiles\.ps1 -Source Thread -ThreadId') 'After the deck task the helper says how to fetch the file'
     $agent.state.omitTaskId = $true
     $viaList = Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Run -Name $taskNames[1] 6>$null
     Check ($viaList.threadId -and $viaList.status -eq 200) 'When the task read has no ID, Run finds it in the task list'
+    $agent.state.listAsValue = $true
+    $viaValue = Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Run -Name $taskNames[2] 6>$null
+    Check ($viaValue.threadId -and $viaValue.status -eq 200) 'A task list under a value property is read as well as a bare array'
+    $agent.state.listAsValue = $false
     $agent.state.omitTaskId = $false
     $agent.state.refuseRunNow = $true
-    Throws { Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Run -Name $taskNames[0] 6>$null } 'HTTP 409\. The task is Off.*-Action Enable.*-Action Run.*-Action Disable'
+    Throws { Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Run -Name $taskNames[0] 6>$null } 'HTTP 409\. The task is Paused.*-Action Enable.*-Action Run.*-Action Disable'
     $agent.state.refuseRunNow = $false
 
     $mark = $agent.state.log.Count
     $enableOutput = Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Enable -Name $taskNames[0] -PollSeconds 1 6>&1)
-    $enablePut = @($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.method -eq 'PUT' })
-    Check ($enableOutput -match 'is now On' -and $enablePut.Count -eq 1 -and $enablePut[0].body.properties.isEnabled -eq $true -and $enablePut[0].body.properties.cronExpression -ceq $desired.acts.tasks[0].cronExpression -and $enablePut[0].body.properties.agentPrompt -ceq $desired.acts.tasks[0].agentPrompt -and $enablePut[0].body.properties.agentMode -ceq 'Review' -and $agent.state.tasks[$taskNames[0]].status -ceq 'Active') 'Enable sends the task as it is on the agent with isEnabled true, in Review mode, and checks it is On'
+    $enableWrites = @(Get-FakeAgentWrites -Agent $agent -Since $mark)
+    Check ($enableOutput -match 'is now Active' -and $enableWrites.Count -eq 1 -and $enableWrites[0] -ceq "POST /api/v1/scheduledtasks/$taskId/resume" -and $agent.state.tasks[$taskNames[0]].status -ceq 'Active') 'Enable resumes the task with the resume call, writes nothing else, and checks it is Active'
     $mark = $agent.state.log.Count
-    Check ((Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Enable -Name $taskNames[0] 6>&1)) -match 'already On' -and @(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 0) 'Enable on a task that is On writes nothing'
+    Check ((Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Enable -Name $taskNames[0] 6>&1)) -match 'already Active' -and @(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 0) 'Enable on a task that is Active writes nothing'
     $agent.state.tasks[$taskNames[0]].cronExpression = '15 3 * * *'
     $agent.state.tasks[$taskNames[0]].agentPrompt = 'A prompt edited in the portal.'
-    $null = Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Disable -Name $taskNames[0] -PollSeconds 1 6>$null
-    Check ($agent.state.tasks[$taskNames[0]].status -ceq 'Paused' -and $agent.state.tasks[$taskNames[0]].cronExpression -ceq '15 3 * * *' -and $agent.state.tasks[$taskNames[0]].agentPrompt -ceq 'A prompt edited in the portal.') 'Disable keeps the schedule and prompt as they are on the agent'
-    $agent.state.tasks[$taskNames[1]].status = 'Active'
-    $agent.state.ignoreIsEnabled = $true
     $mark = $agent.state.log.Count
-    Throws { Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Disable -Name $taskNames[1] -PollSeconds 1 -ReadBackSeconds 1 6>$null } 'does not show .* as Off after 1 s'
-    $agent.state.ignoreIsEnabled = $false
-    Check (@(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 1) 'A switch the agent does not show is reported after one PUT, not repeated'
+    $null = Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Disable -Name $taskNames[0] -PollSeconds 1 6>$null
+    Check ($agent.state.tasks[$taskNames[0]].status -ceq 'Paused' -and (@(Get-FakeAgentWrites -Agent $agent -Since $mark) -join '|') -ceq "POST /api/v1/scheduledtasks/$taskId/pause" -and $agent.state.tasks[$taskNames[0]].cronExpression -ceq '15 3 * * *' -and $agent.state.tasks[$taskNames[0]].agentPrompt -ceq 'A prompt edited in the portal.') 'Disable pauses with the pause call and keeps the schedule and prompt as they are on the agent'
+    $agent.state.tasks[$taskNames[1]].status = 'Active'
+    $agent.state.ignorePause = $true
+    $mark = $agent.state.log.Count
+    Throws { Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Disable -Name $taskNames[1] -PollSeconds 1 -ReadBackSeconds 1 6>$null } 'does not list .* as Paused after 1 s'
+    $agent.state.ignorePause = $false
+    Check (@(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 1) 'A pause the agent does not show is reported after one call, not repeated'
     $agent.state.taskEnvelope = $true
-    Check ((Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Status 6>&1)) -match "$($taskNames[1])\s+On" ) 'Status reads tasks the agent returns wrapped in name, type and properties'
+    Check ((Get-HostText (Invoke-SreActsTask -Context $context -TaskNames $taskNames -Action Status 6>&1)) -match "$($taskNames[1])\s+Active" ) 'Status reads tasks the agent returns wrapped in name, type and properties'
     $agent.state.taskEnvelope = $false
 
     # --- The workspace file helpers ----------------------------------------------------------------------------------------------------------
@@ -482,6 +495,11 @@ try {
     $found = @(Get-SreWorkspaceFiles -Context $context -Path "$workspaceRoot/memories")
     Check ((Join-Sorted ($found | ForEach-Object { $_.relativePath })) -ceq 'sessionInsights/s.md,synthesizedKnowledge/deep/a/b.md,synthesizedKnowledge/overview.md' -and ($found | Where-Object { $_.relativePath -ceq 'synthesizedKnowledge/overview.md' }).size -eq 11) 'Files are listed recursively with their relative path and size'
     Check (@(Get-SreWorkspaceFiles -Context $context -Path "$workspaceRoot/memories" -MaxDepth 1).Count -eq 2 -and @(Get-SreWorkspaceFiles -Context $context -Path "$workspaceRoot/memories" -MaxFiles 2).Count -eq 2 -and @(Get-SreWorkspaceFiles -Context $context -Path "$workspaceRoot/memories" -MaxDepth 0).Count -eq 0) 'Depth and file-count limits are honoured'
+    $iso = ($found | Where-Object { $_.relativePath -ceq 'synthesizedKnowledge/overview.md' }).modified
+    $agent.state.epochTimes = $true
+    $epoch = ((Get-SreWorkspaceFiles -Context $context -Path "$workspaceRoot/memories") | Where-Object { $_.relativePath -ceq 'synthesizedKnowledge/overview.md' }).modified
+    $agent.state.epochTimes = $false
+    Check ($iso -ceq '2026-11-12 00:00:00Z' -and $epoch -ceq '2026-11-11 05:51:17Z') 'A file time that comes as Unix seconds, or as ISO text, is shown as one readable UTC time'
     Check ([Convert]::ToBase64String((Get-SreWorkspaceFile -Context $context -Path "$workspaceRoot/tmp/ThreadFiles/t1/deck.pptx")) -ceq [Convert]::ToBase64String($binary)) 'A binary file comes back byte for byte'
     $agent.state.files["$workspaceRoot/tmp/ThreadFiles/t4/empty.bin"] = [byte[]]::new(0)
     $agent.state.files["$workspaceRoot/tmp/ThreadFiles/t4/one.bin"] = [byte[]](65)

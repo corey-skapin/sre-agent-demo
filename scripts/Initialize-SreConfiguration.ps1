@@ -11,8 +11,8 @@ repository-only instruction first, then the skills and the Stop hook, then the h
 and last the code repository. The repository needs the one-time GitHub sign-in; add -GitHubSignIn
 to print the link and wait for it. Run Apply again after the sign-in with a new -BackupPath.
 When the skin turns on ASK, MEMORY or PROACTIVE (the estate-question skill, the seeded notes, and the read-only agents, skills and Review-mode
-scheduled tasks), Apply also puts those on the agent, after the handlers and plans and before the code repository: the tasks are created Off, and the
-notes are seeded only into an empty notes folder.
+scheduled tasks), Apply also puts those on the agent, after the handlers and plans and before the code repository: the tasks are created and then
+paused (the platform starts a new task Active), and the notes are seeded only into an empty notes folder.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(

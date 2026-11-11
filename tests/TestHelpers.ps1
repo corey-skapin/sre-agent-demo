@@ -125,17 +125,28 @@ while ($listener.IsListening) {
                 if (-not $state.ignoreWrites) {
                     $p = $body.properties
                     $existing = if ($state.tasks.ContainsKey($name)) { $state.tasks[$name] } else { $null }
-                    $enabled = if ($state.ignoreIsEnabled) { $true } else { $p.isEnabled -ne $false }
+                    # The live service ignores isEnabled: a new task starts Active and an existing one keeps its status.
+                    $status = if ($existing) { $existing.status } else { 'Active' }
+                    if ($state.honorIsEnabled) { $status = if ($p.isEnabled -ne $false) { 'Active' } else { 'Paused' } }
                     $state.tasks[$name] = @{
                         id = $(if ($existing) { $existing.id } else { [guid]::NewGuid().ToString() }); name = $name; description = $p.description
-                        status = $(if ($enabled) { 'Active' } else { 'Paused' }); cronExpression = $p.cronExpression; agentPrompt = $p.agentPrompt; agent = $p.agent
+                        status = $status; cronExpression = $p.cronExpression; agentPrompt = $p.agentPrompt; agent = $p.agent
                         agentMode = $p.agentMode; executionCount = $(if ($existing) { $existing.executionCount } else { 0 }); lastExecutionTime = $null; nextExecutionTime = $null; threadId = $null
                     }
                 }
                 Send-Reply $context 202 $null
             }
         } elseif ($path -eq '/api/v1/scheduledtasks') {
-            Send-Reply $context 200 @{ value = @($state.tasks.Values) }
+            # The live service lists the tasks as a bare array; a list under 'value' is the other shape the code accepts.
+            if ($state.listAsValue) { Send-Reply $context 200 @{ value = @($state.tasks.Values) } } else { Send-Reply $context 200 (ConvertTo-Json -InputObject @($state.tasks.Values) -Depth 20 -Compress) }
+        } elseif ($path -match '^/api/v1/scheduledtasks/(?<id>[^/]+)/(?<verb>pause|resume)$' -and $method -eq 'POST') {
+            $verb = $Matches.verb
+            $found = @($state.tasks.Values | Where-Object { $_.id -eq $Matches.id }) | Select-Object -First 1
+            if (-not $found) { Send-Reply $context 404 @{ error = 'no such task' } }
+            else {
+                if (-not $state.ignorePause) { $found.status = $(if ($verb -eq 'pause') { 'Paused' } else { 'Active' }) }
+                Send-Reply $context 200 @{ message = "Scheduled task $($verb)d successfully" }
+            }
         } elseif ($path -match '^/api/v1/scheduledtasks/(?<id>[^/]+)/execute$' -and $method -eq 'POST') {
             $found = @($state.tasks.Values | Where-Object { $_.id -eq $Matches.id }) | Select-Object -First 1
             if (-not $found) { Send-Reply $context 404 @{ error = 'no such task' } }
@@ -165,7 +176,7 @@ while ($listener.IsListening) {
                     if ($seen.ContainsKey($first)) { continue }
                     $seen[$first] = $true
                     $isDir = $rest.Contains('/')
-                    $entries.Add(@{ name = $first; path = $prefix + $first; size = $(if ($isDir) { 0 } else { $state.files[$filePath].Length }); isDir = $isDir; isSymlink = $false; modifiedTime = '2026-11-12T00:00:00Z' })
+                    $entries.Add(@{ name = $first; path = $prefix + $first; size = $(if ($isDir) { 0 } else { $state.files[$filePath].Length }); isDir = $isDir; isSymlink = $false; modifiedTime = $(if ($state.epochTimes) { 1794376277 } else { '2026-11-12T00:00:00Z' }) })
                 }
                 foreach ($dir in @($state.dirs)) {
                     if (-not $dir.StartsWith($prefix)) { continue }
@@ -254,7 +265,7 @@ function Start-FakeAgent {
         policy = @{ allow = @(); ask = @(); deny = @() }; etag = $null; instructions = ''; oauthUrl = "https://$githubHost/login/oauth/authorize?client_id=test"
         skills = @{}; hooks = @{}; repos = @{}; domains = @(); signInOnOAuth = $true; ignoreWrites = $false; rejectEtagOnce = $false; failPut = $null
         omitSkillTools = $false; domainsStatus = 200
-        tasks = @{}; files = @{}; dirs = @(); threadStates = @{}; taskEnvelope = $false; ignoreIsEnabled = $false; refuseRunNow = $false; omitTaskId = $false
+        tasks = @{}; files = @{}; dirs = @(); threadStates = @{}; taskEnvelope = $false; honorIsEnabled = $false; ignorePause = $false; listAsValue = $false; refuseRunNow = $false; omitTaskId = $false; epochTimes = $false
         ignoreUpload = $false; uploads = @(); runThreadState = 'Idle'; listStatus = 200; missingFolderStatus = 404
         threads = @(); messages = @{}; log = [Collections.ArrayList]::Synchronized([Collections.ArrayList]::new())
     })

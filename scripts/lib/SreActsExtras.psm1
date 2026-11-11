@@ -6,15 +6,45 @@ Import-Module (Join-Path $PSScriptRoot 'SreReleaseExtras.psm1')
 # What the ASK, MEMORY and PROACTIVE modules (SreActs.psm1) put on a running SRE agent besides its two read-only agents, which go through the
 # core reconcile in SreConfiguration.psm1 like the T12 handler: the skills, the three scheduled tasks and the seeded notes.
 # Writes are idempotent: read first, change only what differs, back up what was read, verify by reading again, never replay, never delete.
-# Tasks are created by REST in Review mode and Off. Once a task exists the apply never changes whether it is on: that is yours to set.
+# Tasks are created by REST in Review mode. The live service ignores isEnabled and starts a new task Active, so the apply pauses each task it
+# creates with the pause route. Once a task exists the apply never changes whether it is Active or Paused: that is yours to set.
 # Notes are seeded only into an empty notes folder: the route's effect on files that are already there is not known.
 
+function Get-SreActsTaskList {
+    <#
+    .SYNOPSIS
+    The agent's own list of scheduled tasks. Only this list carries a task's ID and its run times; the single-task read has neither. Read-only.
+    #>
+    param([Parameter(Mandatory)][Collections.IDictionary]$Context)
+    $response = Invoke-SreData -Context $Context -Method GET -Path '/api/v1/scheduledtasks'
+    Assert-SreDataSuccess -Response $response -What 'List scheduled tasks'
+    # The live service answers with a bare array; a list under 'value', or a single task object, is accepted too.
+    $body = $response.Body
+    $items = if ($body -is [array]) { $body } elseif ($null -ne (Get-SreProperty $body 'value')) { Get-SreProperty $body 'value' } elseif ($null -ne (Get-SreProperty $body 'name')) { @($body) } else { @() }
+    return @($items | Where-Object { $null -ne $_ })
+}
+
+function Format-SreActsTime {
+    param([AllowNull()]$Value)
+    if ($null -eq $Value -or [string]$Value -eq '') { return '' }
+    if ($Value -is [datetime]) { return $Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm'Z'") }
+    return [string]$Value
+}
+
 function Get-SreActsTaskView {
-    # One flat view of a task, whether the agent answers with the bare task or with the name/type/properties envelope.
-    param([AllowNull()]$Item)
+    # One flat view of a task, whether the agent answers with the bare task or with the name/type/properties envelope. -Listed is the same task
+    # from the agent's task list, whose ID, status and run times are used when it is given.
+    param([AllowNull()]$Item, [AllowNull()]$Listed)
     if ($null -eq $Item) { return $null }
     $source = if ((Get-SreProperty $Item 'properties') -is [Collections.IDictionary]) { Get-SreProperty $Item 'properties' } else { $Item }
-    $get = { param($key) $value = Get-SreProperty $source $key; if ($null -eq $value) { $value = Get-SreProperty $Item $key }; $value }
+    $listedKeys = 'id', 'status', 'lastExecutionTime', 'nextExecutionTime', 'executionCount'
+    $get = {
+        param($key)
+        $value = if ($key -in $listedKeys) { Get-SreProperty $Listed $key } else { $null }
+        if ($null -eq $value) { $value = Get-SreProperty $source $key }
+        if ($null -eq $value) { $value = Get-SreProperty $Item $key }
+        $value
+    }
     $status = [string](& $get 'status')
     $flag = & $get 'isEnabled'
     [pscustomobject]@{
@@ -22,7 +52,7 @@ function Get-SreActsTaskView {
         enabled = $(if ($status) { $status -eq 'Active' } elseif ($null -ne $flag) { [bool]$flag } else { $false })
         description = [string](& $get 'description'); cronExpression = [string](& $get 'cronExpression'); agentPrompt = ConvertTo-SreLf ([string](& $get 'agentPrompt'))
         agent = [string](& $get 'agent'); agentMode = [string](& $get 'agentMode')
-        lastRun = [string](& $get 'lastExecutionTime'); nextRun = [string](& $get 'nextExecutionTime'); runs = [string](& $get 'executionCount'); threadId = [string](& $get 'threadId')
+        lastRun = Format-SreActsTime (& $get 'lastExecutionTime'); nextRun = Format-SreActsTime (& $get 'nextExecutionTime'); runs = [string](& $get 'executionCount'); threadId = [string](& $get 'threadId')
     }
 }
 
@@ -75,7 +105,7 @@ function Get-SreActsPlan {
             $view.agentMode -ieq 'Review' -and $view.description -ceq $task.description
         if (-not $same) {
             $enabled = if ($view) { [bool]$view.enabled } else { [bool]$task.enabled }
-            $operations.Add(@{ name = "task:$($task.name)"; reason = $(if ($view) { 'update (on or off stays as it is)' } else { 'create (Off)' }); method = 'Put'; path = "/api/v2/extendedAgent/scheduledtasks/$([uri]::EscapeDataString($task.name))"
+            $operations.Add(@{ name = "task:$($task.name)"; reason = $(if ($view) { 'update (Active or Paused stays as it is)' } else { 'create (then paused)' }); enabled = $enabled; method = 'Put'; path = "/api/v2/extendedAgent/scheduledtasks/$([uri]::EscapeDataString($task.name))"
                 body = @{ name = $task.name; type = 'ScheduledTask'; tags = @(); properties = @{
                     name = $task.name; description = $task.description; cronExpression = $task.cronExpression; agentPrompt = $task.agentPrompt
                     agent = $task.agent; agentMode = 'Review'; isEnabled = $enabled } }
@@ -96,6 +126,38 @@ function Get-SreActsPlan {
     @{ operations = @($operations.ToArray()); notes = @($notes.ToArray()) }
 }
 
+function Set-SreActsTaskState {
+    <#
+    .SYNOPSIS
+    Pauses or resumes one task with the agent's pause and resume calls, found by name in the task list, and waits until the list shows the state.
+    Writes nothing when the task is already in it. Returns $true when it changed the task.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][Collections.IDictionary]$Context, [Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][bool]$Active,
+        [ValidateRange(1, 300)][int]$TimeoutSeconds = 60
+    )
+    $want = if ($Active) { 'Active' } else { 'Paused' }
+    $pause = if ($TimeoutSeconds -lt 10) { 1 } else { 3 }
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $find = { @(Get-SreActsTaskList -Context $Context | Where-Object { [string](Get-SreProperty $_ 'name') -ceq $Name }) | Select-Object -First 1 }
+    $listed = & $find
+    # A task that was only just written can take a moment to show up in the list.
+    while (-not $listed -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds $pause; $listed = & $find }
+    if (-not $listed) { throw "The agent's task list does not show '$Name' after $TimeoutSeconds s. Nothing was paused or resumed; check Invoke-ScheduledTask.ps1 -Action Status." }
+    $id = [string](Get-SreProperty $listed 'id')
+    if (-not $id -or $id -notmatch '^[A-Za-z0-9_.:-]+$') { throw "The agent lists no usable ID for task '$Name'." }
+    if ([string](Get-SreProperty $listed 'status') -ieq $want) { return $false }
+    $response = Invoke-SreData -Context $Context -Method POST -Path "/api/v1/scheduledtasks/$id/$(if ($Active) { 'resume' } else { 'pause' })" -Body @{}
+    Assert-SreDataSuccess -Response $response -What "$(if ($Active) { 'Resume' } else { 'Pause' }) '$Name'"
+    do {
+        Start-Sleep -Seconds $pause
+        $listed = & $find
+        if ($listed -and [string](Get-SreProperty $listed 'status') -ieq $want) { return $true }
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "The agent does not list '$Name' as $want after $TimeoutSeconds s. The call was not repeated; check Invoke-ScheduledTask.ps1 -Action Status."
+}
+
 function Invoke-SreActs {
     <#
     .SYNOPSIS
@@ -110,7 +172,7 @@ function Invoke-SreActs {
     $plan = Get-SreActsPlan -Desired $Desired -Observed $observed
     foreach ($note in $plan.notes) { Write-Host $note }
     if (-not $plan.operations.Count) { return @{ changed = $false; verified = $true; operations = @(); notes = $plan.notes } }
-    if (-not $PSCmdlet.ShouldProcess($Context.resourceId, "Back up and apply $($plan.operations.Count) setting(s) for $($Desired.acts.modules -join ', '): $(@($plan.operations | ForEach-Object { $_.name }) -join ', ') (Review mode, tasks Off, nothing is deleted)")) {
+    if (-not $PSCmdlet.ShouldProcess($Context.resourceId, "Back up and apply $($plan.operations.Count) setting(s) for $($Desired.acts.modules -join ', '): $(@($plan.operations | ForEach-Object { $_.name }) -join ', ') (Review mode, new tasks paused, nothing is deleted)")) {
         return @{ changed = $false; verified = $false; preview = $plan; notes = $plan.notes }
     }
     $fullPath = [IO.Path]::GetFullPath("$BackupPath.acts.json")
@@ -123,6 +185,7 @@ function Invoke-SreActs {
         $stream.Write($bytes, 0, $bytes.Length)
     } finally { $stream.Dispose() }
     $seedState = 'not needed'
+    $settle = [Collections.Generic.List[object]]::new()
     foreach ($operation in $plan.operations) {
         if ($operation.name -eq 'seed:notes') {
             $response = Send-SreNotes -Context $Context -Files $operation.files
@@ -134,6 +197,15 @@ function Invoke-SreActs {
         $response = Invoke-SreData -Context $Context -Method PUT -Path $operation.path -Body $operation.body
         Assert-SreDataSuccess -Response $response -What "Apply $($operation.name)"
         Write-Host "  applied $($operation.name) (HTTP $($response.Status), $($response.Ms) ms)"
+        if ($operation.name -like 'task:*') {
+            # The service starts a new task Active whatever isEnabled says, so each written task goes straight back to the state it should be in.
+            # A task the list does not show yet is tried again after the read-back.
+            try {
+                if (Set-SreActsTaskState -Context $Context -Name $operation.name.Substring(5) -Active ([bool]$operation.enabled) -TimeoutSeconds ([Math]::Min($ReadBackSeconds, 20))) {
+                    Write-Host "  $(if ($operation.enabled) { 'resumed' } else { 'paused' }) $($operation.name.Substring(5))"
+                }
+            } catch { $settle.Add($operation) }
+        }
     }
     $deadline = [DateTime]::UtcNow.AddSeconds($ReadBackSeconds)
     do {
@@ -144,7 +216,7 @@ function Invoke-SreActs {
         if (-not $pending.Count -and (-not $seedPending -or $seedState -ne 'accepted')) { if ($seedState -eq 'accepted') { $seedState = 'verified' }; break }
         if ([DateTime]::UtcNow -ge $deadline) {
             if ($pending.Count) {
-                throw "Read-back does not show $(@($pending | ForEach-Object { $_.name }) -join ', ') after $ReadBackSeconds s. Nothing was replayed; inspect with Initialize-SreConfiguration.ps1 -Inspect and the backup before you apply again."
+                throw "Read-back does not show $(@($pending | ForEach-Object { $_.name }) -join ', ') after $ReadBackSeconds s. Nothing was replayed; inspect with Initialize-SreConfiguration.ps1 -Inspect and the backup before you apply again. A task that was written may still be Active: check Invoke-ScheduledTask.ps1 -Action Status."
             }
             $seedState = 'unverified'
             Write-Warning "The notes upload was accepted but no notes file appeared within $ReadBackSeconds s. Check with Export-SreAgentFiles.ps1 -Source Notes -List; the upload was not repeated."
@@ -152,6 +224,11 @@ function Invoke-SreActs {
         }
         Start-Sleep -Seconds $(if ($ReadBackSeconds -lt 10) { 1 } else { 5 })
     } while ($true)
+    foreach ($operation in $settle) {
+        if (Set-SreActsTaskState -Context $Context -Name $operation.name.Substring(5) -Active ([bool]$operation.enabled) -TimeoutSeconds $ReadBackSeconds) {
+            Write-Host "  $(if ($operation.enabled) { 'resumed' } else { 'paused' }) $($operation.name.Substring(5))"
+        }
+    }
     @{ changed = $true; verified = $true; seed = $seedState; backupPath = $fullPath; operations = @($plan.operations | ForEach-Object { $_.name }); notes = $plan.notes }
 }
 
@@ -213,17 +290,20 @@ function Invoke-SreActsTask {
     )
     if ($Action -ne 'Status' -and -not $Name) { throw "Say which task with -Name: $($TaskNames -join ', ')." }
     if ($Name -and $Name -notin $TaskNames) { throw "Unknown task '$Name'. The tasks are: $($TaskNames -join ', ')." }
+    $listed = @(Get-SreActsTaskList -Context $Context)
     $readTask = {
         param([string]$TaskName)
         $item = Read-SreItem -Context $Context -Path "/api/v2/extendedAgent/scheduledtasks/$([uri]::EscapeDataString($TaskName))" -What "Read task $TaskName"
         if (-not $item) { return $null }
-        return Get-SreActsTaskView (ConvertTo-SreHashtable $item.Body)
+        $entry = @($listed | Where-Object { [string](Get-SreProperty $_ 'name') -ceq $TaskName }) | Select-Object -First 1
+        return Get-SreActsTaskView (ConvertTo-SreHashtable $item.Body) $entry
     }
     if ($Action -eq 'Status') {
         foreach ($taskName in $TaskNames) {
             $view = & $readTask $taskName
             if (-not $view) { Write-Host ("{0,-22} not on the agent. Run Initialize-SreConfiguration.ps1 -Apply." -f $taskName); continue }
-            Write-Host ("{0,-22} {1,-4} schedule '{2}' (UTC, not proven)  runs {3}  last {4}  next {5}  mode {6}" -f $taskName, $(if ($view.enabled) { 'On' } else { 'Off' }), $view.cronExpression,
+            # A paused task keeps its old next-run time in the list, so it is shown as not scheduled.
+            Write-Host ("{0,-22} {1,-6} schedule '{2}' (UTC)  runs {3}  last {4}  next {5}  mode {6}" -f $taskName, $(if ($view.enabled) { 'Active' } else { 'Paused' }), $view.cronExpression,
                 $(if ($view.runs) { $view.runs } else { 0 }), $(if ($view.lastRun) { $view.lastRun } else { 'never' }), $(if ($view.nextRun -and $view.enabled) { $view.nextRun } else { 'not scheduled' }), $view.agentMode)
         }
         return
@@ -232,17 +312,11 @@ function Invoke-SreActsTask {
     if (-not $view) { throw "Task '$Name' is not on the agent. Run Initialize-SreConfiguration.ps1 -Apply first." }
     if ($Action -eq 'Run') {
         $id = $view.id
-        if (-not $id) {
-            $list = Invoke-SreData -Context $Context -Method GET -Path '/api/v1/scheduledtasks'
-            Assert-SreDataSuccess -Response $list -What 'List scheduled tasks'
-            $match = @(Get-SreProperty $list.Body 'value' | Where-Object { [string](Get-SreProperty $_ 'name') -ceq $Name }) | Select-Object -First 1
-            $id = if ($match) { [string](Get-SreProperty $match 'id') } else { '' }
-        }
-        if (-not $id -or $id -notmatch '^[A-Za-z0-9_.:-]+$') { throw "The agent returned no usable ID for task '$Name'." }
+        if (-not $id -or $id -notmatch '^[A-Za-z0-9_.:-]+$') { throw "The agent's task list shows no usable ID for task '$Name'." }
         if (-not $PSCmdlet.ShouldProcess($Name, 'run the scheduled task now (it starts one agent thread, which spends AAUs)')) { return }
         $response = Invoke-SreData -Context $Context -Method POST -Path "/api/v1/scheduledtasks/$id/execute" -Body @{}
         if ($response.Status -lt 200 -or $response.Status -ge 300) {
-            $hint = if (-not $view.enabled) { ' The task is Off. If the agent will not run an Off task, use -Action Enable, then -Action Run, then -Action Disable.' } else { '' }
+            $hint = if (-not $view.enabled) { ' The task is Paused. If the agent will not run a paused task, use -Action Enable, then -Action Run, then -Action Disable.' } else { '' }
             throw "Run-now for '$Name' failed: HTTP $($response.Status).$hint"
         }
         $threadId = Find-SreThreadId -Value $response.Body
@@ -257,22 +331,12 @@ function Invoke-SreActsTask {
         return [pscustomobject]@{ task = $Name; threadId = $threadId; status = [int]$response.Status; waited = $waited }
     }
     $want = $Action -eq 'Enable'
-    $label = if ($want) { 'On' } else { 'Off' }
+    $label = if ($want) { 'Active' } else { 'Paused' }
     if ($view.enabled -eq $want) { Write-Host "'$Name' is already $label."; return }
-    if (-not $PSCmdlet.ShouldProcess($Name, "turn the schedule $label$(if ($want) { ' (it will start agent threads by itself)' })")) { return }
-    # The task's own schedule and prompt are sent back as they are on the agent, so a change made in the portal is kept.
-    $body = @{ name = $Name; type = 'ScheduledTask'; tags = @(); properties = @{
-        name = $Name; description = $view.description; cronExpression = $view.cronExpression; agentPrompt = $view.agentPrompt
-        agent = $view.agent; agentMode = 'Review'; isEnabled = $want } }
-    $response = Invoke-SreData -Context $Context -Method PUT -Path "/api/v2/extendedAgent/scheduledtasks/$([uri]::EscapeDataString($Name))" -Body $body
-    Assert-SreDataSuccess -Response $response -What "Turn '$Name' $label"
-    $deadline = [DateTime]::UtcNow.AddSeconds($ReadBackSeconds)
-    do {
-        $after = & $readTask $Name
-        if ($after -and $after.enabled -eq $want) { Write-Host "'$Name' is now $label."; return }
-        Start-Sleep -Seconds $(if ($PollSeconds -lt 3) { 1 } else { 3 })
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw "The agent does not show '$Name' as $label after $ReadBackSeconds s. The PUT was not repeated; check Invoke-ScheduledTask.ps1 -Action Status."
+    if (-not $PSCmdlet.ShouldProcess($Name, "$(if ($want) { 'resume the schedule (it will start agent threads by itself)' } else { 'pause the schedule' })")) { return }
+    # The agent's pause and resume calls leave the task's schedule and prompt as they are, so a change made in the portal is kept.
+    $null = Set-SreActsTaskState -Context $Context -Name $Name -Active $want -TimeoutSeconds $ReadBackSeconds
+    Write-Host "'$Name' is now $label."
 }
 
 function Resolve-SreExportPath {
@@ -328,7 +392,7 @@ function Export-SreAgentFolder {
 function Get-SreActsDataChecks {
     <#
     .SYNOPSIS
-    Readiness rows for the modules, from reads only: skills and tasks (required), the Off or On state and the seeded notes (informational).
+    Readiness rows for the modules, from reads only: skills and tasks (required), the Paused or Active state and the seeded notes (informational).
     #>
     param([Parameter(Mandatory)][Collections.IDictionary]$Context, [Parameter(Mandatory)][Collections.IDictionary]$Desired)
     $acts = $Desired.acts
@@ -344,8 +408,8 @@ function Get-SreActsDataChecks {
         $pending = @($plan.operations | Where-Object { $_.name -like 'task:*' } | ForEach-Object { $_.name })
         $rows.Add((& $row 'ACTS-tasks' $(if ($pending.Count) { 'fail' } else { 'pass' }) $true 'Three scheduled tasks present, current and in Review mode' $pending 'Compares each task with its file. A task that is not in Review mode counts as different.'))
         $states = [ordered]@{}
-        foreach ($task in $acts.tasks) { $view = Get-SreActsTaskView $observed.tasks[$task.name]; $states[$task.name] = if ($view) { if ($view.enabled) { 'On' } else { 'Off' } } else { 'absent' } }
-        $rows.Add((& $row 'ACTS-schedules' 'pass' $false 'Tasks Off unless you turned a schedule on' $states 'Informational. An On task starts agent threads by itself, and each one spends AAUs. Turn one on or off with Invoke-ScheduledTask.ps1.'))
+        foreach ($task in $acts.tasks) { $view = Get-SreActsTaskView $observed.tasks[$task.name]; $states[$task.name] = if ($view) { if ($view.enabled) { 'Active' } else { 'Paused' } } else { 'absent' } }
+        $rows.Add((& $row 'ACTS-schedules' 'pass' $false 'Tasks Paused unless you resumed a schedule' $states 'Informational. An Active task starts agent threads by itself, and each one spends AAUs. Pause or resume one with Invoke-ScheduledTask.ps1.'))
     }
     if ($acts.seed) {
         $state = $observed.notes
@@ -356,4 +420,4 @@ function Get-SreActsDataChecks {
     return @($rows.ToArray())
 }
 
-Export-ModuleMember -Function Get-SreActsTaskView, Get-SreActsObserved, Get-SreActsPlan, Invoke-SreActs, Find-SreThreadId, Wait-SreThreadIdle, Invoke-SreActsTask, Resolve-SreExportPath, Export-SreAgentFolder, Get-SreActsDataChecks
+Export-ModuleMember -Function Get-SreActsTaskList, Get-SreActsTaskView, Get-SreActsObserved, Get-SreActsPlan, Set-SreActsTaskState, Invoke-SreActs, Find-SreThreadId, Wait-SreThreadIdle, Invoke-SreActsTask, Resolve-SreExportPath, Export-SreAgentFolder, Get-SreActsDataChecks

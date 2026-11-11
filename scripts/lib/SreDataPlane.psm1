@@ -198,6 +198,19 @@ function Get-SreWorkspaceEntries {
     @(Get-SreProperty $response.Body 'entries' | Where-Object { $null -ne $_ })
 }
 
+function ConvertTo-SreFileTime {
+    # The live file list gives modifiedTime as Unix seconds; other shapes give ISO text. One readable UTC text either way.
+    param([AllowNull()]$Value)
+    if ($Value -is [datetime]) { return $Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss'Z'") }
+    $text = [string]$Value
+    $number = 0L
+    if ($text -match '^\d{9,13}$' -and [long]::TryParse($text, [ref]$number)) {
+        $seconds = if ($number -gt 99999999999) { [long][Math]::Floor($number / 1000) } else { $number }
+        return [DateTimeOffset]::FromUnixTimeSeconds($seconds).UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss'Z'")
+    }
+    return $text
+}
+
 function Get-SreWorkspaceFiles {
     <#
     .SYNOPSIS
@@ -214,7 +227,7 @@ function Get-SreWorkspaceFiles {
             if (Get-SreProperty $entry 'isDir') {
                 if ($Depth -lt $MaxDepth) { Add-WorkspaceFolder -Folder "$Folder/$name" -Relative $childRelative -Depth ($Depth + 1) }
             } else {
-                $found.Add([pscustomobject]@{ path = "$Folder/$name"; relativePath = $childRelative; size = [long](Get-SreProperty $entry 'size'); modified = [string](Get-SreProperty $entry 'modifiedTime') })
+                $found.Add([pscustomobject]@{ path = "$Folder/$name"; relativePath = $childRelative; size = [long](Get-SreProperty $entry 'size'); modified = ConvertTo-SreFileTime (Get-SreProperty $entry 'modifiedTime') })
             }
         }
     }

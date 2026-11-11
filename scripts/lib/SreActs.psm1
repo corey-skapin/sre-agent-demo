@@ -102,7 +102,8 @@ function Get-SreActsTask {
     $parsed = Get-SreActsFile -RelativePath "proactive\tasks\$Name.md" -Settings $Settings -Keys @('name', 'description', 'cron', 'agent')
     $cron = [string]$parsed.meta['cron']
     if ($cron -notmatch '^\S+( \S+){4}$') { throw "Task $Name needs a five-field cron schedule, not '$cron'." }
-    # Created Off: a schedule that starts threads by itself spends AAUs. Run it by hand with Invoke-ScheduledTask.ps1, or turn it on yourself.
+    # Wanted Paused: a schedule that starts threads by itself spends AAUs. The platform ignores this flag and starts a new task Active, so
+    # Invoke-SreActs pauses it right after the write. Run it by hand with Invoke-ScheduledTask.ps1, or resume it yourself.
     [ordered]@{
         name = $Name; description = [string]$parsed.meta['description']; cronExpression = $cron
         agent = [string]$parsed.meta['agent']; agentPrompt = $parsed.body; agentMode = 'Review'; enabled = $false
