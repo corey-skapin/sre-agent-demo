@@ -24,6 +24,8 @@ commands, or follow them yourself.
 
 ## Turn it on
 
+You type the recall question into the agent's chat in the portal yourself: no script sends a chat message. The Stop hook may block the first answer and the agent rewrites it, so allow about 3 minutes. The hook now allows recall and Q&A chats straight away, but that change is tested offline only until a live window.
+
 Add `MEMORY` to `sre.requiredScenarios` in your private skin. The overview fills its
 names from the skin and from the optional T09 and T12 settings, and leaves out the
 lines for a scenario you didn't turn on. Then:

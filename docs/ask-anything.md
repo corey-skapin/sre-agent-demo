@@ -10,6 +10,8 @@ follow them yourself.
 
 ## Turn it on
 
+You type the questions into the agent's chat in the portal yourself: no script sends a chat message. Before you present, open the agent in the portal once and let its welcome thread finish.
+
 Add `ASK` to `sre.requiredScenarios` in your private skin. There is nothing else to
 fill in: the skill's resource names come from the skin you already have. Then:
 

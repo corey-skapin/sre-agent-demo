@@ -114,6 +114,7 @@ anything. `-Wait` keeps polling until a card is pending or `-TimeoutMinutes` pas
 If the agent's read of the run command is held for authorization, `Status` lists it
 as an authorization card, says it is not the Approve card and stops waiting
 ([why](#limits)).
+Start and Reset each take about 3 minutes to return.
 Start the fault about 15 minutes before the beat: the one run measured took 6 minutes
 51 seconds from the fault to the card, and the alert's five-minute check can add up to
 five more. Rehearse once.
@@ -200,7 +201,7 @@ Not measured yet, so treat it as a rehearsal item and not a demo claim:
 - That the skill's list read-back (below) avoids the second card. It is tested
   offline only.
 - What the thread does if nobody authorizes that second card.
-- That a failure shows as a failed run command: the script succeeded every time.
+- That a failure shows as a failed run command: the script succeeded every time. To test it, send a run command to the Arc server whose script throws, read it back with `az rest --method get --url <RUN_COMMAND_URL>?api-version=<API_VERSION> --query properties.instanceView.executionState -o tsv` (expect `Failed`; the az CLI may print a WARNING line first, which is not an error), then delete it.
 - How long the act takes with a person at the screen and no second card: the one run
   had the click and the authorization 21 and 25 minutes after the card.
 - That the T11 plan opens a new thread on a second fault with its cooldown off.

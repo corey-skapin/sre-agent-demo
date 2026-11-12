@@ -78,6 +78,8 @@ To resume or pause a schedule, use `-Action Enable` (resume) or `-Action Disable
 each one spends AAUs, so pause it again when you're done. The apply never changes
 this setting after a task exists.
 
+To change a task's schedule, edit the `cron:` line in its file under `config\acts\proactive\tasks\` (UTC, five fields) and run the apply again; it updates the schedule and leaves the task's Paused or Active state alone. Put the original back afterwards.
+
 If a future platform version refuses to run a paused task, run `-Action Enable`, then
 `-Action Run`, then `-Action Disable`. The script says so when the call fails.
 

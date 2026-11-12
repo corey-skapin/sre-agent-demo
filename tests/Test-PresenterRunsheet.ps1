@@ -248,7 +248,7 @@ try {
         if ($cells[3] -match '^(?<minutes>\d+)') { $cutMinutes += [int]$Matches.minutes }
     }
     Check ($rows.Count -eq 8 -and $fullMinutes -eq 28 -and $cutMinutes -eq 15) "Running order adds up to the 28-minute run and the 15-minute cut (got $fullMinutes and $cutMinutes)"
-    Check ($actsFlat.Contains('Only the Friday release has measured timings')) 'Running order is honest that most minutes are a budget'
+    Check ($actsFlat.Contains('are a budget from one rehearsal')) 'Running order is honest that the minutes are a budget from one rehearsal'
     $positions = @('## 6. Optional: one live incident', '### Running order', '### Act 1: ask it anything', '### The Friday release (T12)', '### Act 3: it remembers',
         '### Act 4: it works when nothing is broken', '## 7. Close') | ForEach-Object { $actsText.IndexOf($_) }
     Check (@($positions | Where-Object { $_ -lt 0 }).Count -eq 0 -and (@($positions | Sort-Object) -join ',') -ceq ($positions -join ',')) 'Every act block sits inside step 6, in act order, so the Arc splice headings stay put'

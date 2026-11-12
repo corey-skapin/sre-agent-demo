@@ -49,6 +49,14 @@ needs the grants in place and can consume active-flow AAUs. The retained
 identity avoids principal churn, not these other losses. Local tests do not prove
 a complete live retained-identity park/wake cycle.
 
+### One measured rehearsal
+
+A full dress rehearsal from zero kept one parent for about 2 hours 28 minutes
+(created at 11:27 am, deleted at 1:55 pm on 12 November 2026). At 4 AAUs an hour that
+is about **10 baseline AAUs**, plus active work that can't be read back. About 8
+minutes of that was the build, and the rest was the acts, the extras and waiting for
+cards. Budget 3 hours and 12 baseline AAUs for the same run.
+
 ### Illustrative baseline, not a dollar quote
 
 For one agent, an illustrative 730-hour month is **2,920 baseline AAUs**.
