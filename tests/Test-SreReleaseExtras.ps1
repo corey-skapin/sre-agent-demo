@@ -177,6 +177,14 @@ try {
     Check (((Get-FakeAgentWrites -Agent $agent -Since $mark) -join '|') -ceq "PUT /api/v2/repos/$repoName|POST /api/v2/repos/$repoName/test") 'One repository PUT, then one connectivity test'
     Check (@($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.path -eq '/api/v2/github/oauth/config' }).Count -eq 1) 'The sign-in link was requested once'
     Check ($text -match 'https://github\.com/login/oauth/authorize' -and $text -match 'repo scope' -and $text -match 'every repository' -and $text -match 'once per agent build') 'The sign-in text shows the link and says the grant reaches every repository'
+    Check ($text -match 'lapses after 5 minutes') 'The sign-in text says the link lapses after 5 minutes'
+    $script:opened = @()
+    $launch = { param($u) $script:opened += "open:$u" }
+    $copy = { param($u) $script:opened += "copy:$u" }
+    $did = @(Open-SreSignInLink -Url 'https://signin.example.test/authorize?x=1' -Interactive $true -Launcher $launch -Copier $copy)
+    Check (($did -join ',') -ceq 'copied,opened' -and $script:opened.Count -eq 2 -and $script:opened[1] -ceq 'open:https://signin.example.test/authorize?x=1') 'Interactive: the sign-in link is copied and opened in the browser'
+    $script:opened = @()
+    Check (@(Open-SreSignInLink -Url 'https://signin.example.test/x' -Interactive $false -Launcher $launch -Copier $copy).Count -eq 0 -and $script:opened.Count -eq 0) 'Not interactive: nothing is opened or copied'
     Check ($agent.state.repos[$repoName].properties.url -ceq "https://$githubHost/example-owner/ticketing-app" -and $agent.state.repos[$repoName].properties.branch -ceq 'main') 'The agent holds the demo repository only'
     $readiness = @(Get-SreReleaseDataChecks -Context $context -Desired $desired)
     Check (@($readiness | Where-Object { $_.status -ne 'pass' }).Count -eq 0) 'Readiness: everything passes once the repository is cloned'

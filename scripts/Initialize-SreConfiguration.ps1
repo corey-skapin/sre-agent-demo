@@ -23,6 +23,7 @@ param(
     [switch]$Apply,
     [string]$BackupPath,
     [switch]$GitHubSignIn,
+    [switch]$NoOpen,
     [ValidateRange(1, 600)][int]$TimeoutSeconds = 180
 )
 Set-StrictMode -Version Latest
@@ -62,7 +63,7 @@ try {
         # The acts come after the handlers (their tasks name the two read-only agents) and before the repository stage, which can wait on a person.
         if ($context -and $desired.acts) { $result.acts = Invoke-SreActs -Context $context -Desired $desired -BackupPath $BackupPath -WhatIf:$WhatIfPreference }
         if ($context -and $desired.release) {
-            $releaseAfter = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath $BackupPath -GitHubSignIn:$GitHubSignIn -WhatIf:$WhatIfPreference
+            $releaseAfter = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath $BackupPath -GitHubSignIn:$GitHubSignIn -NoOpen:$NoOpen -WhatIf:$WhatIfPreference
             $result.release = @{ before = $releaseBefore; after = $releaseAfter }
         }
         $result | ConvertTo-Json -Depth 100
