@@ -14,16 +14,16 @@ server, so none of them is a read-only check.
 
 - A fault in an on-prem-shaped app reaches Azure Monitor, creates an SRE incident,
   and you recover it from Azure instead of logging on to the server.
-- It does not show the agent repairing an Arc server, and a reliable automatic SRE
+- On its own it does not show the agent repairing an Arc server, and a reliable automatic SRE
   RCA is not proven. An earlier crash run stalled before the final RCA. A later
   bounded warning run completed five queries and a final investigation, but it
   read stale evidence as an ongoing warning and ruled out host pressure from
   sparse counters too confidently. The handler instructions were tightened
   afterwards (evidence age, ingestion lag, "not observed in the available
   counters" instead of "ruled out") and that change hasn't been re-run live.
-  Treat SRE-executed Arc repair as a possible future capability. The optional `ARC`
-  module ([Act 6](arc-server-room.md)) builds that path on this setup, as one Review
-  card you approve; it hasn't run live end to end.
+  A Review-mode repair of the Arc server is demo-ready through the optional `ARC`
+  module ([Act 6](arc-server-room.md)): you approve one Run Command card, and it ran
+  live twice on 12 November 2026. Autonomous repair is not demo-ready.
 
 ## How it fits together
 
