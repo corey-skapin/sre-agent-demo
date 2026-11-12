@@ -360,6 +360,52 @@ try {
             Remove-Item Function:\Get-SreActsDataChecks -ErrorAction SilentlyContinue
         } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
     }
+    $arcSkinPath = [IO.Path]::GetTempFileName()
+    $previousResponder = $global:AzResponder
+    try {
+        $arcSkin = Get-Content (Join-Path $root 'config\demo-skin.json') -Raw | ConvertFrom-Json -AsHashtable
+        $arcSkin.sre.requiredScenarios += 'ARC'
+        $arcSkin | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $arcSkinPath
+        $arcDesired = Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant -SkinPath $arcSkinPath
+        & $readinessModule {
+            param($Desired, $Skin)
+            $script:ReadinessDesired = $Desired; $script:ReadinessSkin = $Skin
+            function script:Get-SreActsDataChecks { @() }
+            # The acts read the data plane, so the session needs the endpoint and the parent ID the plain stand-in leaves out.
+            function script:New-SreConfigurationSession { @{ token = 'unit-test'; endpoint = 'https://example.azuresre.ai'; resourceId = $script:ReadinessAgentId } }
+        } $arcDesired $arcSkin
+        $arcReport = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $arcSkinPath
+        $arcRows = @($arcReport.checks | Where-Object { $_.id -match '^ARC-' })
+        Assert-True ($arcReport.status -eq 'pass' -and $arcRows.Count -eq 1 -and $arcRows[0].id -ceq 'ARC-repair-script' -and -not $arcRows[0].required -and $arcRows[0].status -eq 'pending' -and $arcRows[0].message -match 'run -Action Prepare') "ARC adds one informational repair-script row, pending until the script is installed, and no resource-health row of its own: $($arcReport.status) $(@($arcReport.checks | Where-Object { $_.status -eq 'fail' }) | ConvertTo-Json -Compress -Depth 6)"
+        Assert-True (@($arcReport.checks | Where-Object { $_.id -eq 'T11-resource-health' }).Count -eq 1 -and @($arcReport.checks | Where-Object { $_.id -in @('handler-instructions', 'plan-filters-handler') -and $_.status -eq 'pass' }).Count -eq 2) 'With ARC the handler and the cooldown-off T11 plan still match what readiness compares'
+        # The install marker on the Arc server is read through the global az stand-in: a matching hash passes, another hash is stale.
+        $global:ArcReadinessPrevious = $previousResponder
+        $global:ArcReadinessSha = [string]$arcDesired.acts.arc.repairSha256
+        $global:AzResponder = {
+            if ($args[0] -eq 'rest' -and ($args -join ' ') -match 'runCommands/arc-repair-install\?') {
+                return (@{ name = 'arc-repair-install'; properties = @{ provisioningState = 'Succeeded'; instanceView = @{ executionState = 'Succeeded'; exitCode = 0; output = "sha256=$($global:ArcReadinessSha)" } } } | ConvertTo-Json -Depth 6)
+            }
+            & $global:ArcReadinessPrevious @args
+        }
+        $arcInstalled = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $arcSkinPath
+        Assert-True ($arcInstalled.status -eq 'pass' -and @($arcInstalled.checks | Where-Object { $_.id -eq 'ARC-repair-script' -and $_.status -eq 'pass' -and -not $_.required }).Count -eq 1) 'The ARC row passes when the install marker holds the hash of the repair script in this repo'
+        $global:ArcReadinessSha = '0' * 64
+        $arcStale = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $arcSkinPath
+        Assert-True ($arcStale.status -eq 'pass' -and @($arcStale.checks | Where-Object { $_.id -eq 'ARC-repair-script' -and $_.status -eq 'pending' -and $_.message -match 'not the script in this repo' }).Count -eq 1) 'A stale repair script on the server is pending, never a failure, so a parked estate still reads the same'
+        $global:AzResponder = { throw 'synthetic read failure' }
+        $arcUnreadable = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -SkinPath $arcSkinPath
+        Assert-True ($arcUnreadable.status -eq 'pass' -and @($arcUnreadable.checks | Where-Object { $_.id -eq 'ARC-repair-script' -and $_.status -eq 'pending' -and -not $_.required -and $_.message -match 'synthetic read failure' }).Count -eq 1) 'A marker that cannot be read is pending with the reason, never a failure'
+    } finally {
+        $global:AzResponder = $previousResponder
+        Remove-Variable -Scope Global -Name ArcReadinessPrevious, ArcReadinessSha -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $arcSkinPath -Force
+        & $readinessModule {
+            param($Desired, $Skin)
+            $script:ReadinessDesired = $Desired; $script:ReadinessSkin = $Skin; $script:ReadinessFailure = ''
+            Remove-Item Function:\Get-SreActsDataChecks -ErrorAction SilentlyContinue
+            function script:New-SreConfigurationSession { @{ token = 'unit-test' } }
+        } (Get-SreDesiredConfiguration -SubscriptionId $subscription -TenantId $tenant) $skin
+    }
     foreach ($failure in @('parent', 'denied', 'arc')) {
         & $readinessModule { param($Failure) $script:ReadinessFailure = $Failure } $failure
         $failed = Get-SreReadinessReport -SubscriptionId $subscription -TenantId $tenant -DesiredState Active
@@ -612,6 +658,7 @@ try {
 & (Join-Path $PSScriptRoot 'Test-SreReleaseExtras.ps1')
 & (Join-Path $PSScriptRoot 'Test-FridayRelease.ps1')
 & (Join-Path $PSScriptRoot 'Test-SreActs.ps1')
+& (Join-Path $PSScriptRoot 'Test-SreArc.ps1')
 & (Join-Path $PSScriptRoot 'Test-DriftDemo.ps1')
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts\Invoke-T10ArcFault.ps1'), [ref]$tokens, [ref]$errors)

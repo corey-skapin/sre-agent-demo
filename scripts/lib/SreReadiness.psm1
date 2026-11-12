@@ -7,6 +7,8 @@ Import-Module (Join-Path $PSScriptRoot 'SreRelease.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreDataPlane.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreReleaseExtras.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreActsExtras.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreActs.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SreArcServerRoom.psm1')
 
 function Get-SreSqlAlertQuery {
     param([string]$MachineResourceId)
@@ -161,6 +163,19 @@ function Get-SreReadinessReport {
             foreach ($scenario in $scenarios) {
                 # The ASK, MEMORY and PROACTIVE modules have no Arc host or alert of their own; Get-SreActsDataChecks reports on them.
                 if ($scenario -in 'ASK', 'MEMORY', 'PROACTIVE') { continue }
+                if ($scenario -eq 'ARC') {
+                    # ARC reuses T11's server and alert (checked under T11). Its one extra is the repair script the agent asks to run on the server.
+                    # Informational: the Arc estate may be parked, and the marker survives a park, so this reads the same either way.
+                    $arcConfig = Get-SreArcConfig -Skin $skin -SubscriptionId $SubscriptionId
+                    try {
+                        $marker = Get-ArcRunCommand -SubscriptionId $SubscriptionId -Settings $arcConfig -Name $arcConfig.installName
+                        $install = Get-ArcInstallState -RunCommand @($marker) -Settings $arcConfig -ExpectedSha256 (Get-SreArcRepairScript -Skin $skin -SubscriptionId $SubscriptionId).sha256
+                        Add-Check 'ARC-repair-script' $arcConfig.machineId $(if ($install.state -eq 'installed') { 'pass' } else { 'pending' }) 'The repair script on the Arc server is the one in this repo' $install.state $install.detail $false
+                    } catch {
+                        Add-Check 'ARC-repair-script' $arcConfig.machineId 'pending' 'A readable install marker on the Arc server' $null $_.Exception.Message $false
+                    }
+                    continue
+                }
                 if ($scenario -eq 'T09') {
                     $appId = "$base/$($groups[2])/providers/Microsoft.App/containerApps/ca-$prefix-fault"
                     try {

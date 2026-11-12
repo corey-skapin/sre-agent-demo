@@ -14,6 +14,7 @@ its top and points here. They were adapted from commit
 | `config/t12/skills/github-issue-followup.md` | `labs/onboardinglab/workflow-templates/plugin/skills/github-issue-followup/SKILL.md` |
 | `config/t12/hooks/release-closing-check.md` | `labs/onboardinglab/agent-recipe/config/hooks/evidence-checklist.yaml` |
 | `config/acts/ask/skills/estate-query.md` | The shape of a skill file in `labs/onboardinglab/workflow-templates/plugin/skills` |
+| `config/acts/arc/skills/arc-server-repair.md` | The shape of a skill file in `labs/onboardinglab/workflow-templates/plugin/skills` |
 | `config/acts/proactive/skills/estate-health-check.md` | `labs/onboardinglab/workflow-templates/scheduled-tasks/reservation-daily-health-report.yaml` and `labs/onboardinglab/workflow-templates/plugin/skills/proactive-health-check/SKILL.md` |
 | `config/acts/proactive/skills/bicep-drift-scan.md` | `labs/terraform-drift-detection/skills/terraform-drift-analysis.md` and `labs/terraform-drift-detection/scripts/induce-drift.ps1` |
 | `config/acts/proactive/skills/governance-deck.md` | `labs/zava-learning/sre-config/agent-config/skills/zava-audit-report/SKILL.md`, `nsg-audit/SKILL.md` and `rbac-audit/SKILL.md` |

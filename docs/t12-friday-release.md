@@ -550,6 +550,9 @@ tests:
   seconds after it. The alert took 16 min 43 s from the click to resolve.
 
 Not yet shown live, so rehearse before you present: a closing summary that passes
-the hook on its first draft; the skill's new limit on the issue body's size; and the
-`-SwapRules` rule update. The runner (`Invoke-FridayRelease.ps1`) is covered by
-offline tests against a fake agent and has run live three times.
+the hook on its first draft; the handler's new step 6 wording (it dates the change
+from when the card started running, not when it appeared, and never names a clock
+time for a re-check, written after the third run's blocked drafts); the skill's new
+limit on the issue body's size; and the `-SwapRules` rule update. The runner
+(`Invoke-FridayRelease.ps1`) is covered by offline tests against a fake agent and has
+run live three times.

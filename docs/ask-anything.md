@@ -47,17 +47,18 @@ already had, so everything it can see is bounded by the identity's grants.
 Let the audience pick. Three questions fit the slot. "Seen live" means the agent ran
 that kind of query in a live session on this layer (the list is
 [below](#what-is-proven-and-what-isnt)); questions 5, 7, 8 and 11 were also asked word
-for word on 2026-11-11, and the rest weren't. "Not run yet" is a rehearsal item, not a
-demo item. Run each question once before you present.
+for word on 2026-11-11, questions 1 to 4 and 6 on 2026-11-12, and questions 9 and 10
+weren't. "Not run yet" is a rehearsal item, not a demo item. Run each question once
+before you present.
 
 | # | Question | Needs | Status |
 |---|---|---|---|
-| 1 | How many Arc servers do I have, and what state is each in? | The Arc estate awake | Seen live: Resource Graph |
-| 2 | Which servers stopped reporting in the last hour? | The Arc estate awake for about 30 minutes | Seen live: Heartbeat queries |
-| 3 | Which servers are busiest, on average and at peak, over the last 24 hours? | The Arc estate awake, with a day of data | Seen live: Perf queries |
-| 4 | Show me the Windows error events from the last day. | The Arc estate awake | Seen live: Event queries |
+| 1 | How many Arc servers do I have, and what state is each in? | The Arc estate awake | Seen live: Resource Graph; about 1 minute 10 seconds |
+| 2 | Which servers stopped reporting in the last hour? | The Arc estate awake for about 30 minutes | Seen live: Heartbeat queries; about 1 minute 5 seconds |
+| 3 | Which servers are busiest, on average and at peak, over the last 24 hours? | The Arc estate awake, with a day of data | Seen live: Perf queries, but a just-woken estate has minutes of data, not a day; about 1 minute 5 seconds |
+| 4 | Show me the Windows error events from the last day. | The Arc estate awake | Seen live: Event queries; about 50 seconds |
 | 5 | What changed in the estate in the last 24 hours, and who changed it? | Nothing extra | Seen live, after one nudge ([why](#questions-that-name-people)) |
-| 6 | Which machines are out of line with how this estate is tagged or configured? | The Arc estate awake | Not run yet |
+| 6 | Which machines are out of line with how this estate is tagged or configured? | The Arc estate awake | Seen live; about 1 minute 40 seconds, and it rewrote its own note ([limits](#limits)) |
 | 7 | Who has access to the infrastructure resource group? | Nothing extra | Seen live, after one nudge ([why](#questions-that-name-people)) |
 | 8 | How is the ticketing app doing, and which release is it running? | T12 | Seen live: requests by release; about 1 minute 50 seconds |
 | 9 | Which release broke checkout, and how many checkouts failed? | T12, after a bad release | Seen live: the Friday release's investigation |
@@ -65,10 +66,14 @@ demo item. Run each question once before you present.
 | 11 | What do you already know about this estate? Don't run any commands. | `MEMORY` | Seen live: 20 seconds, no commands, from the seeded overview and the agent's notes ([how](it-remembers.md)) |
 
 Questions 1 to 4 and 6 need the Arc estate awake. After a wake, Windows telemetry
-arrives late with its original timestamps, so a healthy server can look silent: in
-the one wake that was measured (2026-11-10) it took 15 to 20 minutes to settle, and
-the guide says 30 to leave a margin. Wake the estate before you start, and if you
-can't wait, say so and show the Arc connection status, which is current sooner.
+arrives late with its original timestamps, so a healthy server can look silent. In
+two measured wakes it took 15 to 20 minutes to settle (2026-11-10, and 2026-11-12,
+when Log Analytics had no Windows heartbeat 13 minutes after the wake began and had
+them by minute 21), and the guide says 30 to leave a margin. Asked 20 minutes in, the
+agent said the estate had only just started and that its answer covered those
+minutes (questions 2 and 3), so it raised no false alarm. Wake the estate before you
+start, and if you can't wait, say so and show the Arc connection status, which is
+current sooner.
 
 ## What you can and can't claim
 
@@ -118,6 +123,10 @@ hadn't looked names up (one run).
   needed.
 - Heartbeat, Perf and Event answers are only as good as the data collection that
   feeds them. An estate that has been parked for a day has no data for that day.
+- The agent writes notes while it answers, and it can overwrite one of its own
+  earlier notes without reading it: question 6 replaced the note that questions 1 to 4
+  had written in the same sitting, and said so. Export the notes first if you want to
+  keep them ([how](it-remembers.md#keep-the-notes-across-a-rebuild)).
 
 ## Time and cost
 
@@ -145,13 +154,21 @@ when you ask question 8, the Stop hook can read the answer as an investigation
 summary and send the agent back once; it did, and the second reply was allowed. Ask
 it after the alert resolves, or expect a short delay.
 
+Measured on 2026-11-12, on a build from zero with the Arc estate awake for about 20
+minutes: questions 1 to 4 and 6 each ran once in a new chat and took about 1 minute 10
+seconds, 1 minute 5 seconds, 1 minute 5 seconds, 50 seconds and 1 minute 40 seconds,
+with no card and no wait for a person. Each answer named its queries and row counts.
+Question 1 found all nine Arc machines Connected and read the eight Azure VMs from the
+infrastructure group, where the skill's corrected line says they are, and it noticed
+that `sql-guest` has no Azure Monitor agent, so it sends no heartbeat. Questions 2 and
+3 said how little time the data covered, as above. Question 4 listed four start-up
+error events from the Windows servers, and question 6 named the machines that differ
+and an extension that had failed on eight. The read tool rejected one `$()`
+substitution and the agent retried without it. Question 11, asked first on notes
+restored through `memory.seedPath`, took 28 seconds, ran no command and answered from
+the restored notes ([how](it-remembers.md)).
+
 Not run yet:
 
-- Questions 1 to 4 and 6 through the skill, because they need the Arc estate awake.
-  The Arc machines, VMs and groups were read live by the health check instead, which
-  found the estate parked.
-- The estate-query skill's corrected line about where the Azure VMs are (the
-  infrastructure group, not the Arc group). The health check skill has the same
-  correction and found all eight VMs there.
 - The three-question slot's timing, as one sitting. The questions above took about
   three minutes in total, with two nudges before the skill was changed.

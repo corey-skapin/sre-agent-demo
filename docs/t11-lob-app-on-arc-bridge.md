@@ -21,7 +21,9 @@ server, so none of them is a read-only check.
   sparse counters too confidently. The handler instructions were tightened
   afterwards (evidence age, ingestion lag, "not observed in the available
   counters" instead of "ruled out") and that change hasn't been re-run live.
-  Treat SRE-executed Arc repair as a possible future capability.
+  Treat SRE-executed Arc repair as a possible future capability. The optional `ARC`
+  module ([Act 6](arc-server-room.md)) builds that path on this setup, as one Review
+  card you approve; it hasn't run live end to end.
 
 ## How it fits together
 
@@ -209,7 +211,9 @@ an Arc machine (`Microsoft.HybridCompute/machines`), and, with code connected, i
 cites `LobArcBridgeApp.ps1` and the `CrashOnProcessing` branch. The only
 remediation it should propose is resetting the app config to `FaultMode=Healthy`
 and restarting the scheduled task through Arc Run Command, which you run. That is
-the aim, not a promise: not all of it is reliable yet.
+the aim, not a promise: not all of it is reliable yet. With the `ARC` module on, the
+agent proposes that recovery itself as a Review card you approve
+([Act 6](arc-server-room.md)).
 
 ## Limits
 

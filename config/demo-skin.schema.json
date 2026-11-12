@@ -31,7 +31,7 @@
         "nativeContainerFaultState": { "const": "Status" },
         "t10Scenario": { "enum": ["HeartbeatByBackingVm", "StopService", "DiskPressure", "CpuPressure", "WriteEvent"] },
         "lobFaultMode": { "enum": ["CrashOnProcessing", "Degraded"] },
-        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11", "SQL", "T12", "ASK", "MEMORY", "PROACTIVE"] } },
+        "requiredScenarios": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["T09", "T10", "T11", "SQL", "T12", "ASK", "MEMORY", "PROACTIVE", "ARC"] } },
         "sqlTargetArcMachine": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" }
       }
     },
@@ -109,5 +109,11 @@
       "properties": { "requiredScenarios": { "contains": { "const": "PROACTIVE" } } }
     } } },
     "then": { "properties": { "sre": { "properties": { "requiredScenarios": { "contains": { "const": "T12" } } } } } }
+  }, {
+    "if": { "properties": { "sre": {
+      "required": ["requiredScenarios"],
+      "properties": { "requiredScenarios": { "contains": { "const": "ARC" } } }
+    } } },
+    "then": { "properties": { "sre": { "properties": { "accessLevel": { "const": "High" }, "requiredScenarios": { "contains": { "const": "T11" } } } } } }
   }]
 }

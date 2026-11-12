@@ -392,11 +392,11 @@ yourself in rehearsal.
 | 3. It remembers | {{memoryStatus}} | 3 | skipped |
 | 4. It works when nothing is broken | {{proactiveStatus}} | 4 | 3, the governance deck only |
 | 5. Why you can trust it | {{releaseStatus}} | 3 | 3 |
-| 6. The server room (Arc) | not built yet | 5 | skipped |
+| 6. The server room (Arc) | {{arcStatus}} | 5 | skipped, or 4 in place of the deck |
 | Close | | 1 | 2 |
 
-The Friday release and *Why you can trust it* share one section below. Until the
-server-room act exists, spend its five minutes on the LOB and SQL investigations in
+The Friday release and *Why you can trust it* share one section below. Without the
+server-room act, spend its five minutes on the LOB and SQL investigations in
 steps 4 and 5. The close is step 7; add the pilot offer (one agent, one service) after
 it, with the figures in [the cost reference]({{costGuideUrl}}).
 
@@ -417,6 +417,10 @@ Then:
    proposed, and a person decides.
 3. Why you can trust it (3 minutes). The trust beat in the Friday release section.
 4. The close (2 minutes). Step 7, then the pilot offer.
+
+The cut leaves out the server room (Act 6). If it is in this guide and your audience is
+mostly infrastructure people, swap the governance deck (3 minutes) for its short form
+(4 minutes, in its section below); the cut then runs 16 minutes.
 <!-- CUT:END -->
 <!-- ACTS:END -->
 
@@ -589,6 +593,60 @@ instructions and the agent's grants, which the trust beat explains.
 **After the beat**, ask your AI tool to run `Invoke-DriftDemo.ps1 -Action Reset`
 and then `-Action Status`, which should show all three settings as declared.
 <!-- PROACTIVE:END -->
+
+<!-- ARC:START -->
+### Act 6: the server room (Arc)
+
+Needs the `ARC` module (which needs T11), the agent up, the Arc estate awake for at
+least 30 minutes and the repair script installed on the server
+([the details]({{arcGuideUrl}})). The line-of-business app on
+`{{arcMachineResourceIdName}}` breaks, the agent diagnoses it and proposes one
+repair, and a person approves it.
+
+**Before the beat**, about 15 minutes before (one run took 6 minutes 51 seconds from
+the fault to the card, and the alert's five-minute check can add up to five more, so
+rehearse once), ask your AI tool to:
+
+1. Check the estate with `Invoke-ArcServerRoom.ps1 -Action Check`. Every row should
+   pass. A server that has been Connected for under 30 minutes is pending: wait.
+2. Break the app with `Invoke-ArcServerRoom.ps1 -Action Start -ApproveFault`.
+3. Follow it with `Invoke-ArcServerRoom.ps1 -Action Status -Wait`, until it says a
+   card is waiting **and** that it is the allowed repair. If it says the card is not
+   the allowed repair, don't approve it.
+
+**At the beat**, open the thread. Read what failed (the 4100 events from
+`{{lobEventSource}}`), what shows the server itself is fine (heartbeat and host
+counters), the one change it proposes (a Run Command that runs the repair script
+installed in advance) and the statement that it waits for a person. Open the card,
+read its URL and body, and click **Approve**. About 35 seconds later the repair has
+run (20 seconds for the script to start, 15 to run). The agent reads the run command
+back and should report `was=CrashOnProcessing now=Healthy state=Running`, then check
+the app's heartbeat. Say a person approved it, never that the audit proves who. Don't
+offer the alert's clearing as proof of recovery: it clears by itself, before the
+repair, once the one failure event leaves its window.
+
+**If the thread stops after the click**, `Status` says an authorization card is
+waiting, and the thread shows a card titled "Authorization required: please grant
+access to the requested Azure resources". It is not the Approve card. In the one run
+the agent read the new run command too early, got a 404 and the platform held that read
+for a person. Authorizing it makes that one read run as you, not as the agent, so say
+so; the repair itself already ran as the agent. The skill now reads the list of run
+commands to avoid this, but that is not yet proven live, and what happens if nobody
+authorizes the card is unknown.
+
+**Say:** "A server fails, and the agent finds it in the telemetry we already collect.
+It proposes one change, a script we installed in advance, and it waits. I decide. It
+checks that the app came back. Had I said no, nothing would have changed."
+
+**Short form for the executive cut (4 minutes).** Start the fault 15 minutes before,
+show the finished thread's summary and the card, click **Approve**, show the output
+line, and skip the evidence walk-through.
+
+**After the beat**, ask your AI tool to preview and then run
+`Invoke-ArcServerRoom.ps1 -Action Reset -DeleteThreads`. If the card never appears
+within about 15 minutes of the fault, say so, run `-Action Status` and read the alert
+and thread it shows, then reset: that is a finding, not a demo.
+<!-- ARC:END -->
 
 ## 7. Close
 

@@ -23,7 +23,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'scripts\New-PresenterRunsheet.ps1') -Destination $scriptPath
     Copy-Item -LiteralPath (Join-Path $root 'docs\delivery-runsheet.md') -Destination (Join-Path $fixture 'docs\delivery-runsheet.md')
     foreach ($file in @('t09-native-containerapp-closed-loop.md', 'sre-response-plan-automation.md', 't12-friday-release.md',
-            'ask-anything.md', 'it-remembers.md', 'proactive-checks.md', 'sre-cost-and-demo-fidelity.md')) {
+            'ask-anything.md', 'it-remembers.md', 'proactive-checks.md', 'arc-server-room.md', 'sre-cost-and-demo-fidelity.md')) {
         [IO.File]::WriteAllText((Join-Path $fixture "docs\$file"), '# Reference page')
     }
     $contextPath = Join-Path $fixture '.local\demo-context.json'
@@ -203,7 +203,7 @@ try {
         $context.release[$bad[0]] = $saved
     }
     # The act modules are optional: no acts field leaves no trace, each listed module renders, each unlisted one is a skip note.
-    $actsTrace = 'Running order|ask it anything|it remembers|works when nothing is broken|ACTS:|ASK:|MEMORY:|PROACTIVE:|CUT:'
+    $actsTrace = 'Running order|ask it anything|it remembers|works when nothing is broken|the server room|ACTS:|ASK:|MEMORY:|PROACTIVE:|ARC:|CUT:'
     Check ($text -notmatch $actsTrace -and $releaseText -notmatch $actsTrace) 'No acts field leaves no trace of the act modules'
     # Every script command the act blocks tell you to run must name a real script, real parameters and valid -Action or -Source values.
     function Test-ScriptCommands([string]$Markdown) {
@@ -238,7 +238,7 @@ try {
     Check ($actsText -notmatch '\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)|(Act 1 \(ask it anything\)|Act 3 \(it remembers\)|Act 4 \(it works when nothing is broken\)) is not configured|no executive cut') 'All three modules render with no markers, skip notes or missing cut'
     Check ($actsFlat.Contains('| 1. Ask it anything | configured | 3 | skipped |') -and $actsFlat.Contains('| 2. The Friday release | configured | 9 | 6, short form |') -and
         $actsFlat.Contains('| 3. It remembers | configured | 3 | skipped |') -and $actsFlat.Contains('| 4. It works when nothing is broken | configured | 4 | 3, the governance deck only |') -and
-        $actsFlat.Contains('| 5. Why you can trust it | configured | 3 | 3 |') -and $actsFlat.Contains('| 6. The server room (Arc) | not built yet | 5 | skipped |')) 'Running order says which acts this guide has and how each runs in each cut'
+        $actsFlat.Contains('| 5. Why you can trust it | configured | 3 | 3 |') -and $actsFlat.Contains('| 6. The server room (Arc) | not configured | 5 | skipped, or 4 in place of the deck |')) 'Running order says which acts this guide has and how each runs in each cut'
     $rows = @($actsText -split '\r?\n' | Where-Object { $_ -match '^\| (Open|Close|[1-6]\. )' })
     $fullMinutes = 0
     $cutMinutes = 0
@@ -269,6 +269,26 @@ try {
     }
     Check ($actsText.Contains('../docs/ask-anything.md') -and $actsText.Contains('../docs/it-remembers.md') -and $actsText.Contains('../docs/proactive-checks.md') -and
         $actsText.Contains('../docs/sre-cost-and-demo-fidelity.md')) 'The acts link their module pages and the cost reference'
+    Check ($actsText.Contains('Act 6 (the server room) is not configured in this saved guide') -and $actsText -notmatch '### Act 6|Invoke-ArcServerRoom|arc-server-room\.md') 'Without the ARC module, Act 6 is a skip note with no commands and no link'
+    $context.acts = @('ASK', 'MEMORY', 'PROACTIVE', 'ARC')
+    $arcText = Get-Content -LiteralPath (Render) -Raw
+    $arcFlat = $arcText -replace '\s+', ' '
+    Check ($arcFlat.Contains('| 6. The server room (Arc) | configured | 5 | skipped, or 4 in place of the deck |') -and $arcText.Contains('### Act 6: the server room (Arc)') -and
+        $arcText -notmatch '\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)|Act \d \([^)]+\) is not configured in this saved guide|no executive cut') 'The ARC module adds Act 6 to the running order and the guide'
+    $arcPositions = @('### Act 4: it works when nothing is broken', '### Act 6: the server room (Arc)', '## 7. Close') | ForEach-Object { $arcText.IndexOf($_) }
+    Check (@($arcPositions | Where-Object { $_ -lt 0 }).Count -eq 0 -and (@($arcPositions | Sort-Object) -join ',') -ceq ($arcPositions -join ',')) 'Act 6 sits after Act 4 and before the close, inside step 6'
+    Check ($arcFlat.Contains('Invoke-ArcServerRoom.ps1 -Action Check') -and $arcFlat.Contains('Invoke-ArcServerRoom.ps1 -Action Start -ApproveFault') -and
+        $arcFlat.Contains('Invoke-ArcServerRoom.ps1 -Action Status -Wait') -and $arcFlat.Contains('Invoke-ArcServerRoom.ps1 -Action Reset -DeleteThreads')) 'Act 6 gives the exact commands'
+    Check ((Test-ScriptCommands $arcText) -ge ((Test-ScriptCommands $actsText) + 4)) 'Every Act 6 command names a real script, parameter and -Action value'
+    Check ($arcFlat.Contains('a person approved it, never that the audit proves who') -and $arcFlat.Contains('If it says the card is not the allowed repair, don''t approve it') -and
+        $arcFlat.Contains('The cut leaves out the server room (Act 6)') -and $arcFlat.Contains('the cut then runs 16 minutes')) 'Act 6 keeps the approval wording and the executive-cut verdict'
+    Check ($arcText -notmatch '(?:\r?\n){3}' -and (Test-ArcSpliceShape $arcText) -and $arcText.Contains('../docs/arc-server-room.md') -and $arcText.TrimEnd().EndsWith("**Say:** `"$closing`"")) 'The render with Act 6 keeps the Arc splice headings, the shared closing and its module page link'
+    foreach ($link in [regex]::Matches($arcText, '\]\((?<target>[^)]+)\)')) {
+        $target = $link.Groups['target'].Value
+        if ($target -match '^https://') { continue }
+        $resolved = [IO.Path]::GetFullPath((Join-Path (Split-Path $output -Parent) ([Uri]::UnescapeDataString(($target -split '#', 2)[0]))))
+        Check (Test-Path -LiteralPath $resolved -PathType Leaf) "Relative link in the Act 6 render resolves: $target"
+    }
     $context.acts = @('ASK')
     $askText = Get-Content -LiteralPath (Render) -Raw
     Check ($askText.Contains('### Act 1: ask it anything') -and $askText.Contains('Act 3 (it remembers) is not configured in this saved guide') -and
@@ -284,6 +304,12 @@ try {
         $memoryText.Contains('The Friday release (T12) is not configured in this saved guide') -and $memoryText.Contains('There is no executive cut in this saved guide') -and
         $memoryText -notmatch 'Invoke-FridayRelease|WEBSITE_RUN_FROM_PACKAGE|ticketing web app|Invoke-ScheduledTask|Invoke-DriftDemo') 'The MEMORY module stands alone without the Friday release and leaves no scenario text'
     Check ($memoryText -notmatch '(?:\r?\n){3}|\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)' -and (Test-ArcSpliceShape $memoryText)) 'The MEMORY-only render is clean and keeps the Arc splice headings'
+    $context.acts = @('ARC')
+    $arcOnlyText = Get-Content -LiteralPath (Render) -Raw
+    Check ($arcOnlyText.Contains('### Act 6: the server room (Arc)') -and $arcOnlyText.Contains('| 6. The server room (Arc) | configured | 5 |') -and $arcOnlyText.Contains('| 2. The Friday release | not configured | 9 | 6, short form |') -and
+        $arcOnlyText.Contains('Act 1 (ask it anything) is not configured in this saved guide') -and $arcOnlyText.Contains('There is no executive cut in this saved guide') -and
+        $arcOnlyText -notmatch 'Invoke-FridayRelease|WEBSITE_RUN_FROM_PACKAGE|ticketing web app|Invoke-ScheduledTask|Invoke-DriftDemo') 'The ARC module stands alone without the Friday release or the other acts'
+    Check ($arcOnlyText -notmatch '(?:\r?\n){3}|\{\{|\}\}|<!-- [A-Z0-9]+:(START|END)' -and (Test-ArcSpliceShape $arcOnlyText)) 'The ARC-only render is clean and keeps the Arc splice headings'
     $context.acts = @('PROACTIVE')
     Reject { Render } 'PROACTIVE needs the release'
     $context.acts = @('ASK', 'PROACTIVE')
@@ -291,7 +317,7 @@ try {
     $context.release = $savedRelease
     foreach ($badActs in @('ASK', @(), @('ASK', 'ASK'), @('ask'), @('BOGUS'), @('ASK', 7), @($null), $null)) {
         $context.acts = $badActs
-        Reject { Render } 'acts must be a list of one or more of ASK, MEMORY and PROACTIVE'
+        Reject { Render } 'acts must be a list of one or more of ASK, MEMORY, PROACTIVE and ARC'
     }
     $context.Remove('acts')
     $context.sql = @{

@@ -1,0 +1,8 @@
+Arc application recovery policy
+Only for an incident on {arcMachineName} whose Application events come from {eventSource} (4100, 4101 or 4200),
+follow the arc-server-repair skill: diagnose with read-only queries, then propose exactly one Run Command that runs
+the repair script installed on that server, as a Review card, and wait. Execute a change only after its specific
+human approval in Review mode. Time the change from the run command's start time (the approved execution), never
+from when the card appeared, and measure recovery from that time. Never name a clock time or a delay for a re-check,
+and never say or imply that the alert will clear, or when. Do not apply this policy to SQL, to another machine or
+to the Container App.

@@ -66,8 +66,8 @@ Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs
   clicks each **Approve**; keep the GitHub `ask` policy. Run it with `Invoke-FridayRelease.ps1`.
   Park, then `Remove-TicketingWorkload.ps1`, then `Remove-SreAgent.ps1`
   ([T12 runbook](docs/t12-friday-release.md)).
-- **Acts (optional):** `ASK`, `MEMORY` and `PROACTIVE` add skills, notes and scheduled tasks (paused), no grant;
-  `PROACTIVE` needs `T12`. Run a task or `Invoke-DriftDemo.ps1` only when asked. Export notes before parking ([Act 4](docs/proactive-checks.md)).
+- **Acts (optional):** `ASK`, `MEMORY`, `PROACTIVE` and `ARC` add skills, notes, paused tasks and one Arc repair script, no grant;
+  `PROACTIVE` needs `T12`, `ARC` needs `T11`. Run a task, `Invoke-DriftDemo.ps1` or `Invoke-ArcServerRoom.ps1 -Action Start` only when asked. Export notes before parking ([Act 4](docs/proactive-checks.md), [Act 6](docs/arc-server-room.md)).
 - **Present:** `New-PresenterRunsheet.ps1` renders `.local\presenter-runsheet.md`
   from the saved context ([how](docs/ai-deploy-handbook.md#your-presenter-guide)).
   The Arc half is in the Arc repo (`docs/runsheet.md`).

@@ -3,7 +3,7 @@ Import-Module (Join-Path $PSScriptRoot 'SreRuntime.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreDataPlane.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SreReleaseExtras.psm1')
 
-# What the ASK, MEMORY and PROACTIVE modules (SreActs.psm1) put on a running SRE agent besides its two read-only agents, which go through the
+# What the ASK, MEMORY, PROACTIVE and ARC modules (SreActs.psm1) put on a running SRE agent besides its two read-only agents, which go through the
 # core reconcile in SreConfiguration.psm1 like the T12 handler: the skills, the three scheduled tasks and the seeded notes.
 # Writes are idempotent: read first, change only what differs, back up what was read, verify by reading again, never replay, never delete.
 # Tasks are created by REST in Review mode. The live service ignores isEnabled and starts a new task Active, so the apply pauses each task it
@@ -161,7 +161,7 @@ function Set-SreActsTaskState {
 function Invoke-SreActs {
     <#
     .SYNOPSIS
-    Applies the skills, tasks and seed of the ASK, MEMORY and PROACTIVE modules. Run it after the core reconcile has created the two read-only agents.
+    Applies the skills, tasks and seed of the ASK, MEMORY, PROACTIVE and ARC modules. Run it after the core reconcile has created the two read-only agents.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
