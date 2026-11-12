@@ -153,6 +153,7 @@ try {
     # The Stop hook must leave these reports alone: it judges closing summaries of incident investigations only.
     $hook = Get-Content -LiteralPath (Join-Path $root 'config\t12\hooks\release-closing-check.md') -Raw
     Check ($hook -match 'First determine whether this response is the incident investigation summary' -and $hook -match 'scheduled health checks, drift scans and governance reports' -and $hook -match 'deck-building notes' -and $hook -match 'answers about the estate') 'The Stop hook says scheduled reports, deck notes and estate answers are not investigation summaries'
+    Check ($hook -match 'A recall or Q&A chat is not an investigation summary' -and $hook -match 'no pending card') 'The Stop hook lets a recall or Q&A chat through without the closing check'
 
     # --- Rendering helpers and the guards on what an agent file may say ----------------------------------------------------------------
     $settingsT09 = Get-SreActsSettings -Skin (Get-DemoSkin -Path (New-ActsSkinFile -Scenarios @('T09', 'ASK')) -RepoRoot $root) -SubscriptionId $subscription
