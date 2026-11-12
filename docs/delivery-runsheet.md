@@ -407,7 +407,7 @@ so a closing summary can arrive a minute or two after the first draft. Allow for
 in the timings above. Without the server-room act, drop minutes 28 to 38 and finish
 at about 28. The close is step 7; add the pilot offer (one agent, one service) after
 it, with the figures in [the cost reference]({{costGuideUrl}}).
-The minutes below are a budget from one rehearsal on 12 November 2026, so time your own run. Time each act takes on its own, and in the 15-minute executive cut (minutes). The staged order above runs them overlapped, so the wall time is longer than this sum suggests.
+The minutes below are a budget from one rehearsal on 12 November 2026, so time your own run. The table gives each act's own time. The card waits (the Friday release about 5 minutes, the Arc act about 6.5 minutes plus its Start and Reset) are what make the show about 40 minutes even when staged; run back to back, it takes longer.
 
 | Act | In this guide | Full run, unstaged | Executive cut, 15 minutes |
 | --- | --- | --- | --- |
@@ -500,7 +500,7 @@ agent anything. Watch what it does with the alert."
    appsettings set` on {{releaseAppName}} that sets `WEBSITE_RUN_FROM_PACKAGE` to
    the package URL of {{releaseGoodVersion}} and changes nothing else. If it
    proposes anything different, don't approve it. Click **Approve**.
-3. The app restarts: about two minutes until the first healthy request. This is
+3. The app restarts: recovery took 1 to 1.5 minutes after the click in the rehearsal. This is
    your talking time for the trust beat below.
 4. Say that a person approved it, never that the audit proves it. Check that the
    thread's closing summary says so and doesn't predict when the alert clears (it

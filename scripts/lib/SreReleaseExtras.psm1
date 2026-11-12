@@ -157,7 +157,7 @@ function Open-SreSignInLink {
     #>
     param(
         [Parameter(Mandatory)][string]$Url,
-        [bool]$Interactive = ($IsWindows -and [Environment]::UserInteractive -and -not [Console]::IsOutputRedirected),
+        [bool]$Interactive = ($IsWindows -and [Environment]::UserInteractive),
         [scriptblock]$Launcher = { param($u) Start-Process -FilePath $u },
         [scriptblock]$Copier = { param($u) Set-Clipboard -Value $u }
     )

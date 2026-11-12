@@ -61,7 +61,7 @@ Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs
   once Active readiness passes. It breaks the demo Container App on purpose,
   waits for the alert and the agent's proposed fix, then checks recovery.
 - **T12 (optional Friday release):** with `T12` and a `release` section in the skin, run
-  `Deploy-TicketingWorkload.ps1` (`-WhatIf` first) and wait for its role before Build. The user
+  `Deploy-TicketingWorkload.ps1` (`-WhatIf` first) and wait 30 minutes after the grant time it prints before Build. The user
   signs in to GitHub once per build (`Initialize-SreConfiguration.ps1 -Apply -GitHubSignIn`) and
   clicks each **Approve**; keep the GitHub `ask` policy. Run it with `Invoke-FridayRelease.ps1`.
   Park, then `Remove-TicketingWorkload.ps1`, then `Remove-SreAgent.ps1`

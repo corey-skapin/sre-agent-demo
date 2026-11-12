@@ -227,11 +227,9 @@ Proven live (2026-11-10 and 2026-11-11), on a build from zero:
   and the binary `.pptx` downloads through the file API intact.
 - `Invoke-DriftDemo.ps1` Start and Reset on the real web app.
 
+Measured on 12 November 2026, after a build from zero: the apply paused all three tasks it created (`Status` showed them Paused), and a task fired by itself at its cron time.
+
 Written offline and covered by tests against a fake agent, but **not run live yet**:
 
-- The apply pausing a task it has just created (the same pause call was made by hand
-  and worked). The next build from zero proves it: `Status` should show all three
-  Paused right after the build.
-- A task firing by itself at its cron time (nobody waited for one).
 - The `ACTS-schedules` row for a task that is Active, and what a run costs in AAUs.
 - Whether the three drift changes restart the web app (no traffic ran during them).

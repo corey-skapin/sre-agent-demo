@@ -7,7 +7,11 @@ the presentation script: [the docs map](README.md) has the reading order.
 
 ## Where the subscription and tenant come from
 
-Every script takes `-SubscriptionId` and `-TenantId` as parameters. Confirm them with the user once, for example from `az account show` (the `id` and `tenantId` fields), then pass them to every script. Don't take them from whatever the CLI happens to be signed in to. Check a skin with `Get-DemoSkin` (from `scripts\lib\DemoSkin.psm1`): it validates the file against the schema and names any missing or wrong field.
+Every script takes `-SubscriptionId` and `-TenantId` as parameters. Confirm them with the user once, then pass them to every script. `az account show` shows the `id` and `tenantId` the CLI is on, so you can compare them with what the user told you. Check a skin with `Get-DemoSkin`: it validates the file against the schema and names any missing or wrong field.
+
+```powershell
+Import-Module .\scripts\lib\DemoSkin.psm1
+```
 
 ## Your presenter guide
 

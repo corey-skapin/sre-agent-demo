@@ -172,8 +172,7 @@ start, so the agent can line the first failure up with the release.
 
 Deploy the web app first, before the paid parent exists. A new role can take many
 minutes to work, so creating the grant now means no AAUs are spent waiting for it.
-Wait until the deploy script's own role check passes before you build the agent:
-the role can take 5 to 30 minutes, and no agent is running (so nothing is billed) while you wait.
+The script prints the time it granted the agent's role. Wait 30 minutes after that time before you build the agent (the role took up to about 27 minutes in the rehearsal). No agent is running, so nothing is billed, and it's a good time to wake the Arc estate.
 If the deploy stops with "workspace could not be found", the new workspace hasn't registered yet: run the same command once more.
 
 ```powershell
@@ -262,8 +261,8 @@ deletes the connection with the parent, so you repeat it after every wake.
   -Apply -GitHubSignIn -BackupPath <ANOTHER_NEW_FILE_OUTSIDE_REPO.json>
 ```
 
-The script checks the guard is in place, then prints the sign-in link, opens it in your default browser and copies it to the clipboard (when run interactively on Windows; add `-NoOpen` to skip both), and waits up
-to five minutes. The link lapses after 5 minutes, so start this only when you are at the screen, for the sign-in to appear. Open the link in a browser signed in to
+The script checks the guard is in place, then prints the sign-in link, opens it in your default browser and copies it to the clipboard (from a desktop session on Windows; add `-NoOpen` to skip both), and waits up
+to five minutes. The link lapses after 5 minutes, so start this only when you are at the screen. Approve in the browser: open the link in a browser signed in to
 the GitHub account that owns your app repository and approve the SRE Agent app
 (measured on 2026-11-10: 141 seconds from opening the link to the sign-in showing
 up). It then connects the repository, waits for the clone and tests the
