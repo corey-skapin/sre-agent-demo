@@ -5,6 +5,14 @@ the Arc checkout or redeploying its workloads. Your AI tool can follow this page
 you, and the steps are the same if you run them yourself. It is a reference, not
 the presentation script: [the docs map](README.md) has the reading order.
 
+## Where the subscription and tenant come from
+
+Every script takes `-SubscriptionId` and `-TenantId` as parameters. Confirm them with the user once, then pass them to every script. `az account show` shows the `id` and `tenantId` the CLI is on, so you can compare them with what the user told you. Check a skin with `Get-DemoSkin`: it validates the file against the schema and names any missing or wrong field.
+
+```powershell
+Import-Module .\scripts\lib\DemoSkin.psm1
+```
+
 ## Your presenter guide
 
 After setup, save the confirmed names, IDs and URLs from your setup output and
@@ -44,7 +52,7 @@ current.
 | `recordedAtUtc` | UTC timestamp ending in `Z` for the saved context |
 | `resourceGroups` | Object with confirmed `arc`, `infra`, `sre` names |
 | `agentName`, `agentUrl` | Agent name and actual Azure/SRE portal resource URL from deployment: the `Portal:` line `Deploy-SreAgent.ps1` prints. Save it then; it can also be rebuilt as `https://portal.azure.com/#view/Microsoft_Azure_PaasServerless/AgentFrameBlade.ReactView/id/` followed by the agent's ARM ID with each `/` written `%2F` |
-| `applicationUrl` | Container App HTTPS endpoint: `https://` plus `properties.configuration.ingress.fqdn` from `az containerapp show` |
+| `applicationUrl` | Container App HTTPS endpoint: `https://` plus the output of `az containerapp show --name <APP> --resource-group <ARC_GROUP> --query properties.configuration.ingress.fqdn -o tsv` |
 | `applicationInsightsResourceId` | SRE diagnostics component |
 | `logAnalyticsWorkspaceId` | Existing Arc workspace |
 | `containerAppResourceId`, `arcMachineResourceId` | Exact T09 app and T11 Arc machine |
@@ -76,7 +84,7 @@ Omit it until the Arc engine/signal and SRE route are verified; the guide then
 shows a skip note. Source defaults alone are not verified setup.
 
 The optional `release` object is the T12 equivalent. `appResourceId` is the
-ticketing web app's resource ID (the `Deploy-TicketingWorkload.ps1` output names
+ticketing web app's resource ID (`az webapp show --name <APP> --resource-group <TICKETING_GROUP> --query id -o tsv`; the `Deploy-TicketingWorkload.ps1` output names
 the app and its group), `appUrl` is its `https://<name>.azurewebsites.net`
 address, `repository` is `<OWNER>/<REPOSITORY>`, the two versions are `vX.Y.Z`
 tags and `responsePlan` is the rendered plan name. The resource ID must match the
@@ -86,7 +94,7 @@ shows a skip note where the Friday release goes
 ([T12 runbook](t12-friday-release.md)).
 
 The optional `acts` list switches on the modular acts in the guide: it adds a
-running order for the full 28-minute run and the 15-minute executive cut, and one
+running order for the staged 40-minute run and the 15-minute executive cut, and one
 block for each module you list: [Act 1, ask it anything](ask-anything.md),
 [Act 3, it remembers](it-remembers.md),
 [Act 4, it works when nothing is broken](proactive-checks.md) and

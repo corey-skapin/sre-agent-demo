@@ -377,14 +377,39 @@ Check the alert's Monitor condition separately from its workflow status.
 Describe a manual reset as a manual reset, not agent repair, if you needed one.
 
 <!-- ACTS:START -->
-### Running order: the full 28 minutes or the 15-minute executive cut
+### Running order: the staged 40 minutes or the 15-minute executive cut
 
 The acts below stand alone. Run any of them, in any order, or skip one: each says
-what it needs, and the others still work. Two running orders are suggested. Only the
-Friday release has measured timings, so treat the other minutes as a budget and time
-yourself in rehearsal.
+what it needs, and the others still work. Two running orders are suggested. They come
+from one live rehearsal (the measured times are in
+[the cost reference]({{costGuideUrl}})), so time yourself in yours.
 
-| Act | In this guide | Full run, 28 minutes | Executive cut, 15 minutes |
+Run the full demo **staged**, not act by act. The Friday release and the Arc fault
+each need 4 to 7 minutes before their Approve card appears, so start both at the top
+and fill that wait with the acts that need no card. Run the whole order as one
+sitting of about 40 minutes:
+
+| Minute | You do | In this guide |
+| --- | --- | --- |
+| 0 | Start the Friday release (it releases the bad version) and the Arc fault if you built it (Act 6 has the command; it takes about 3 minutes to return). Say one sentence to open | {{releaseStatus}}, {{arcStatus}} |
+| 2 | Act 1: type the questions into the agent's chat in the portal. No script sends a chat message. Each answer takes about 1 to 1.5 minutes | {{askStatus}} |
+| 8 | Start the drift demo and the health check and governance deck tasks for Act 4. They run in parallel and take 2 to 3.5 minutes | {{proactiveStatus}} |
+| 12 | Act 3, memory: type the question into a new chat. It takes about 3 minutes | {{memoryStatus}} |
+| 16 | The Friday card has been due since about minute 5. Check it, then approve it. Recovery follows in about 1 to 1.5 minutes | {{releaseStatus}} |
+| 20 | Read the Friday closing summary. Say *Why you can trust it* | {{releaseStatus}} |
+| 24 | Act 4: read the health check, the drift scan and its Reset, and the deck | {{proactiveStatus}} |
+| 28 | The Arc card has been due since about minute 7. Check and approve it | {{arcStatus}} |
+| 34 | Read the Arc closing summary (about 1.5 minutes after the click) | {{arcStatus}} |
+| 38 | Run the Arc `Reset` (about 3 minutes) while you close | |
+
+The agent's Stop hook can hold back a closing summary and make the agent rewrite it,
+so a closing summary can arrive a minute or two after the first draft. Allow for that
+in the timings above. Without the server-room act, drop minutes 28 to 38 and finish
+at about 28. The close is step 7; add the pilot offer (one agent, one service) after
+it, with the figures in [the cost reference]({{costGuideUrl}}).
+The minutes below are a budget from one rehearsal on 12 November 2026, so time your own run. The table gives each act's own time. The card waits (the Friday release about 5 minutes, the Arc act about 6.5 minutes plus its Start and Reset) are what make the show about 40 minutes even when staged; run back to back, it takes longer.
+
+| Act | In this guide | Full run, unstaged | Executive cut, 15 minutes |
 | --- | --- | --- | --- |
 | Open | | | 1 |
 | 1. Ask it anything | {{askStatus}} | 3 | skipped |
@@ -394,11 +419,6 @@ yourself in rehearsal.
 | 5. Why you can trust it | {{releaseStatus}} | 3 | 3 |
 | 6. The server room (Arc) | {{arcStatus}} | 5 | skipped, or 4 in place of the deck |
 | Close | | 1 | 2 |
-
-The Friday release and *Why you can trust it* share one section below. Without the
-server-room act, spend its five minutes on the LOB and SQL investigations in
-steps 4 and 5. The close is step 7; add the pilot offer (one agent, one service) after
-it, with the figures in [the cost reference]({{costGuideUrl}}).
 
 <!-- CUT:START -->
 **Executive cut, in order.** Say one sentence to open: the agent is on call for this
@@ -462,7 +482,7 @@ from a rehearsal change what it says in the next run
 **About 12 minutes before the beat**, ask your AI tool to run
 `Invoke-FridayRelease.ps1 -Action Start`. It sends checkout traffic, waits five
 minutes on {{releaseGoodVersion}}, then releases {{releaseBadVersion}}. The Review
-card appears four to six minutes after the release (4 min 19 s and 5 min 33 s
+card appears three to six minutes after the release (3 min 37 s to 5 min 33 s
 measured). Keep
 `Invoke-FridayRelease.ps1 -Action Status -Wait` running: it records when each step
 happened and says when the card is waiting.
@@ -480,7 +500,7 @@ agent anything. Watch what it does with the alert."
    appsettings set` on {{releaseAppName}} that sets `WEBSITE_RUN_FROM_PACKAGE` to
    the package URL of {{releaseGoodVersion}} and changes nothing else. If it
    proposes anything different, don't approve it. Click **Approve**.
-3. The app restarts: about two minutes until the first healthy request. This is
+3. The app restarts: recovery took 1 to 1.5 minutes after the click in the rehearsal. This is
    your talking time for the trust beat below.
 4. Say that a person approved it, never that the audit proves it. Check that the
    thread's closing summary says so and doesn't predict when the alert clears (it
@@ -631,8 +651,10 @@ access to the requested Azure resources". It is not the Approve card. In the one
 the agent read the new run command too early, got a 404 and the platform held that read
 for a person. Authorizing it makes that one read run as you, not as the agent, so say
 so; the repair itself already ran as the agent. The skill now reads the list of run
-commands to avoid this, but that is not yet proven live, and what happens if nobody
-authorizes the card is unknown.
+commands to avoid this, and the rehearsal showed one click and no authorization card.
+What happens if nobody authorizes a card is unknown.
+
+**Expect this aside:** the agent's closing summary may point out that the alert text says event 4200 while this fault is a 4100. That is true: the rule fires on 4100, 4101 and 4200, and the description names only 4200. Say so, and carry on.
 
 **Say:** "A server fails, and the agent finds it in the telemetry we already collect.
 It proposes one change, a script we installed in advance, and it waits. I decide. It

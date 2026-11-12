@@ -150,12 +150,30 @@ function Get-SreReleaseExtrasPlan {
     @{ stage = $Stage; operations = @($operations.ToArray()); notes = @($notes.ToArray()); guardInPlace = $guardInPlace }
 }
 
+function Open-SreSignInLink {
+    <#
+    .SYNOPSIS
+    Opens the sign-in link in the default browser and copies it to the clipboard, only when run interactively on Windows. Returns what it did.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [bool]$Interactive = ($IsWindows -and [Environment]::UserInteractive),
+        [scriptblock]$Launcher = { param($u) Start-Process -FilePath $u },
+        [scriptblock]$Copier = { param($u) Set-Clipboard -Value $u }
+    )
+    $done = [Collections.Generic.List[string]]::new()
+    if (-not $Interactive) { return @() }
+    try { & $Copier $Url; $done.Add('copied') } catch { Write-Verbose "Clipboard unavailable: $($_.Exception.Message)" }
+    try { & $Launcher $Url; $done.Add('opened') } catch { Write-Verbose "Browser did not open: $($_.Exception.Message)" }
+    return @($done.ToArray())
+}
+
 function Wait-SreGitHubSignIn {
     <#
     .SYNOPSIS
     Prints the one-time GitHub sign-in link and waits for the agent to list a signed-in domain. The only step here a person does.
     #>
-    param([Parameter(Mandatory)][Collections.IDictionary]$Context, [ValidateRange(30, 1800)][int]$TimeoutSeconds = 300)
+    param([Parameter(Mandatory)][Collections.IDictionary]$Context, [ValidateRange(30, 1800)][int]$TimeoutSeconds = 300, [switch]$NoOpen)
     $config = Invoke-SreData -Context $Context -Method GET -Path '/api/v2/github/oauth/config'
     Assert-SreDataSuccess -Response $config -What 'Read the GitHub sign-in link'
     $url = [string](Get-SreProperty $config.Body 'oAuthUrl')
@@ -165,6 +183,9 @@ function Wait-SreGitHubSignIn {
     Write-Host 'GitHub sign-in (once per agent build):'
     Write-Host '  1. Open this link in a browser where you are signed in to the GitHub account that owns the demo repository:'
     Write-Host "     $url"
+    Write-Information -InformationAction Continue '     The link lapses after 5 minutes, so start this only when you are at the screen.'
+    $shown = @(if (-not $NoOpen) { Open-SreSignInLink -Url $url })
+    if ($shown.Count) { Write-Information -InformationAction Continue "     (This script $($shown -join ' and ') the link for you. If you see no tab, paste it from the clipboard or from above.)" }
     Write-Host '  2. Approve the SRE Agent app. It asks for the repo scope, so the grant reaches every repository that account can reach.'
     Write-Host '     The ask policy and the repository-only instruction are already in place, and every GitHub write still waits for a person.'
     Write-Host "Waiting up to $TimeoutSeconds s for the sign-in to appear..."
@@ -187,7 +208,7 @@ function Invoke-SreReleaseExtras {
     param(
         [Parameter(Mandatory)][Collections.IDictionary]$Context, [Parameter(Mandatory)][Collections.IDictionary]$Desired,
         [Parameter(Mandatory)][ValidateSet('Before', 'After')][string]$Stage, [Parameter(Mandatory)][string]$BackupPath,
-        [switch]$GitHubSignIn, [ValidateRange(30, 1800)][int]$SignInTimeoutSeconds = 300, [ValidateRange(1, 600)][int]$ReadBackSeconds = 90
+        [switch]$GitHubSignIn, [switch]$NoOpen, [ValidateRange(30, 1800)][int]$SignInTimeoutSeconds = 300, [ValidateRange(1, 600)][int]$ReadBackSeconds = 90
     )
     if ($Stage -eq 'After' -and $GitHubSignIn) {
         $guardCheck = Get-SreReleaseExtrasPlan -Desired $Desired -Observed (Get-SreReleaseObserved -Context $Context -Desired $Desired) -Stage After
@@ -200,7 +221,7 @@ function Invoke-SreReleaseExtras {
             throw $guardCheck.notes[0]
         }
         if (@((Get-SreReleaseObserved -Context $Context -Desired $Desired).domains).Count -eq 0) {
-            if ($PSCmdlet.ShouldProcess('GitHub sign-in link', 'fetch the one-time sign-in link and wait for the sign-in')) { $null = Wait-SreGitHubSignIn -Context $Context -TimeoutSeconds $SignInTimeoutSeconds }
+            if ($PSCmdlet.ShouldProcess('GitHub sign-in link', 'fetch the one-time sign-in link and wait for the sign-in')) { $null = Wait-SreGitHubSignIn -Context $Context -TimeoutSeconds $SignInTimeoutSeconds -NoOpen:$NoOpen }
         }
     }
     $observed = Get-SreReleaseObserved -Context $Context -Desired $Desired
@@ -284,4 +305,4 @@ function Get-SreReleaseDataChecks {
     )
 }
 
-Export-ModuleMember -Function ConvertTo-SreLf, ConvertTo-SreHashtable, Read-SreItem, Get-SreReleaseObserved, Get-SreReleaseGuardInstruction, Get-SreReleaseExtrasPlan, Wait-SreGitHubSignIn, Invoke-SreReleaseExtras, Get-SreReleaseDataChecks
+Export-ModuleMember -Function ConvertTo-SreLf, ConvertTo-SreHashtable, Read-SreItem, Get-SreReleaseObserved, Get-SreReleaseGuardInstruction, Get-SreReleaseExtrasPlan, Open-SreSignInLink, Wait-SreGitHubSignIn, Invoke-SreReleaseExtras, Get-SreReleaseDataChecks

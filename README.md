@@ -281,7 +281,7 @@ command includes `-GrantAzureMonitorAlertAccess`, which a first build needs
   -ConfigurationBackupPath <NEW_PATH_OUTSIDE_REPO.json>
 ```
 
-The complete build took about 5.5 minutes live. If it is interrupted after the
+The complete build took 5 to 8 minutes live (8 on a from-zero rebuild). If it is interrupted after the
 parent exists, do not rerun it: continue with `Initialize-SreConfiguration.ps1
 -Inspect`, then `-Apply -BackupPath <NEW_PATH>`.
 

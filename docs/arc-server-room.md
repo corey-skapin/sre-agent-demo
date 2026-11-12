@@ -114,6 +114,7 @@ anything. `-Wait` keeps polling until a card is pending or `-TimeoutMinutes` pas
 If the agent's read of the run command is held for authorization, `Status` lists it
 as an authorization card, says it is not the Approve card and stops waiting
 ([why](#limits)).
+Start and Reset each take about 3 minutes to return.
 Start the fault about 15 minutes before the beat: the one run measured took 6 minutes
 51 seconds from the fault to the card, and the alert's five-minute check can add up to
 five more. Rehearse once.
@@ -195,20 +196,13 @@ same shape against the healthy app, before the agent was built, ran the installe
 script by its path alone (no execution-policy or quoting problem) and exited 0 in 10
 seconds.
 
-Not measured yet, so treat it as a rehearsal item and not a demo claim:
+Measured again on 12 November 2026, on a full skin with T12 and ARC both on: the fault reached the Approve card in 6 minutes 21 seconds, the closing summary came 1 minute 29 seconds after the click, and there was no second card, so the skill's list read-back works live. The Stop hook allowed the closing summary on the first pass. A hand-sent run command whose script throws showed `executionState` of `Failed` with exit code 1, and its `provisioningState` stayed `Succeeded`. To repeat that test, read it back with `az rest --method get --url <RUN_COMMAND_URL>?api-version=<API_VERSION> --query properties.instanceView.executionState -o tsv` (the az CLI may print a WARNING line first, which is not an error), then delete it. `Start` and `Reset` took about 3 minutes each.
 
-- That the skill's list read-back (below) avoids the second card. It is tested
-  offline only.
-- What the thread does if nobody authorizes that second card.
-- That a failure shows as a failed run command: the script succeeded every time.
-- How long the act takes with a person at the screen and no second card: the one run
-  had the click and the authorization 21 and 25 minutes after the card.
-- That the T11 plan opens a new thread on a second fault with its cooldown off.
-- That the Stop hook, if T12 is also on, accepts the Arc closing summary. The lean
-  skin of the run had no T12, so there was no hook.
-- That `Status` is enough to run the act from. It reads ARM, the alert, the thread and
-  the run command, not Log Analytics, so its timeline has no "first 4100" row; the
-  agent's own report carries the Log Analytics evidence.
+Still not measured, so treat these as rehearsal items and not demo claims:
+
+- What the thread does if nobody authorizes a card.
+- A second Arc fault with its cooldown off: only the Friday release was confirmed to open a new thread.
+- `Status` reads ARM, the alert, the thread and the run command, not Log Analytics, so its timeline has no "first 4100" row; the agent's own report carries the Log Analytics evidence.
 
 ## Park and wake
 

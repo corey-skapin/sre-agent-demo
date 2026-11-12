@@ -170,18 +170,26 @@ try {
     $waiting = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) 6>$null
     Check (-not $waiting.changed -and @(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 0 -and @($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.path -like '*oauth*' }).Count -eq 0) 'Without -GitHubSignIn the repository stage fetches no sign-in link and writes nothing'
     $mark = $agent.state.log.Count
-    $output = @(Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn 6>&1)
+    $output = @(Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -NoOpen 6>&1)
     $result = $output | Where-Object { $_ -is [hashtable] } | Select-Object -First 1
     $text = (@($output | Where-Object { $_ -is [Management.Automation.InformationRecord] } | ForEach-Object { [string]$_.MessageData }) -join "`n")
     Check ($result.changed -and $result.verified -and $result.latestCommit -ceq 'abcdef0' -and $result.connectivity -ceq 'HTTP 200') 'With -GitHubSignIn the repository is connected, cloned and tested'
     Check (((Get-FakeAgentWrites -Agent $agent -Since $mark) -join '|') -ceq "PUT /api/v2/repos/$repoName|POST /api/v2/repos/$repoName/test") 'One repository PUT, then one connectivity test'
     Check (@($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.path -eq '/api/v2/github/oauth/config' }).Count -eq 1) 'The sign-in link was requested once'
     Check ($text -match 'https://github\.com/login/oauth/authorize' -and $text -match 'repo scope' -and $text -match 'every repository' -and $text -match 'once per agent build') 'The sign-in text shows the link and says the grant reaches every repository'
+    Check ($text -match 'lapses after 5 minutes') 'The sign-in text says the link lapses after 5 minutes'
+    $script:opened = @()
+    $launch = { param($u) $script:opened += "open:$u" }
+    $copy = { param($u) $script:opened += "copy:$u" }
+    $did = @(Open-SreSignInLink -Url 'https://signin.example.test/authorize?x=1' -Interactive $true -Launcher $launch -Copier $copy)
+    Check (($did -join ',') -ceq 'copied,opened' -and $script:opened.Count -eq 2 -and $script:opened[1] -ceq 'open:https://signin.example.test/authorize?x=1') 'Interactive: the sign-in link is copied and opened in the browser'
+    $script:opened = @()
+    Check (@(Open-SreSignInLink -Url 'https://signin.example.test/x' -Interactive $false -Launcher $launch -Copier $copy).Count -eq 0 -and $script:opened.Count -eq 0) 'Not interactive: nothing is opened or copied'
     Check ($agent.state.repos[$repoName].properties.url -ceq "https://$githubHost/example-owner/ticketing-app" -and $agent.state.repos[$repoName].properties.branch -ceq 'main') 'The agent holds the demo repository only'
     $readiness = @(Get-SreReleaseDataChecks -Context $context -Desired $desired)
     Check (@($readiness | Where-Object { $_.status -ne 'pass' }).Count -eq 0) 'Readiness: everything passes once the repository is cloned'
     $mark = $agent.state.log.Count
-    $second = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn 6>$null
+    $second = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -NoOpen 6>$null
     Check (-not $second.changed -and @(Get-FakeAgentWrites -Agent $agent -Since $mark).Count -eq 0 -and @($agent.state.log | Select-Object -Skip $mark | Where-Object { $_.path -like '*oauth*' }).Count -eq 0) 'Signed in and connected already: a second apply writes nothing and asks for no second sign-in'
 
     # --- The guard order: no repository without the guard -----------------------------------------------------------------------------
@@ -190,13 +198,13 @@ try {
     $agent.state.domains = @(@{ name = 'github.com' })
     $held = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) 6>$null
     Check (-not $held.changed -and $held.notes[0] -match '^Blocked' -and @(Get-FakeAgentWrites -Agent $agent).Count -eq 0) 'Signed in but no guard: stage After refuses to connect the repository'
-    Throws { Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn 6>$null } '^Blocked'
+    Throws { Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -NoOpen 6>$null } '^Blocked'
     $agent.state.domains = @()
-    Throws { Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn 6>$null } '^Blocked'
+    Throws { Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -NoOpen 6>$null } '^Blocked'
     Check (@($agent.state.log | Where-Object { $_.path -like '*oauth*' }).Count -eq 0 -and @(Get-FakeAgentWrites -Agent $agent).Count -eq 0) 'Without the guard the sign-in link is not even requested'
     $readiness = @(Get-SreReleaseDataChecks -Context $context -Desired $desired)
     Check (@($readiness | Where-Object { $_.required -and $_.status -eq 'fail' }).Count -eq 3 -and @($readiness | Where-Object { $_.id -eq 'T12-github-guard' -and $_.status -eq 'fail' }).Count -eq 1) 'Readiness on an empty agent fails the three required rows'
-    $preview = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -WhatIf 6>$null
+    $preview = Invoke-SreReleaseExtras -Context $context -Desired $desired -Stage After -BackupPath (New-BackupBase) -GitHubSignIn -NoOpen -WhatIf 6>$null
     Check (-not $preview.changed -and $preview.notes[0] -match '^Blocked' -and @(Get-FakeAgentWrites -Agent $agent).Count -eq 0 -and @($agent.state.log | Where-Object { $_.path -like '*oauth*' }).Count -eq 0) 'A preview with -GitHubSignIn on an agent that has no guard yet says the guard comes first, instead of failing'
 
     # --- A service that drops an empty tool list, and a sign-in read that fails -------------------------------------------------------
