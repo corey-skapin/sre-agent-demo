@@ -79,9 +79,9 @@ change: 4 AAUs per agent-hour from creation until deletion, plus active work.
   invoice or an agreement rate: look up your region and currency before you quote
   it. The plan bills for as long as it exists, whether or not the parent does.
   Parking doesn't stop it; `Remove-TicketingWorkload.ps1` does.
-- **A window.** The build takes about 5.5 minutes, and a new role can take far
+- **A window.** The build takes 5 to 8 minutes, and a new role can take far
   longer to work, which is why the workload and its grant are deployed before the
-  parent. A run then needs four to six minutes to the Review card and about two
+  parent. A run then needs three to six minutes to the Review card and one to two
   more to recovery (measured on 2026-11-11), plus your presenting time. Every hour
   the parent exists is 4 baseline AAUs. The active-flow AAUs for one T12
   investigation can't be read back: Azure Resource Manager has no platform metrics

@@ -434,8 +434,8 @@ Everything else runs from scripts your AI tool can run for you.
 
 - The paid parent bills 4 AAUs per hour from creation until you delete it
   ([cost reference](sre-cost-and-demo-fidelity.md#t12-the-friday-release)). The
-  build takes about 5.5 minutes, plus the role wait if you skipped step 2's lead
-  time, plus the run: about five minutes to the card, two to recovery.
+  build takes 5 to 8 minutes, plus the role wait if you skipped step 2's lead
+  time, plus the run: three to six minutes to the card, one to two to recovery.
 - The workload is one `B1` plan, one Linux web app and a little telemetry. The
   retail price of a Linux `B1` plan is in the cost reference. Park the parent when
   you're done; the workload keeps running until you remove it.

@@ -462,7 +462,7 @@ from a rehearsal change what it says in the next run
 **About 12 minutes before the beat**, ask your AI tool to run
 `Invoke-FridayRelease.ps1 -Action Start`. It sends checkout traffic, waits five
 minutes on {{releaseGoodVersion}}, then releases {{releaseBadVersion}}. The Review
-card appears four to six minutes after the release (4 min 19 s and 5 min 33 s
+card appears three to six minutes after the release (3 min 37 s to 5 min 33 s
 measured). Keep
 `Invoke-FridayRelease.ps1 -Action Status -Wait` running: it records when each step
 happened and says when the card is waiting.

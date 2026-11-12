@@ -16,9 +16,8 @@ Don't ask for approval again at each step.
   configuration backups, exports and evidence. Pass the skin as
   `-SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json`. The tracked skins are fictional examples.
 - Use `pwsh` (PowerShell 7.4+; Windows PowerShell can't run the scripts), Azure CLI
-  2.60+ with Bicep (`az bicep install`), and the `containerapp` and
-  `connectedmachine` extensions (`az extension add --name containerapp`, then the
-  same for `connectedmachine`). The scripts don't install any of it.
+  2.60+ with Bicep (`az bicep install`), and the `containerapp` and `connectedmachine`
+  extensions (`az extension add --name <NAME>`). The scripts don't install any of it.
 - The Arc estate must be Active first. This repo never deploys, changes or removes it. By default
   the build also needs its Container App (`workloads.deployContainerApps` in the Arc skin) and the
   LOB app and alert that this repo's LOB scripts add; [Prerequisites](README.md#prerequisites)
@@ -41,8 +40,9 @@ Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs
 - **Build:** `Deploy-SreAgent.ps1 -WhatIf`, then `Deploy-SreAgent.ps1
   -ApproveParentCreation -GrantAzureMonitorAlertAccess -ConfigurationBackupPath
   <NEW_FILE_OUTSIDE_REPO.json>`. It creates the paid parent (4 AAUs per hour until
-  you delete it), then applies and checks the configuration (about 5.5 minutes).
-  The grant switch creates the one subscription Monitoring Contributor grant the
+  you delete it), then applies and checks the configuration (5 to 8 minutes).
+  Then ask the user to open the agent in the portal once so its welcome thread
+  finishes. The grant switch creates the one subscription Monitoring Contributor grant the
   agent needs for Azure Monitor alerts, and readiness fails without it. A wake
   needs no change: the switch finds the retained grant and changes nothing. If the
   parent already exists and the grant is missing, Deploy refuses an existing
