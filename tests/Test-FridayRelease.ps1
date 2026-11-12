@@ -175,8 +175,10 @@ try {
     Check ($cards[0].kind -ceq 'azure-write' -and $cards[0].status -ceq 'Pending' -and $cards[0].createdUtc -ceq (& $at 700) -and $cards[0].summary -ceq 'Redeploy v1.2.0' -and $cards[0].command -match 'az webapp config appsettings set') 'An Azure write card carries its time, summary and command'
     Check ($cards[2].kind -ceq 'permission-rule' -and $cards[2].summary -ceq 'CreateGithubIssue' -and $cards[2].command -ceq 'title=Fix checkout; repo=example-owner/ticketing-app') 'A permission-rule card shows the tool and its parameters, so you can check it before a person approves'
     Check ($cards[3].command -ceq '' -and $cards[3].summary -ceq '') 'A card with no display still reads safely'
-    $long = ConvertTo-Json -InputObject @(@{ azCliExecution = @{ id = 'c'; status = 'Pending'; originalFunctionCall = @{ command = ('x' * 900) } } }) -Depth 6 | ConvertFrom-Json
-    Check (@(Get-FridayCards -Messages $long)[0].command.Length -le 304) 'A very long command is clipped for the report'
+    $long = ConvertTo-Json -InputObject @(@{ azCliExecution = @{ id = 'c'; status = 'Pending'; originalFunctionCall = @{ command = ('x' * 9000) } } }) -Depth 6 | ConvertFrom-Json
+    Check (@(Get-FridayCards -Messages $long)[0].command.Length -le 4003) 'A very long command is clipped only far beyond any real card'
+    $mid = ConvertTo-Json -InputObject @(@{ azCliExecution = @{ id = 'c'; status = 'Pending'; originalFunctionCall = @{ command = ('y' * 900) } } }) -Depth 6 | ConvertFrom-Json
+    Check (@(Get-FridayCards -Messages $mid)[0].command -match ('y' * 900)) 'A card command of several hundred characters is shown in full, so you can check it before you approve'
     Check (@(Get-FridayCards -Messages @()).Count -eq 0 -and @(Get-FridayCards -Messages $null).Count -eq 0) 'No messages, no cards'
 
     # --- Folding the sources into the run ---------------------------------------------------------------------------------------------

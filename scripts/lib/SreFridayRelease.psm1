@@ -257,7 +257,7 @@ function Get-FridayCards {
         $cli = Get-SreProperty $message 'azCliExecution'
         if ($cli) {
             [pscustomobject]@{ id = [string](Get-SreProperty $cli 'id'); kind = 'azure-write'; status = [string](Get-SreProperty $cli 'status')
-                createdUtc = (ConvertTo-FridayUtc (Get-SreProperty $cli 'createdTimestamp')); summary = [string](Get-SreProperty $cli 'description'); command = (Get-FridayClip (Get-SreProperty $cli 'originalFunctionCall')) }
+                createdUtc = (ConvertTo-FridayUtc (Get-SreProperty $cli 'createdTimestamp')); summary = [string](Get-SreProperty $cli 'description'); command = (Get-FridayClip (Get-SreProperty $cli 'originalFunctionCall') -Length 4000) }
         }
         $approval = Get-SreProperty $message 'approval'
         if ($approval) {
