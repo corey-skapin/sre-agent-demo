@@ -646,7 +646,8 @@ az identity show --subscription <SUBSCRIPTION_ID> `
 ```
 
 Check each exit status. Resource removal is sequential with bounded observation
-(`Hibernate-SreAgent.ps1 -TimeoutSeconds 300` by default), not a hard cancellation
+(`Hibernate-SreAgent.ps1 -TimeoutSeconds 300` by default for a park, 1200 for a
+full removal), not a hard cancellation
 deadline on each Azure CLI call. Read-before-write verifies target and retained
 principal; stop on failed reads/writes without blind retries. Recheck Hibernated
 readiness separately before parking Arc. Its required checks are the exact retained
@@ -783,6 +784,13 @@ Use the same explicit subscription/tenant/skin as deployment:
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 ```
 
+A full removal takes about 10 minutes, because each grant takes about 50 seconds
+to delete and verify. Without `-TimeoutSeconds` it allows 1200 seconds (20 minutes).
+If it still stops with "Lifecycle observation deadline reached", don't rerun blindly.
+Run `Test-SreReadiness.ps1 -DesiredState Removed` with the saved principal to see what
+is left, then run the same `Remove-SreAgent.ps1` command again with
+`-TimeoutSeconds 1800`.
+
 The shared lifecycle implementation deletes only inventoried known identity-owned
 grants at the known subscription/workload scopes, verified parent administrator
 grants, named parent/diagnostics and UAMI. It deletes the dedicated group only
@@ -823,7 +831,8 @@ Removed readiness reports external-grant verification pending. Failed reads are
 failures, never interpreted as absence. Pending deletion is observed within the
 deadline, not blindly resubmitted. Parent-lifetime cascade may remove its grants;
 already absent exact targets are skipped. Local mocks cover these contracts;
-the destructive Removed convergence remains untested against the live estate.
+the destructive Removed convergence ran live once, on 2026-11-19 (see
+[Live Removed convergence, 2026-11-19](#live-removed-convergence-2026-11-19)).
 
 ## Evidence boundaries
 
@@ -876,6 +885,29 @@ and nothing beyond it.
   `-GrantAzureMonitorAlertAccess` (the offline tests show an existing exact grant is
   found and left alone), and any instance other than the one tested. Repeat the
   readiness checks after every wake.
+
+### Live Removed convergence, 2026-11-19
+
+One live full removal ran on the Removed path. It is where the 1200-second default
+for Removed comes from.
+
+- **Start.** An earlier park had already deleted the paid parent, and the ticketing
+  workload had been removed first, as the [teardown order](t12-friday-release.md#teardown)
+  says. The SRE group held the identity, Application Insights and the Smart Detection
+  action group. The identity had seven grants (six workload-group grants plus the
+  subscription Monitoring Contributor), and there was no parent administrator entry.
+- **Preview.** `Remove-SreAgent.ps1 -WhatIf` listed exactly those three resources,
+  seven grants and the group, and changed nothing.
+- **First run, old 300-second default.** It exited 1 after 5 min 47 s with "Lifecycle
+  observation deadline reached". It had removed 6 of the 7 grants (about 50 s each)
+  and nothing else.
+- **Second run, `-TimeoutSeconds 1200`.** It removed the last grant, the three
+  resources and the group in 5 min 33 s and exited 0.
+- **Readiness.** `Test-SreReadiness.ps1 -DesiredState Removed` with the saved
+  principal passed all 4 required checks: SRE group absent, external grants absent,
+  parent administrator absent, no retained-state drift.
+- **Not covered:** removing a parent that still exists in the same run, removal while
+  a T12 workload still exists, and a rebuild from zero after this removal.
 
 ### Earlier SQL and LOB rehearsals
 

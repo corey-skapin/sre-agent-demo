@@ -55,7 +55,7 @@ Run these from the repo root as `.\scripts\NAME.ps1`, each with the three inputs
   then run it with `-Confirm:$false`. It deletes only the paid parent. Park SRE before Arc.
 - **Wake:** wake Arc first, then run the Build commands again. The identity and
   its grants are reused.
-- **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with `-Confirm:$false`.
+- **Remove:** `Remove-SreAgent.ps1 -WhatIf`, show the preview, then run it with `-Confirm:$false` (about 10 minutes).
 - **Incident:** follow
   [Run one incident after setup](docs/ai-deploy-handbook.md#run-one-incident-after-setup-optional),
   once Active readiness passes. It breaks the demo Container App on purpose,

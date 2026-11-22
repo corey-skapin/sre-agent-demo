@@ -399,6 +399,9 @@ For Removed:
    grants/resources are removed before deleting
    the empty dedicated group. Shared Arc/Monitor and your private exports are
    untouched.
+   A full removal takes about 10 minutes and allows 20 by default. If it stops at
+   the deadline, run the Removed readiness check with the saved principal, then the
+   same command again with `-TimeoutSeconds 1800`.
 5. Verify `-DesiredState Removed` with the saved principal. Without that principal,
    external-grant absence is pending even when the group is gone.
 

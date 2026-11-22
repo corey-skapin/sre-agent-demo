@@ -129,6 +129,9 @@ try {
     $global:LifecycleState.assignments += $platformGrant
     & $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf
     Check ($global:LifecycleState.assignments.Count -eq 8 -and @($global:AzCalls | Where-Object { $_ -match ' delete' }).Count -eq 0) 'Removed preview retains all seven UAMI grants plus parent admin'
+    $removeText = (& $remove -SubscriptionId $subscription -TenantId $tenant -WhatIf 6>&1 | Out-String)
+    $parkText = (& $hibernate -SubscriptionId $subscription -TenantId $tenant -WhatIf 6>&1 | Out-String)
+    Check ($removeText -match 'Time limit: 1200 seconds' -and $parkText -match 'Time limit: 300 seconds') 'A Removed run without -TimeoutSeconds allows 1200 seconds, a park still 300'
     & $remove -SubscriptionId $subscription -TenantId $tenant -Confirm:$false
     Check (-not $global:LifecycleState.groupExists -and $global:LifecycleState.assignments.Count -eq 0) 'Full Removed deletes the exact subscription prerequisite together with six workload grants and parent admin'
     Reset-Fixture

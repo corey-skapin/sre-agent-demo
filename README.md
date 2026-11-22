@@ -483,7 +483,8 @@ Full removal uses `Remove-SreAgent.ps1`:
 
 Its live read-only preview has been rehearsed: seven UAMI assignments, one parent
 administrator, four resources and the dedicated group; no mutation occurred.
-Destructive Removed convergence remains a separate unverified live step.
+Removed convergence has run live once (see [Live Removed
+convergence, 2026-11-19](docs/sre-response-plan-automation.md#live-removed-convergence-2026-11-19)).
 Known extra UAMI grants require an explicit full assignment-ID
 [allow-list](docs/sre-response-plan-automation.md#explicit-removed-convergence),
 not a blanket role exemption.
@@ -500,6 +501,10 @@ not a blanket role exemption.
   -SkinPath <PRIVATE_LAB_FOLDER>\sre-skin.json -DesiredState Removed `
   -PreviousIdentityPrincipalId <SAVED_PRINCIPAL_ID> -OutputFormat Json
 ```
+
+A full removal takes about 10 minutes and allows 20 by default. If it stops at the
+deadline, follow [Explicit Removed
+convergence](docs/sre-response-plan-automation.md#explicit-removed-convergence).
 
 Removed deletes only known SRE resources, known identity-owned grants, verified
 parent grants and the dedicated group **after it is empty**. Unknown resources
