@@ -20,7 +20,7 @@ param(
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')]
     [string]$PreviousIdentityPrincipalId,
     [string[]]$AdditionalOwnedRoleAssignmentIds = @(),
-    [ValidateRange(1, 1800)][int]$TimeoutSeconds = 300
+    [ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200
 )
 $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'Hibernate-SreAgent.ps1') @PSBoundParameters -DesiredState Removed

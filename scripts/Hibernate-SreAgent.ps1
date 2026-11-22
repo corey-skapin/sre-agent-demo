@@ -50,6 +50,8 @@ $inventoryParameters = @{
 }
 $before = Get-SreLifecycleInventory @inventoryParameters
 $removing = $DesiredState -eq 'Removed'
+# Each grant takes about 50 seconds to delete and verify, so a full removal needs a longer default than a park.
+if ($removing -and -not $PSBoundParameters.ContainsKey('TimeoutSeconds')) { $TimeoutSeconds = 1200 }
 foreach ($message in $before.drift) { Write-Warning "$message Retained unchanged during Hibernate; inspect before Active." }
 $resourceIds = @(if ($removing) { @($before.removableResources) + @($before.resources | Where-Object id -EQ $before.identityId | ForEach-Object { $_.id }) } else { @($before.removableResources | Where-Object { $_ -eq $before.agentId }) })
 $assignmentIds = @(if ($removing) { @($before.externalAssignments) + @($before.parentAssignments) | ForEach-Object { $_.id } | Sort-Object -Unique })
@@ -76,6 +78,7 @@ if ($removing) {
     Write-Host "Dedicated group: $($before.groupId). Shared Arc resources and private exports are excluded."
 }
 Write-Verbose $target
+Write-Information "Time limit: $TimeoutSeconds seconds." -InformationAction Continue
 Write-Host 'Deleting the agent deletes its memory notes with it. To keep them, run Export-SreAgentFiles.ps1 -Source Notes -OutputPath <a folder outside the repository> first (docs/it-remembers.md).'
 if (-not $PSCmdlet.ShouldProcess($target, "$DesiredState SRE; parent deletion loses native history/memory")) { return }
 $clock = [Diagnostics.Stopwatch]::StartNew()
