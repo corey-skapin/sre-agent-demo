@@ -223,7 +223,7 @@ function Get-SreConfigurationSnapshot {
     param([Collections.IDictionary]$Session)
     $result = @{
         schemaVersion = 1; checkedAtUtc = [DateTime]::UtcNow.ToString('o')
-        sourceRevision = $script:TemplateRevision; resourceId = $Session.resourceId
+        sourceRevision = $script:TemplateRevision; resourceId = $Session.resourceId; legacyHandlersRoute = 'present'
     }
     foreach ($entry in @(@('subagents', '/api/v2/extendedAgent/agents'), @('filters', '/api/v2/extendedAgent/incidentFilters'), @('handlers', '/api/v1/incidentPlayground/handlers'))) {
         $raw = Invoke-SreConfigurationRequest -Session $Session -Method Get -Path $entry[1]
@@ -232,6 +232,12 @@ function Get-SreConfigurationSnapshot {
             if ($raw.Contains('nextLink') -and $raw.nextLink) { throw "SRE $($entry[0]) list is paginated; full conflict/absence verification is required before apply." }
             if ($raw.value -isnot [array]) { throw "SRE $($entry[0]) value is not an array; absence is not verified." }
             $result[$entry[0]] = @($raw.value)
+        } elseif ($raw -is [string] -and $entry[0] -eq 'handlers' -and $raw -match '(?is)^\s*(<!doctype html|<html)') {
+            # The platform retired the v1 route and its catch-all now serves the web app, so there are no legacy handlers.
+            $result.legacyHandlersRoute = 'retired'
+            $result[$entry[0]] = @()
+        } elseif ($raw -is [string]) {
+            throw "Unexpected non-JSON response for $($entry[0]); refusing to infer absence."
         } else {
             $result[$entry[0]] = @($raw)
         }

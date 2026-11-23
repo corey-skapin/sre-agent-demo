@@ -92,6 +92,9 @@ try {
                 if ($script:TestSchema -eq 'missing-value') { return @{} }
                 if ($script:TestSchema -eq 'pagination') { return @{ value = @(); nextLink = 'https://untrusted.invalid/next' } }
                 if ($script:TestSchema -eq 'wrong-value') { return @{ value = @{} } }
+                $spa = '<!doctype html><html><head><title>SRE Agent</title></head><body></body></html>'
+                if ($script:TestSchema -eq 'legacy-html' -and $collection -eq 'handlers') { return $spa }
+                if ($script:TestSchema -eq 'v2-html' -and $collection -eq 'filters') { return $spa }
                 if ($collection -eq 'subagents') {
                     $script:TestAgentReads++
                     if ($script:TestAgentReads -eq 2) {
@@ -186,6 +189,12 @@ try {
         $script:TestSnapshot = @{ subagents = @(); filters = @(); handlers = @() }
         $script:TestSchema = ''; $script:TestConcurrent = ''; $script:TestForbidden = $false; $script:TestCalls.Clear()
     }
+    & $module { $script:TestSchema = 'legacy-html' }
+    $retired = Get-SreConfigurationSnapshot $session
+    Check ($retired.legacyHandlersRoute -ceq 'retired' -and @($retired.handlers).Count -eq 0 -and @((Get-SreConfigurationPlan $desired $retired).operations).Count -eq 3) 'An HTML reply from the retired legacy route means no legacy handlers and the plan proceeds'
+    & $module { $script:TestSchema = 'v2-html' }
+    Throws { Get-SreConfigurationSnapshot $session } 'non-JSON'
+    & $module { $script:TestSchema = '' }
     $other = Join-Path ([IO.Path]::GetTempPath()) "sre-config-$([guid]::NewGuid()).json"
     try {
         $fresh = Invoke-SreConfigurationReconcile $desired $session -BackupPath $other

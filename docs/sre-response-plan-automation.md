@@ -100,6 +100,12 @@ promise. Keep the revision above, the parent preview API version, exact list/PUT
 envelopes and `https://azuresre.dev` token audience under review together.
 The v1 handler collection is **GET-only**: it detects active legacy overrides
 that could undermine modern routing; no handler creation/update is supported.
+The platform has since retired that route. On 23 November 2026 a live agent
+answered `GET /api/v1/incidentPlayground/handlers` with HTTP 200, content type
+`text/html` and the web app's start page, while the v2 routes still returned JSON.
+The adapter treats an HTML reply from that one route as no legacy handlers
+and shows `legacyHandlersRoute: retired` in the Inspect snapshot. Any other
+non-JSON reply, including HTML from a v2 route, still stops the apply.
 
 To re-pin, compare the selected upstream revision's `Apply-Extras.ps1`,
 `Export-Agent.ps1` and AzMonitor recipe with the adapter and fixtures. Review
@@ -109,7 +115,7 @@ same PR. Run local tests and Bicep compilation. A pin update or a mocked pass
 doesn't prove the live service accepts it, so test live separately.
 Do not download/execute upstream scripts or silently follow a movable branch.
 
-On authentication/denial, malformed/empty/paginated reads, unsupported legacy
+On authentication/denial, malformed/empty/non-JSON/paginated reads, unsupported legacy
 state or schema drift, **stop explicitly**. Do not infer absence, guess POST,
 fall back to another endpoint/account, grant permissions, delete the parent or
 claim partial setup is ready. Apply backs up before writes; a later failure can
